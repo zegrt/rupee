@@ -9,7 +9,11 @@ import com.zegrt.rupee.data.local.entity.ConfidenceTier
 import com.zegrt.rupee.data.local.entity.InboxDecisionState
 import com.zegrt.rupee.data.local.entity.InboxReasonCode
 import com.zegrt.rupee.data.local.entity.Mode
+import com.zegrt.rupee.data.local.entity.ParsedTransactionKind
+import com.zegrt.rupee.data.local.entity.RawCaptureIngestionStatus
+import com.zegrt.rupee.data.local.entity.RawCaptureSourceType
 import com.zegrt.rupee.data.local.entity.SyncStatus
+import com.zegrt.rupee.data.local.entity.TransactionCandidateType
 
 class RupeeTypeConverters {
     @TypeConverter
@@ -64,9 +68,36 @@ class RupeeTypeConverters {
     fun toMode(value: String?): Mode? = value?.let(Mode::valueOf)
 
     @TypeConverter
+    fun fromRawCaptureSourceType(value: RawCaptureSourceType?): String? = value?.name
+
+    @TypeConverter
+    fun toRawCaptureSourceType(value: String?): RawCaptureSourceType? =
+        value?.let(RawCaptureSourceType::valueOf)
+
+    @TypeConverter
+    fun fromRawCaptureIngestionStatus(value: RawCaptureIngestionStatus?): String? = value?.name
+
+    @TypeConverter
+    fun toRawCaptureIngestionStatus(value: String?): RawCaptureIngestionStatus? =
+        value?.let(RawCaptureIngestionStatus::valueOf)
+
+    @TypeConverter
+    fun fromParsedTransactionKind(value: ParsedTransactionKind?): String? = value?.name
+
+    @TypeConverter
+    fun toParsedTransactionKind(value: String?): ParsedTransactionKind? =
+        value?.let(ParsedTransactionKind::valueOf)
+
+    @TypeConverter
+    fun fromTransactionCandidateType(value: TransactionCandidateType?): String? = value?.name
+
+    @TypeConverter
+    fun toTransactionCandidateType(value: String?): TransactionCandidateType? =
+        value?.let(TransactionCandidateType::valueOf)
+
+    @TypeConverter
     fun fromSyncStatus(value: SyncStatus?): String? = value?.name
 
     @TypeConverter
     fun toSyncStatus(value: String?): SyncStatus? = value?.let(SyncStatus::valueOf)
 }
-

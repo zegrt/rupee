@@ -117,10 +117,10 @@ References:
 
 ## Immediate Next Work
 
-1. commit and push onboarding/build-verification changes
-2. ingestion pipeline foundation
-3. parser registry and first provider parsers
-4. canonical transaction pipeline
+1. parser registry and first provider parsers
+2. decision layer for candidate -> Inbox or canonical path
+3. canonical transaction pipeline
+4. dashboard wiring to real ingested data
 
 ## Current Implementation State
 
@@ -139,6 +139,9 @@ References:
 - SMS permission has been removed from the current preview build and deferred
 - local toolchain is installed enough to compile and assemble a debug APK
 - debug APK builds successfully
+- raw notification capture events are stored locally
+- raw notification events are normalized into parsed signals and transaction candidates
+- no provider-specific parsers, dedupe, Inbox, or canonical transaction decisions yet
 
 ## Notes For Future Codex Sessions
 

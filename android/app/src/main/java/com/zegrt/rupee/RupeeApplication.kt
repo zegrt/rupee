@@ -12,7 +12,10 @@ class RupeeApplication : Application() {
             applicationContext,
             RupeeDatabase::class.java,
             "rupee.db",
-        ).fallbackToDestructiveMigration(false).build()
+        )
+            // Pre-release builds can reset local state while the schema is still moving quickly.
+            .fallbackToDestructiveMigration(true)
+            .build()
     }
 
     val localFinanceRepository: LocalFinanceRepository by lazy {

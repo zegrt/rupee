@@ -38,6 +38,8 @@ The repository now includes a minimal Android app scaffold:
 - seeded local sample data displayed through a minimal home view model
 - onboarding flow with notification access
 - local toolchain and Gradle wrapper for reproducible builds
+- raw notification capture storage
+- first-pass parsed signal and transaction candidate pipeline
 
 This is only the implementation shell. The app does not yet include:
 
@@ -45,6 +47,14 @@ This is only the implementation shell. The app does not yet include:
 - parser logic
 - budgets/cards/EMI features
 - SMS reading in the shipped preview build
+
+More precisely, the app now has the start of an ingestion pipeline, but it is still generic:
+
+- raw notification capture exists
+- normalization into parsed signals and transaction candidates exists
+- provider-specific parsing does not exist yet
+- deduplication does not exist yet
+- Inbox and canonical transaction decisions do not exist yet
 
 ## Product Direction
 
@@ -89,7 +99,7 @@ Rupee v1 is not intended to depend on:
 
 ## Current Phase
 
-The project has finished the planning stack, Android scaffold, local data foundation, and an installable notification-first preview build. The next build step is ingestion.
+The project has finished the planning stack, Android scaffold, local data foundation, onboarding, and the first notification ingestion foundation. The next build step is provider-specific parsing and the decision layer.
 
 ## Working Rule
 

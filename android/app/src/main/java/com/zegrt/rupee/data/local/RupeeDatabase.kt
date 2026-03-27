@@ -9,6 +9,9 @@ import com.zegrt.rupee.data.local.dao.CanonicalTransactionDao
 import com.zegrt.rupee.data.local.dao.CategoryDao
 import com.zegrt.rupee.data.local.dao.CreditCardDao
 import com.zegrt.rupee.data.local.dao.BudgetDao
+import com.zegrt.rupee.data.local.dao.ParsedSignalDao
+import com.zegrt.rupee.data.local.dao.RawCaptureEventDao
+import com.zegrt.rupee.data.local.dao.TransactionCandidateDao
 import com.zegrt.rupee.data.local.dao.UserDao
 import com.zegrt.rupee.data.local.entity.AccountEntity
 import com.zegrt.rupee.data.local.entity.BucketEntity
@@ -18,6 +21,9 @@ import com.zegrt.rupee.data.local.entity.CategoryEntity
 import com.zegrt.rupee.data.local.entity.CreditCardEntity
 import com.zegrt.rupee.data.local.entity.EmiPlanEntity
 import com.zegrt.rupee.data.local.entity.InboxItemEntity
+import com.zegrt.rupee.data.local.entity.ParsedSignalEntity
+import com.zegrt.rupee.data.local.entity.RawCaptureEventEntity
+import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
 import com.zegrt.rupee.data.local.entity.TransactionBucketAssignmentEntity
 import com.zegrt.rupee.data.local.entity.UserEntity
 
@@ -33,8 +39,11 @@ import com.zegrt.rupee.data.local.entity.UserEntity
         BudgetEntity::class,
         InboxItemEntity::class,
         EmiPlanEntity::class,
+        RawCaptureEventEntity::class,
+        ParsedSignalEntity::class,
+        TransactionCandidateEntity::class,
     ],
-    version = 1,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(RupeeTypeConverters::class)
@@ -46,5 +55,7 @@ abstract class RupeeDatabase : RoomDatabase() {
     abstract fun bucketDao(): BucketDao
     abstract fun budgetDao(): BudgetDao
     abstract fun canonicalTransactionDao(): CanonicalTransactionDao
+    abstract fun rawCaptureEventDao(): RawCaptureEventDao
+    abstract fun parsedSignalDao(): ParsedSignalDao
+    abstract fun transactionCandidateDao(): TransactionCandidateDao
 }
-
