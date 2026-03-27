@@ -117,7 +117,7 @@ References:
 
 ## Immediate Next Work
 
-1. parser registry and first provider parsers
+1. add more provider-specific notification parsers, starting with CRED and ICICI
 2. decision layer for candidate -> Inbox or canonical path
 3. canonical transaction pipeline
 4. dashboard wiring to real ingested data
@@ -141,7 +141,9 @@ References:
 - debug APK builds successfully
 - raw notification capture events are stored locally
 - raw notification events are normalized into parsed signals and transaction candidates
-- no provider-specific parsers, dedupe, Inbox, or canonical transaction decisions yet
+- parser registry is in place for notification normalization
+- GPay parser exists alongside the generic fallback parser
+- no dedupe, Inbox, or canonical transaction decisions yet
 
 ## Notes For Future Codex Sessions
 
