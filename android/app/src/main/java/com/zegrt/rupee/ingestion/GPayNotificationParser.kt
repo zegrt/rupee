@@ -18,8 +18,8 @@ class GPayNotificationParser : NotificationParser {
     }
 
     override fun parse(rawEvent: RawCaptureEventEntity): NotificationParseResult {
-        val amountMinor = extractAmountMinor(rawEvent.body)
-        val merchant = extractMerchant(rawEvent.body)
+        val amountMinor = NotificationParsingUtils.extractAmountMinor(rawEvent.body)
+        val merchant = NotificationParsingUtils.extractMerchant(rawEvent.body, merchantRegexes)
 
         return NotificationParseResult(
             parserKey = "notification_gpay",
@@ -38,15 +38,9 @@ class GPayNotificationParser : NotificationParser {
         )
     }
 
-    private fun extractAmountMinor(body: String): Long? {
-        val regex = Regex("""(?:rs\.?|inr|₹)\s*([0-9]+(?:[.,][0-9]{1,2})?)""", RegexOption.IGNORE_CASE)
-        val match = regex.find(body) ?: return null
-        val normalized = match.groupValues[1].replace(",", "")
-        return normalized.toDoubleOrNull()?.times(100)?.toLong()
-    }
-
-    private fun extractMerchant(body: String): String? {
-        val regex = Regex("""(?:to|paid to)\s+([A-Za-z0-9 .&_-]{2,40})""", RegexOption.IGNORE_CASE)
-        return regex.find(body)?.groupValues?.get(1)?.trim()
+    companion object {
+        private val merchantRegexes = listOf(
+            Regex("""(?:to|paid to)\s+([A-Za-z0-9 .&'_-]{2,50})""", RegexOption.IGNORE_CASE),
+        )
     }
 }

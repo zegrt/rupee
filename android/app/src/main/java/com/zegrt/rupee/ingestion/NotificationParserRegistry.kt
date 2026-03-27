@@ -14,6 +14,8 @@ class NotificationParserRegistry(
         fun default(): NotificationParserRegistry {
             return NotificationParserRegistry(
                 parsers = listOf(
+                    CredNotificationParser(),
+                    IciciNotificationParser(),
                     GPayNotificationParser(),
                     GenericNotificationParser(),
                 ),
@@ -21,4 +23,3 @@ class NotificationParserRegistry(
         }
     }
 }
-

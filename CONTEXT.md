@@ -117,10 +117,10 @@ References:
 
 ## Immediate Next Work
 
-1. add more provider-specific notification parsers, starting with CRED and ICICI
-2. decision layer for candidate -> Inbox or canonical path
-3. canonical transaction pipeline
-4. dashboard wiring to real ingested data
+1. decision layer for candidate -> Inbox or canonical path
+2. canonical transaction pipeline
+3. dashboard wiring to real ingested data
+4. parser refinement using real notification samples
 
 ## Current Implementation State
 
@@ -142,7 +142,7 @@ References:
 - raw notification capture events are stored locally
 - raw notification events are normalized into parsed signals and transaction candidates
 - parser registry is in place for notification normalization
-- GPay parser exists alongside the generic fallback parser
+- GPay, CRED, and ICICI parsers exist alongside the generic fallback parser
 - no dedupe, Inbox, or canonical transaction decisions yet
 
 ## Notes For Future Codex Sessions

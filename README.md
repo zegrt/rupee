@@ -47,6 +47,7 @@ Right now the project has:
 - onboarding flow
 - local database foundation
 - notification ingestion foundation
+- early provider-specific parsing for GPay, CRED, and ICICI notifications
 - a buildable debug APK
 
 ## Current Preview
