@@ -1,0 +1,50 @@
+package com.zegrt.rupee.data.local
+
+import androidx.room.Database
+import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
+import com.zegrt.rupee.data.local.dao.AccountDao
+import com.zegrt.rupee.data.local.dao.BucketDao
+import com.zegrt.rupee.data.local.dao.CanonicalTransactionDao
+import com.zegrt.rupee.data.local.dao.CategoryDao
+import com.zegrt.rupee.data.local.dao.CreditCardDao
+import com.zegrt.rupee.data.local.dao.BudgetDao
+import com.zegrt.rupee.data.local.dao.UserDao
+import com.zegrt.rupee.data.local.entity.AccountEntity
+import com.zegrt.rupee.data.local.entity.BucketEntity
+import com.zegrt.rupee.data.local.entity.BudgetEntity
+import com.zegrt.rupee.data.local.entity.CanonicalTransactionEntity
+import com.zegrt.rupee.data.local.entity.CategoryEntity
+import com.zegrt.rupee.data.local.entity.CreditCardEntity
+import com.zegrt.rupee.data.local.entity.EmiPlanEntity
+import com.zegrt.rupee.data.local.entity.InboxItemEntity
+import com.zegrt.rupee.data.local.entity.TransactionBucketAssignmentEntity
+import com.zegrt.rupee.data.local.entity.UserEntity
+
+@Database(
+    entities = [
+        UserEntity::class,
+        AccountEntity::class,
+        CreditCardEntity::class,
+        CategoryEntity::class,
+        BucketEntity::class,
+        CanonicalTransactionEntity::class,
+        TransactionBucketAssignmentEntity::class,
+        BudgetEntity::class,
+        InboxItemEntity::class,
+        EmiPlanEntity::class,
+    ],
+    version = 1,
+    exportSchema = true,
+)
+@TypeConverters(RupeeTypeConverters::class)
+abstract class RupeeDatabase : RoomDatabase() {
+    abstract fun userDao(): UserDao
+    abstract fun accountDao(): AccountDao
+    abstract fun creditCardDao(): CreditCardDao
+    abstract fun categoryDao(): CategoryDao
+    abstract fun bucketDao(): BucketDao
+    abstract fun budgetDao(): BudgetDao
+    abstract fun canonicalTransactionDao(): CanonicalTransactionDao
+}
+

@@ -117,10 +117,10 @@ References:
 
 ## Immediate Next Work
 
-1. local database foundation
-2. onboarding and permissions flow
-3. ingestion pipeline foundation
-4. parser registry and first provider parsers
+1. onboarding and permissions flow
+2. ingestion pipeline foundation
+3. parser registry and first provider parsers
+4. canonical transaction pipeline
 
 ## Current Implementation State
 
@@ -128,7 +128,13 @@ References:
 - Android app module scaffolded under `android/app`
 - basic Compose `MainActivity` added
 - initial Rupee theme placeholders added
-- no local database, navigation, or ingestion logic yet
+- Room-based local database foundation added
+- app-level database bootstrap added
+- core local entities and DAOs added
+- local repository shell added
+- default local seed data added for user, categories, buckets, account, card, and sample transactions
+- Home screen now reads Room-backed seeded state
+- no navigation, onboarding, permissions, or ingestion logic yet
 
 ## Notes For Future Codex Sessions
 

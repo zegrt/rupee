@@ -32,10 +32,13 @@ The repository now includes a minimal Android app scaffold:
 - `android/app` application module
 - basic Jetpack Compose entry screen
 - initial theme placeholders
+- Room-based local data foundation
+- app bootstrap via `Application`
+- core entities, DAOs, and repository shell
+- seeded local sample data displayed through a minimal home view model
 
 This is only the implementation shell. The app does not yet include:
 
-- local database
 - onboarding flow
 - permission handling
 - ingestion pipeline
@@ -83,7 +86,7 @@ Rupee v1 is not intended to depend on:
 
 ## Current Phase
 
-The project has finished the planning stack and initial Android scaffold. The next build step is the local database foundation, followed by onboarding and ingestion.
+The project has finished the planning stack, Android scaffold, and the first local data foundation. The next build step is onboarding and permissions, followed by ingestion.
 
 ## Working Rule
 
