@@ -13,7 +13,7 @@ The goal is to reduce manual entry while helping a single user stay on top of:
 
 ## Current Status
 
-This repository currently contains product and architecture planning documents for the first version of Rupee.
+This repository now contains the initial Android scaffold plus the core planning documents for the first version of Rupee.
 
 ## Documents
 
@@ -23,6 +23,24 @@ This repository currently contains product and architecture planning documents f
 - [Android Screen Spec](./docs/rupee-android-screens.md)
 - [Engineering Roadmap](./docs/rupee-roadmap.md)
 - [Project Context](./CONTEXT.md)
+
+## Android Scaffold
+
+The repository now includes a minimal Android app scaffold:
+
+- root Gradle configuration
+- `android/app` application module
+- basic Jetpack Compose entry screen
+- initial theme placeholders
+
+This is only the implementation shell. The app does not yet include:
+
+- local database
+- onboarding flow
+- permission handling
+- ingestion pipeline
+- parser logic
+- budgets/cards/EMI features
 
 ## Product Direction
 
@@ -62,6 +80,10 @@ Rupee v1 is not intended to depend on:
 4. project scaffolding
 5. Android app implementation
 6. backend sync and web companion
+
+## Current Phase
+
+The project has finished the planning stack and initial Android scaffold. The next build step is the local database foundation, followed by onboarding and ingestion.
 
 ## Working Rule
 

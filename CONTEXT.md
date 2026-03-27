@@ -117,10 +117,18 @@ References:
 
 ## Immediate Next Work
 
-1. project scaffolding
-2. Android implementation shell
+1. local database foundation
+2. onboarding and permissions flow
 3. ingestion pipeline foundation
 4. parser registry and first provider parsers
+
+## Current Implementation State
+
+- root Gradle configuration scaffolded
+- Android app module scaffolded under `android/app`
+- basic Compose `MainActivity` added
+- initial Rupee theme placeholders added
+- no local database, navigation, or ingestion logic yet
 
 ## Notes For Future Codex Sessions
 
