@@ -111,13 +111,16 @@ References:
 
 - [PRD](/Users/cyril/Personal/webdev/wallet/docs/rupee-prd.md)
 - [Architecture](/Users/cyril/Personal/webdev/wallet/docs/rupee-architecture.md)
+- [Schema](/Users/cyril/Personal/webdev/wallet/docs/rupee-schema.md)
+- [Android Screen Spec](/Users/cyril/Personal/webdev/wallet/docs/rupee-android-screens.md)
+- [Engineering Roadmap](/Users/cyril/Personal/webdev/wallet/docs/rupee-roadmap.md)
 
 ## Immediate Next Work
 
-1. schema spec
-2. Android screen spec
-3. engineering roadmap
-4. project scaffolding
+1. project scaffolding
+2. Android implementation shell
+3. ingestion pipeline foundation
+4. parser registry and first provider parsers
 
 ## Notes For Future Codex Sessions
 
@@ -126,3 +129,4 @@ References:
 - Do not make bank sync a dependency for usefulness.
 - Treat deduplication and trust as first-order product problems.
 - Keep raw source evidence separate from canonical finance records.
+- Before every commit, update `CONTEXT.md` and `README.md` if project scope or artifact inventory changed.

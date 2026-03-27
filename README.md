@@ -19,6 +19,9 @@ This repository currently contains product and architecture planning documents f
 
 - [Product PRD](./docs/rupee-prd.md)
 - [Technical Architecture](./docs/rupee-architecture.md)
+- [Schema Spec](./docs/rupee-schema.md)
+- [Android Screen Spec](./docs/rupee-android-screens.md)
+- [Engineering Roadmap](./docs/rupee-roadmap.md)
 - [Project Context](./CONTEXT.md)
 
 ## Product Direction
@@ -59,6 +62,10 @@ Rupee v1 is not intended to depend on:
 4. project scaffolding
 5. Android app implementation
 6. backend sync and web companion
+
+## Working Rule
+
+Before each commit, update `CONTEXT.md` and `README.md` if the project's scope, artifact list, or current phase changed.
 
 ## Repository Note
 
