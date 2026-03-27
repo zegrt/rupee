@@ -139,16 +139,15 @@ Purpose:
 
 - request permissions gradually and with context
 
-Permission order:
+Permission order for current preview build:
 
 1. notification access
-2. SMS access
 
 Rules:
 
 - notification access is primary
-- SMS access is optional fallback / coverage boost
-- do not request SMS before explaining why it helps
+- SMS access is deferred from the current preview build
+- do not request SMS until the notification-first experience is proven
 
 UI structure:
 
@@ -317,7 +316,7 @@ Actions:
 
 If few/no transactions exist:
 
-- explain that Rupee starts filling in once notifications/SMS arrive
+- explain that Rupee starts filling in once notification-based transaction signals arrive
 - show permission completion status
 - show option to add a manual transaction
 
@@ -695,7 +694,7 @@ Sections:
 - profile
 - currency and region
 - notification access status
-- SMS access status
+- SMS access status later
 - accounts and cards management
 - categories and buckets
 - alert preferences

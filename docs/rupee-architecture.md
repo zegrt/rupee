@@ -49,9 +49,9 @@ Responsible for collecting raw financial signals from the device.
 Sources:
 
 - Android notifications
-- SMS messages
 - manual entry
 - future CSV import
+- SMS messages later
 
 Output:
 
@@ -153,7 +153,7 @@ This layer should not be required for basic offline function.
 - onboarding
 - permission flows
 - notification listener
-- SMS reader access
+- SMS reader access later
 - local persistence
 - parsing
 - normalization
@@ -526,6 +526,8 @@ Core relationships:
 
 ### 7.2 SMS ingestion flow
 
+Deferred from the current preview build.
+
 1. SMS reader receives or fetches message
 2. validate sender and format
 3. create `RawCaptureEvent`
@@ -554,8 +556,8 @@ Initial parser coverage should focus on:
 
 - GPay notifications
 - CRED notifications
-- Kotak SMS/notifications
-- SBI SMS/notifications
+- Kotak notifications first, SMS later
+- SBI notifications first, SMS later
 - ICICI credit card alerts
 
 ### 8.3 Parser versioning
@@ -628,7 +630,7 @@ Low duplicate score:
 
 ### 10.4 Example duplicate pairs
 
-- GPay success notification + SBI debit SMS
+- GPay success notification + SBI debit SMS once SMS support is added
 - ICICI card spend alert + CRED card alert
 
 ### 10.5 Canonical merge policy
@@ -895,7 +897,7 @@ This is a directional recommendation, not a locked stack.
 
 - minimize raw message retention if not needed long-term
 - encrypt sensitive data at rest and in transit
-- clearly explain SMS and notification permissions
+- clearly explain notification permissions, and only add SMS later if the value is strong enough
 - allow deletion of transactions and supporting source evidence where practical
 - do not upload raw data unnecessarily in v1
 
@@ -910,7 +912,7 @@ This is a directional recommendation, not a locked stack.
 ### Milestone 2
 
 - notification ingestion
-- SMS ingestion
+- SMS ingestion later
 - raw capture storage
 
 ### Milestone 3
@@ -954,7 +956,7 @@ This is a directional recommendation, not a locked stack.
 ## 23. Open Technical Questions
 
 - how much raw captured content should be retained after parsing
-- whether SMS and notification ingestion should share a parser registry or separate registries
+- whether SMS and notification ingestion should share a parser registry or separate registries once SMS is added
 - whether provenance data should sync in full or remain device-local by default
 - exact duplicate time windows by provider pair
 - whether bill payment events should be modeled in v1 or deferred

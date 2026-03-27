@@ -1,6 +1,6 @@
 # Rupee
 
-Rupee is an Android-first personal finance app for India focused on automatic expense tracking from SMS and notification signals.
+Rupee is an Android-first personal finance app for India focused on automatic expense tracking from notification signals first, with SMS ingestion planned for a later build.
 
 The goal is to reduce manual entry while helping a single user stay on top of:
 
@@ -36,14 +36,15 @@ The repository now includes a minimal Android app scaffold:
 - app bootstrap via `Application`
 - core entities, DAOs, and repository shell
 - seeded local sample data displayed through a minimal home view model
+- onboarding flow with notification access
+- local toolchain and Gradle wrapper for reproducible builds
 
 This is only the implementation shell. The app does not yet include:
 
-- onboarding flow
-- permission handling
 - ingestion pipeline
 - parser logic
 - budgets/cards/EMI features
+- SMS reading in the shipped preview build
 
 ## Product Direction
 
@@ -54,7 +55,7 @@ Rupee v1 is intended to be:
 - single-user
 - offline-capable
 - privacy-aware
-- built around notification and SMS ingestion
+- built around notification ingestion first, with SMS ingestion deferred to a later build
 
 Rupee v1 is not intended to depend on:
 
@@ -66,6 +67,8 @@ Rupee v1 is not intended to depend on:
 ## Planned Core Features
 
 - automatic transaction capture from notifications and SMS
+- automatic transaction capture from notifications first
+- SMS capture later once the install and trust flow is stronger
 - deduplication across multiple sources
 - confidence-based auto-entry with Inbox fallback
 - account and credit card tracking
@@ -86,7 +89,7 @@ Rupee v1 is not intended to depend on:
 
 ## Current Phase
 
-The project has finished the planning stack, Android scaffold, and the first local data foundation. The next build step is onboarding and permissions, followed by ingestion.
+The project has finished the planning stack, Android scaffold, local data foundation, and an installable notification-first preview build. The next build step is ingestion.
 
 ## Working Rule
 

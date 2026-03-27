@@ -43,7 +43,7 @@ This keeps the product usable early while protecting the risky core: capture, de
 
 Rupee MVP is successful if one Android user can:
 
-- grant notification access and optionally SMS access
+- grant notification access
 - set up bank account, credit card, and optional cash account
 - have real spend transactions auto-captured from supported sources
 - avoid duplicate transaction entries across overlapping sources
@@ -146,7 +146,7 @@ Includes:
 
 - welcome flow
 - notification permission screen
-- SMS permission screen
+- SMS permission screen later
 - initial account setup
 - initial credit card setup
 - optional cash setup
@@ -175,7 +175,7 @@ Goal:
 Includes:
 
 - notification listener implementation
-- SMS reader implementation
+- SMS reader implementation later
 - capture allowlist/filtering
 - `raw_capture_events` persistence
 - ingestion diagnostics/logging path
@@ -183,7 +183,7 @@ Includes:
 Suggested branches:
 
 - `feat/notification-ingestion`
-- `feat/sms-ingestion`
+- `feat/sms-ingestion` later
 - `feat/raw-capture-storage`
 
 Dependencies:
@@ -192,7 +192,7 @@ Dependencies:
 
 Exit criteria:
 
-- supported raw notifications and SMS messages are captured reliably
+- supported raw notifications are captured reliably
 - raw evidence can be inspected in debug flows
 
 ## Milestone 4: Parsing and Normalization
@@ -459,7 +459,7 @@ Recommended near-term branch order:
 5. `feat/permissions-flow`
 6. `feat/account-setup`
 7. `feat/notification-ingestion`
-8. `feat/sms-ingestion`
+8. `feat/sms-ingestion` later
 9. `feat/parser-registry`
 10. `feat/parser-gpay`
 11. `feat/parser-cred`

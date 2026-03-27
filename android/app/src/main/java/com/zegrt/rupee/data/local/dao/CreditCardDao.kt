@@ -12,7 +12,9 @@ interface CreditCardDao {
     @Query("SELECT * FROM credit_cards WHERE isActive = 1 ORDER BY sortOrder, displayName")
     fun observeActiveCards(): Flow<List<CreditCardEntity>>
 
+    @Query("SELECT COUNT(*) FROM credit_cards WHERE userId = :userId")
+    suspend fun countCards(userId: String): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertCards(cards: List<CreditCardEntity>)
 }
-

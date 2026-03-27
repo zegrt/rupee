@@ -19,7 +19,7 @@ Rupee is an expense tracker and budget helper with near-zero manual entry.
 The core differentiator is local ingestion of:
 
 - Android notifications
-- SMS messages
+- SMS messages later
 
 The app should infer transactions from real-world payment alerts instead of making the user manually log everything.
 
@@ -38,8 +38,8 @@ The app should infer transactions from real-world payment alerts instead of maki
 - Android-only for v1
 - India-first for v1
 - no bank account linking in v1
-- notification and SMS ingestion are the primary capture methods
-- SMS should be optional if notification coverage is enough
+- notification ingestion is the active primary capture method
+- SMS ingestion is intentionally deferred to a later build to reduce install friction and sensitive-permission prompts
 - auto-create transactions only when confidence is high
 - medium-confidence events should go to an Inbox
 - duplicates across multiple sources must be merged
@@ -117,7 +117,7 @@ References:
 
 ## Immediate Next Work
 
-1. onboarding and permissions flow
+1. commit and push onboarding/build-verification changes
 2. ingestion pipeline foundation
 3. parser registry and first provider parsers
 4. canonical transaction pipeline
@@ -134,7 +134,11 @@ References:
 - local repository shell added
 - default local seed data added for user, categories, buckets, account, card, and sample transactions
 - Home screen now reads Room-backed seeded state
-- no navigation, onboarding, permissions, or ingestion logic yet
+- onboarding flow exists and persists completion
+- notification permission flow exists with a real listener service declaration
+- SMS permission has been removed from the current preview build and deferred
+- local toolchain is installed enough to compile and assemble a debug APK
+- debug APK builds successfully
 
 ## Notes For Future Codex Sessions
 

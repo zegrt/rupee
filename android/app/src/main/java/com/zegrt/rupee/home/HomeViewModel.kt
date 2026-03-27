@@ -34,7 +34,15 @@ class HomeViewModel(
         repository.observeBuckets(),
         repository.observeRecentTransactions(),
         isSeeding,
-    ) { user, accounts, cards, categories, buckets, transactions, seeding ->
+    ) { values ->
+        val user = values[0] as? com.zegrt.rupee.data.local.entity.UserEntity
+        val accounts = values[1] as List<*>
+        val cards = values[2] as List<*>
+        val categories = values[3] as List<*>
+        val buckets = values[4] as List<*>
+        val transactions = values[5] as List<*>
+        val seeding = values[6] as Boolean
+
         HomeUiState(
             userName = user?.displayName ?: "Rupee",
             accountCount = accounts.size,
@@ -52,7 +60,7 @@ class HomeViewModel(
 
     init {
         viewModelScope.launch {
-            repository.seedDefaultsIfEmpty()
+            repository.ensureBaseData()
             isSeeding.value = false
         }
     }
@@ -69,4 +77,3 @@ class HomeViewModelFactory(
         return HomeViewModel(repository) as T
     }
 }
-

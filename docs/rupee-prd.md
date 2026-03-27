@@ -8,7 +8,7 @@ Author: Codex
 
 Rupee is an Android-first personal finance app for India that tracks spending with minimal manual entry.
 
-The product's core value is automatic transaction capture from SMS and app notifications, with smart deduplication across sources like GPay, CRED, and bank alerts. Rupee helps a single user understand spending, manage budgets, track credit cards and EMIs, and stay ahead of dues.
+The product's current core value is automatic transaction capture from Android app notifications, with smart deduplication across sources like GPay, CRED, and bank alerts. SMS ingestion remains a planned later feature once the notification-first flow is stable enough to justify a more sensitive permission.
 
 Rupee is not an accounting tool. It should feel calm, bold, and premium, while staying dense enough to be useful every day.
 
@@ -77,7 +77,7 @@ Existing apps often fail this user because they:
 
 Reason:
 
-- Android can support notification access and SMS-based ingestion
+- Android can support notification access and later SMS-based ingestion
 - This is the only realistic path for low-friction auto-entry in v1
 - iPhone parity is not required initially
 
@@ -123,7 +123,7 @@ It is not primarily:
 ## 9. Core User Flow
 
 1. User installs Rupee on Android
-2. User grants notification access and optionally SMS access
+2. User grants notification access
 3. User manually sets up known accounts and cards
 4. Rupee detects transactions from messages and notifications
 5. Rupee deduplicates and classifies them
@@ -181,7 +181,7 @@ Deduplication is mandatory.
 
 The same spend may be reported by:
 
-- SMS + notification
+- multiple notification sources and, later, SMS + notification
 - bank app + UPI app
 - card app + CRED
 
@@ -202,7 +202,7 @@ The system should prefer one canonical transaction record with multiple source r
 ### 12.1 Ingestion
 
 - Notification ingestion
-- SMS ingestion
+- SMS ingestion later
 - Source tagging per transaction
 - Parser framework for Indian transaction formats
 - Initial support focused on:
@@ -391,7 +391,7 @@ Primary sections:
 
 - Android onboarding and permissions flow
 - Notification access flow
-- Optional SMS access flow
+- SMS access flow deferred from current preview build
 - Manual account/card setup
 - Transaction parsing pipeline
 - Deduplication engine
@@ -469,14 +469,14 @@ Primary sections:
 
 - parsing quality may vary widely by provider and message format
 - duplicate handling may become the main trust issue
-- SMS/notification permissions may feel invasive if value is not clear quickly
+- notification permissions may feel invasive if value is not clear quickly, and SMS is deferred specifically to reduce that risk
 - too many inferred mistakes will kill confidence in the app
 - design can become cluttered if cards, budgets, EMIs, and alerts compete for attention
 
 ## 21. Open Questions for Later
 
 - exact parser rollout order by provider
-- whether SMS access is needed for most users after notification support matures
+- whether SMS access is still worth adding after notification support matures
 - when to add web app relative to Android launch
 - whether monthly reports are in-app first, email first, or both
 - whether card bill payment events should be modeled in v1 or deferred
@@ -485,7 +485,7 @@ Primary sections:
 
 1. Android onboarding, permissions, and manual account/card setup
 2. Notification ingestion pipeline
-3. SMS ingestion pipeline
+3. notification-first ingestion pipeline
 4. Parser + confidence scoring + dedupe engine
 5. Inbox and transaction feed
 6. Budgets and custom buckets
