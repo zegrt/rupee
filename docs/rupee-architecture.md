@@ -53,6 +53,8 @@ Sources:
 - future CSV import
 - SMS messages later
 
+Notification listening is the practical Android-first capture path for v1, but it should be treated as a signal-collection layer rather than the app's truth model. Research on products like Truecaller suggests the most reliable consumer experiences usually come from owning the channel directly, such as default-app behavior, first-party push flows, or presentation overlays. Rupee should therefore keep notifications as evidence feeding parsing, decisioning, dedupe, and canonical transaction creation.
+
 Output:
 
 - raw captured events

@@ -9,6 +9,7 @@ import com.zegrt.rupee.data.local.dao.CanonicalTransactionDao
 import com.zegrt.rupee.data.local.dao.CategoryDao
 import com.zegrt.rupee.data.local.dao.CreditCardDao
 import com.zegrt.rupee.data.local.dao.BudgetDao
+import com.zegrt.rupee.data.local.dao.InboxItemDao
 import com.zegrt.rupee.data.local.dao.ParsedSignalDao
 import com.zegrt.rupee.data.local.dao.RawCaptureEventDao
 import com.zegrt.rupee.data.local.dao.TransactionCandidateDao
@@ -43,7 +44,7 @@ import com.zegrt.rupee.data.local.entity.UserEntity
         ParsedSignalEntity::class,
         TransactionCandidateEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(RupeeTypeConverters::class)
@@ -55,6 +56,7 @@ abstract class RupeeDatabase : RoomDatabase() {
     abstract fun bucketDao(): BucketDao
     abstract fun budgetDao(): BudgetDao
     abstract fun canonicalTransactionDao(): CanonicalTransactionDao
+    abstract fun inboxItemDao(): InboxItemDao
     abstract fun rawCaptureEventDao(): RawCaptureEventDao
     abstract fun parsedSignalDao(): ParsedSignalDao
     abstract fun transactionCandidateDao(): TransactionCandidateDao

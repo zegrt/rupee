@@ -13,12 +13,27 @@ enum class TransactionCandidateType {
     UNKNOWN,
 }
 
+enum class CandidateDecisionState {
+    AUTO_CREATED,
+    INBOX_PENDING,
+    IGNORED,
+}
+
+enum class CandidateDecisionReason {
+    HIGH_CONFIDENCE_SPEND,
+    MEDIUM_CONFIDENCE_REVIEW,
+    LOW_CONFIDENCE_IGNORE,
+    NON_SPEND_REVIEW,
+    MISSING_AMOUNT,
+}
+
 @Entity(
     tableName = "transaction_candidates",
     indices = [
         Index("userId"),
         Index("parsedSignalId"),
         Index("candidateType"),
+        Index("decisionState"),
         Index("occurredAt"),
         Index("candidateFingerprint"),
     ],
@@ -36,9 +51,13 @@ data class TransactionCandidateEntity(
     val mode: Mode? = null,
     val occurredAt: String? = null,
     val candidateFingerprint: String? = null,
+    val confidenceTier: ConfidenceTier? = null,
+    val decisionState: CandidateDecisionState,
+    val decisionReason: CandidateDecisionReason,
+    val linkedInboxItemId: String? = null,
+    val linkedCanonicalTransactionId: String? = null,
     val normalizationVersion: String,
     val createdAt: String,
     val updatedAt: String,
     val syncStatus: SyncStatus,
 )
-

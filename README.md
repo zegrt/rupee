@@ -48,6 +48,7 @@ Right now the project has:
 - local database foundation
 - notification ingestion foundation
 - early provider-specific parsing for GPay, CRED, and ICICI notifications
+- a first decision layer for auto-create vs Inbox vs ignore
 - a buildable debug APK
 
 ## Current Preview

@@ -3,6 +3,8 @@ package com.zegrt.rupee.data.local
 import androidx.room.TypeConverter
 import com.zegrt.rupee.data.local.entity.AccountType
 import com.zegrt.rupee.data.local.entity.BudgetType
+import com.zegrt.rupee.data.local.entity.CandidateDecisionReason
+import com.zegrt.rupee.data.local.entity.CandidateDecisionState
 import com.zegrt.rupee.data.local.entity.CanonicalTransactionStatus
 import com.zegrt.rupee.data.local.entity.CanonicalTransactionType
 import com.zegrt.rupee.data.local.entity.ConfidenceTier
@@ -94,6 +96,20 @@ class RupeeTypeConverters {
     @TypeConverter
     fun toTransactionCandidateType(value: String?): TransactionCandidateType? =
         value?.let(TransactionCandidateType::valueOf)
+
+    @TypeConverter
+    fun fromCandidateDecisionState(value: CandidateDecisionState?): String? = value?.name
+
+    @TypeConverter
+    fun toCandidateDecisionState(value: String?): CandidateDecisionState? =
+        value?.let(CandidateDecisionState::valueOf)
+
+    @TypeConverter
+    fun fromCandidateDecisionReason(value: CandidateDecisionReason?): String? = value?.name
+
+    @TypeConverter
+    fun toCandidateDecisionReason(value: String?): CandidateDecisionReason? =
+        value?.let(CandidateDecisionReason::valueOf)
 
     @TypeConverter
     fun fromSyncStatus(value: SyncStatus?): String? = value?.name

@@ -117,8 +117,8 @@ References:
 
 ## Immediate Next Work
 
-1. decision layer for candidate -> Inbox or canonical path
-2. canonical transaction pipeline
+1. dedupe across repeated notification sources and repeated alerts
+2. canonical transaction pipeline refinement
 3. dashboard wiring to real ingested data
 4. parser refinement using real notification samples
 
@@ -143,7 +143,20 @@ References:
 - raw notification events are normalized into parsed signals and transaction candidates
 - parser registry is in place for notification normalization
 - GPay, CRED, and ICICI parsers exist alongside the generic fallback parser
-- no dedupe, Inbox, or canonical transaction decisions yet
+- a first decision layer now routes candidates to auto-created canonical transactions, Inbox, or ignore
+- no dedupe yet
+
+## External Product Research Notes
+
+- Truecaller appears to get reliability by owning the input channel or UI surface, not by depending primarily on passive notification scraping.
+- Their public behavior points to:
+  - default SMS app behavior for Smart SMS and message categorization
+  - their own push notification flows for call alerts
+  - overlay permissions for presentation, not ingestion
+- Product implication for Rupee:
+  - notification ingestion is a valid Android-first v1 tactic
+  - treat notifications as evidence, not source of truth
+  - longer-term robustness likely requires stronger owned channels or integrations beyond notification listening alone
 
 ## Notes For Future Codex Sessions
 
