@@ -25,6 +25,7 @@ enum class CandidateDecisionReason {
     LOW_CONFIDENCE_IGNORE,
     NON_SPEND_REVIEW,
     MISSING_AMOUNT,
+    DUPLICATE_IGNORED,
 }
 
 @Entity(
@@ -54,6 +55,7 @@ data class TransactionCandidateEntity(
     val confidenceTier: ConfidenceTier? = null,
     val decisionState: CandidateDecisionState,
     val decisionReason: CandidateDecisionReason,
+    val duplicateOfCandidateId: String? = null,
     val linkedInboxItemId: String? = null,
     val linkedCanonicalTransactionId: String? = null,
     val normalizationVersion: String,

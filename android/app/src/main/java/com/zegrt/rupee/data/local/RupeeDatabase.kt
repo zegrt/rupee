@@ -44,7 +44,7 @@ import com.zegrt.rupee.data.local.entity.UserEntity
         ParsedSignalEntity::class,
         TransactionCandidateEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(RupeeTypeConverters::class)

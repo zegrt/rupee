@@ -12,7 +12,21 @@ interface TransactionCandidateDao {
     @Query("SELECT * FROM transaction_candidates ORDER BY createdAt DESC LIMIT :limit")
     fun observeRecentTransactionCandidates(limit: Int = 50): Flow<List<TransactionCandidateEntity>>
 
+    @Query(
+        """
+        SELECT * FROM transaction_candidates
+        WHERE userId = :userId
+          AND candidateFingerprint = :fingerprint
+          AND decisionState != 'IGNORED'
+        ORDER BY createdAt DESC
+        LIMIT 1
+        """
+    )
+    suspend fun getLatestUsableByFingerprint(
+        userId: String,
+        fingerprint: String,
+    ): TransactionCandidateEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertTransactionCandidate(candidate: TransactionCandidateEntity)
 }
-

@@ -614,6 +614,11 @@ Trust in Rupee will depend heavily on not showing the same spend multiple times.
 - source account/card similarity
 - known provider combinations
 
+Current implementation note:
+
+- the first dedupe pass uses a conservative fingerprint built from candidate type, amount, currency, mode, masked digits, normalized merchant/counterparty text, and a five-minute time bucket
+- this is meant to suppress obvious repeated alerts, not fully solve fuzzy duplicate matching yet
+
 ### 10.3 Proposed scoring approach
 
 Compute a duplicate score from weighted signals.

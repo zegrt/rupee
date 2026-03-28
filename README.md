@@ -49,6 +49,7 @@ Right now the project has:
 - notification ingestion foundation
 - early provider-specific parsing for GPay, CRED, and ICICI notifications
 - a first decision layer for auto-create vs Inbox vs ignore
+- a first dedupe layer to suppress repeated transaction alerts
 - a buildable debug APK
 
 ## Current Preview

@@ -117,10 +117,10 @@ References:
 
 ## Immediate Next Work
 
-1. dedupe across repeated notification sources and repeated alerts
+1. dashboard wiring to real ingested data
 2. canonical transaction pipeline refinement
-3. dashboard wiring to real ingested data
-4. parser refinement using real notification samples
+3. parser refinement using real notification samples
+4. richer dedupe rules for fuzzy multi-source collisions
 
 ## Current Implementation State
 
@@ -144,7 +144,7 @@ References:
 - parser registry is in place for notification normalization
 - GPay, CRED, and ICICI parsers exist alongside the generic fallback parser
 - a first decision layer now routes candidates to auto-created canonical transactions, Inbox, or ignore
-- no dedupe yet
+- a first dedupe layer now suppresses repeated alerts using candidate fingerprints built from amount, mode, merchant/counterparty, masked digits, and a five-minute time bucket
 
 ## External Product Research Notes
 

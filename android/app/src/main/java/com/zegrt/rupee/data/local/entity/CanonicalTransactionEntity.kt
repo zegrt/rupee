@@ -44,6 +44,7 @@ enum class Mode {
         Index("type"),
         Index("status"),
         Index("similarHistoryKey"),
+        Index("dedupeFingerprint"),
     ],
 )
 data class CanonicalTransactionEntity(
@@ -65,9 +66,9 @@ data class CanonicalTransactionEntity(
     val createdBy: String,
     val confidenceTier: ConfidenceTier? = null,
     val similarHistoryKey: String? = null,
+    val dedupeFingerprint: String? = null,
     val isHiddenFromBudget: Boolean = false,
     val createdAt: String,
     val updatedAt: String,
     val syncStatus: SyncStatus,
 )
-

@@ -12,7 +12,20 @@ interface CanonicalTransactionDao {
     @Query("SELECT * FROM canonical_transactions ORDER BY occurredAt DESC LIMIT :limit")
     fun observeRecentTransactions(limit: Int = 20): Flow<List<CanonicalTransactionEntity>>
 
+    @Query(
+        """
+        SELECT * FROM canonical_transactions
+        WHERE userId = :userId
+          AND dedupeFingerprint = :fingerprint
+        ORDER BY createdAt DESC
+        LIMIT 1
+        """
+    )
+    suspend fun getLatestByDedupeFingerprint(
+        userId: String,
+        fingerprint: String,
+    ): CanonicalTransactionEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertTransactions(transactions: List<CanonicalTransactionEntity>)
 }
-
