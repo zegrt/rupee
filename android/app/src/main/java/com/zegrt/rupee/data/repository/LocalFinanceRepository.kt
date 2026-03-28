@@ -9,7 +9,10 @@ import com.zegrt.rupee.data.local.entity.BudgetType
 import com.zegrt.rupee.data.local.entity.CanonicalTransactionEntity
 import com.zegrt.rupee.data.local.entity.CategoryEntity
 import com.zegrt.rupee.data.local.entity.CreditCardEntity
+import com.zegrt.rupee.data.local.entity.InboxDecisionState
+import com.zegrt.rupee.data.local.entity.InboxItemEntity
 import com.zegrt.rupee.data.local.entity.SyncStatus
+import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
 import com.zegrt.rupee.data.local.entity.UserEntity
 import java.time.Instant
 import kotlinx.coroutines.flow.Flow
@@ -38,6 +41,15 @@ class LocalFinanceRepository(
 
     fun observeRecentTransactions(limit: Int = 20): Flow<List<CanonicalTransactionEntity>> =
         database.canonicalTransactionDao().observeRecentTransactions(limit)
+
+    fun observeRecentTransactionCandidates(limit: Int = 20): Flow<List<TransactionCandidateEntity>> =
+        database.transactionCandidateDao().observeRecentTransactionCandidates(limit)
+
+    fun observePendingInboxItems(limit: Int = 20): Flow<List<InboxItemEntity>> =
+        database.inboxItemDao().observeInboxItems(
+            state = InboxDecisionState.PENDING,
+            limit = limit,
+        )
 
     suspend fun ensureBaseData() {
         if (database.userDao().countUsers() > 0) return

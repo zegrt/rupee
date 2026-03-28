@@ -117,10 +117,10 @@ References:
 
 ## Immediate Next Work
 
-1. dashboard wiring to real ingested data
+1. parser refinement using real notification samples
 2. canonical transaction pipeline refinement
-3. parser refinement using real notification samples
-4. richer dedupe rules for fuzzy multi-source collisions
+3. richer dedupe rules for fuzzy multi-source collisions
+4. dedicated Inbox and debug views beyond the home inspection surface
 
 ## Current Implementation State
 
@@ -145,6 +145,7 @@ References:
 - GPay, CRED, and ICICI parsers exist alongside the generic fallback parser
 - a first decision layer now routes candidates to auto-created canonical transactions, Inbox, or ignore
 - a first dedupe layer now suppresses repeated alerts using candidate fingerprints built from amount, mode, merchant/counterparty, masked digits, and a five-minute time bucket
+- the home screen now doubles as a basic pipeline inspection surface for canonical transactions, recent candidates, and pending Inbox volume
 
 ## External Product Research Notes
 

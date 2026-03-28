@@ -6,8 +6,10 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -411,16 +414,20 @@ private fun RupeeHome(uiState: HomeUiState) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
     ) {
         Text("Rupee", style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold)
         Text(
-            text = "Local data foundation for the India-first personal finance tracker.",
+            text = "Pipeline view for the India-first personal finance tracker.",
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.padding(top = 12.dp),
         )
         Spacer(modifier = Modifier.height(24.dp))
-        Card {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text("Hello, ${uiState.userName}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                 Text(
@@ -429,13 +436,132 @@ private fun RupeeHome(uiState: HomeUiState) {
                     modifier = Modifier.padding(top = 8.dp),
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Accounts: ${uiState.accountCount}")
-                Text("Cards: ${uiState.cardCount}")
-                Text("Categories: ${uiState.categoryCount}")
-                Text("Buckets: ${uiState.bucketCount}")
-                Text("Recent transactions: ${uiState.recentTransactionCount}")
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        MetricPill(label = "Accounts", value = uiState.accountCount.toString(), modifier = Modifier.weight(1f))
+                        MetricPill(label = "Cards", value = uiState.cardCount.toString(), modifier = Modifier.weight(1f))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        MetricPill(label = "Categories", value = uiState.categoryCount.toString(), modifier = Modifier.weight(1f))
+                        MetricPill(label = "Buckets", value = uiState.bucketCount.toString(), modifier = Modifier.weight(1f))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        MetricPill(label = "Canonical", value = uiState.recentTransactionCount.toString(), modifier = Modifier.weight(1f))
+                        MetricPill(label = "Inbox", value = uiState.pendingInboxCount.toString(), modifier = Modifier.weight(1f))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        MetricPill(label = "Candidates", value = uiState.recentCandidateCount.toString(), modifier = Modifier.weight(1f))
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
             }
         }
+        Spacer(modifier = Modifier.height(20.dp))
+        InspectionSection(
+            title = "Recent canonical transactions",
+            hasItems = uiState.recentTransactions.isNotEmpty(),
+            emptyLabel = "No canonical transactions yet.",
+        ) {
+            uiState.recentTransactions.forEach { row ->
+                InspectionRow(
+                    headline = row.headline,
+                    subline = row.subline,
+                    trailing = row.amountLabel,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        InspectionSection(
+            title = "Recent candidates",
+            hasItems = uiState.recentCandidates.isNotEmpty(),
+            emptyLabel = "No transaction candidates yet.",
+        ) {
+            uiState.recentCandidates.forEach { row ->
+                InspectionRow(
+                    headline = row.headline,
+                    subline = row.subline,
+                    trailing = row.decisionLabel,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetricPill(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(label, style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+@Composable
+private fun InspectionSection(
+    title: String,
+    hasItems: Boolean,
+    emptyLabel: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
+            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(16.dp))
+            if (hasItems) {
+                content()
+            } else {
+                Text(emptyLabel, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
+@Composable
+private fun InspectionRow(
+    headline: String,
+    subline: String,
+    trailing: String,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = subline,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            Text(
+                text = trailing,
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier
+                    .background(
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        shape = RoundedCornerShape(12.dp),
+                    )
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Spacer(modifier = Modifier.height(12.dp))
     }
 }
 
