@@ -66,7 +66,10 @@ Right now the project has:
 - early provider-specific parsing for GPay, CRED, and ICICI notifications
 - a first decision layer for auto-create vs Inbox vs ignore
 - a first dedupe layer to suppress repeated transaction alerts
-- a basic pipeline inspection view on the home screen
+- a Home / Inbox / Transactions shell inside the app
+- basic inbox confirm / dismiss actions
+- basic transaction merchant / notes editing
+- local Android toolchain setup for repeatable debug builds
 - a buildable debug APK
 
 ## Current Preview
@@ -75,6 +78,7 @@ The current preview build:
 
 - uses notification access
 - does not request SMS access
+- includes basic Inbox and Transactions surfaces
 - can be built locally as a debug APK
 
 APK output:

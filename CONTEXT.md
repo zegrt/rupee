@@ -117,10 +117,11 @@ References:
 
 ## Immediate Next Work
 
-1. parser refinement using real notification samples
-2. canonical transaction pipeline refinement
-3. richer dedupe rules for fuzzy multi-source collisions
-4. dedicated Inbox and debug views beyond the home inspection surface
+1. deepen the Inbox review flow beyond confirm and dismiss
+2. refine canonical transaction editing and transaction detail behavior
+3. parser refinement using real notification samples
+4. richer dedupe rules for fuzzy multi-source collisions
+5. replace the current Home debug shell with the first real daily dashboard
 
 ## Current Implementation State
 
@@ -137,7 +138,7 @@ References:
 - onboarding flow exists and persists completion
 - notification permission flow exists with a real listener service declaration
 - SMS permission has been removed from the current preview build and deferred
-- local toolchain is installed enough to compile and assemble a debug APK
+- local Java and Android toolchain is installed enough to compile and assemble a debug APK
 - debug APK builds successfully
 - raw notification capture events are stored locally
 - raw notification events are normalized into parsed signals and transaction candidates
@@ -145,7 +146,10 @@ References:
 - GPay, CRED, and ICICI parsers exist alongside the generic fallback parser
 - a first decision layer now routes candidates to auto-created canonical transactions, Inbox, or ignore
 - a first dedupe layer now suppresses repeated alerts using candidate fingerprints built from amount, mode, merchant/counterparty, masked digits, and a five-minute time bucket
-- the home screen now doubles as a basic pipeline inspection surface for canonical transactions, recent candidates, and pending Inbox volume
+- the app now has a basic Home / Inbox / Transactions shell
+- the Inbox surface supports initial confirm and dismiss review actions
+- the Transactions surface supports initial merchant and notes editing for canonical transactions
+- the Home surface still doubles as a pipeline inspection view rather than the final daily dashboard
 
 ## External Product Research Notes
 
