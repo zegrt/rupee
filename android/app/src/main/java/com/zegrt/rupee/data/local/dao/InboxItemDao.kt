@@ -16,6 +16,9 @@ interface InboxItemDao {
         limit: Int = 50,
     ): Flow<List<InboxItemEntity>>
 
+    @Query("SELECT * FROM inbox_items WHERE id = :id LIMIT 1")
+    suspend fun getInboxItemById(id: String): InboxItemEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertInboxItem(item: InboxItemEntity)
 }

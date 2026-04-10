@@ -12,6 +12,9 @@ interface CanonicalTransactionDao {
     @Query("SELECT * FROM canonical_transactions ORDER BY occurredAt DESC LIMIT :limit")
     fun observeRecentTransactions(limit: Int = 20): Flow<List<CanonicalTransactionEntity>>
 
+    @Query("SELECT * FROM canonical_transactions WHERE id = :id LIMIT 1")
+    suspend fun getTransactionById(id: String): CanonicalTransactionEntity?
+
     @Query(
         """
         SELECT * FROM canonical_transactions

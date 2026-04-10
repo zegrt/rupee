@@ -21,10 +21,28 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+enum class HomeTab {
+    HOME,
+    INBOX,
+    TRANSACTIONS,
+}
+
+data class HomeInboxRow(
+    val id: String,
+    val headline: String,
+    val subline: String,
+    val reasonLabel: String,
+    val merchantDraft: String,
+)
+
 data class HomeTransactionRow(
+    val id: String,
     val headline: String,
     val subline: String,
     val amountLabel: String,
+    val notes: String,
+    val merchantDraft: String,
+    val notesDraft: String,
 )
 
 data class HomeCandidateRow(
@@ -42,6 +60,10 @@ data class HomeUiState(
     val recentTransactionCount: Int = 0,
     val pendingInboxCount: Int = 0,
     val recentCandidateCount: Int = 0,
+    val selectedTab: HomeTab = HomeTab.HOME,
+    val selectedInboxItemId: String? = null,
+    val selectedTransactionId: String? = null,
+    val inboxItems: List<HomeInboxRow> = emptyList(),
     val recentTransactions: List<HomeTransactionRow> = emptyList(),
     val recentCandidates: List<HomeCandidateRow> = emptyList(),
     val isSeeding: Boolean = true,
@@ -54,7 +76,14 @@ class HomeViewModel(
         maximumFractionDigits = 2
         currency = java.util.Currency.getInstance("INR")
     }
+
     private val isSeeding = MutableStateFlow(true)
+    private val selectedTab = MutableStateFlow(HomeTab.HOME)
+    private val selectedInboxItemId = MutableStateFlow<String?>(null)
+    private val selectedTransactionId = MutableStateFlow<String?>(null)
+    private val inboxMerchantDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
+    private val transactionMerchantDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
+    private val transactionNotesDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
 
     @Suppress("UNCHECKED_CAST")
     val uiState: StateFlow<HomeUiState> = combine(
@@ -67,6 +96,12 @@ class HomeViewModel(
         repository.observeRecentTransactionCandidates(),
         repository.observePendingInboxItems(),
         isSeeding,
+        selectedTab,
+        selectedInboxItemId,
+        selectedTransactionId,
+        inboxMerchantDrafts,
+        transactionMerchantDrafts,
+        transactionNotesDrafts,
     ) { values ->
         val user = values[0] as UserEntity?
         val accounts = values[1] as List<AccountEntity>
@@ -77,6 +112,43 @@ class HomeViewModel(
         val candidates = values[6] as List<TransactionCandidateEntity>
         val inboxItems = values[7] as List<InboxItemEntity>
         val seeding = values[8] as Boolean
+        val tab = values[9] as HomeTab
+        val activeInboxItemId = values[10] as String?
+        val activeTransactionId = values[11] as String?
+        val inboxDrafts = values[12] as Map<String, String>
+        val transactionMerchantDraftMap = values[13] as Map<String, String>
+        val transactionNotesDraftMap = values[14] as Map<String, String>
+
+        val candidateById = candidates.associateBy { it.id }
+        val inboxRows = inboxItems.map { inboxItem ->
+            val candidate = candidateById[inboxItem.transactionCandidateId]
+            HomeInboxRow(
+                id = inboxItem.id,
+                headline = candidate?.toEntityName ?: "Review transaction",
+                subline = listOfNotNull(
+                    candidate?.mode?.name?.replace('_', ' '),
+                    candidate?.amountMinor?.let(::formatMinor),
+                    candidate?.occurredAt,
+                ).joinToString(" • ").ifBlank { inboxItem.createdAt },
+                reasonLabel = inboxItem.reasonCode.name.replace('_', ' '),
+                merchantDraft = inboxDrafts[inboxItem.id] ?: candidate?.toEntityName.orEmpty(),
+            )
+        }
+        val transactionRows = transactions.take(20).map { transaction ->
+            HomeTransactionRow(
+                id = transaction.id,
+                headline = transaction.merchantName ?: "Unnamed transaction",
+                subline = listOfNotNull(
+                    transaction.mode?.name?.replace('_', ' '),
+                    transaction.sourceSummary,
+                    transaction.occurredAt,
+                ).joinToString(" • ").ifBlank { transaction.occurredAt },
+                amountLabel = formatMinor(transaction.amountMinor),
+                notes = transaction.notes.orEmpty(),
+                merchantDraft = transactionMerchantDraftMap[transaction.id] ?: transaction.merchantName.orEmpty(),
+                notesDraft = transactionNotesDraftMap[transaction.id] ?: transaction.notes.orEmpty(),
+            )
+        }
 
         HomeUiState(
             userName = user?.displayName ?: "Rupee",
@@ -87,16 +159,11 @@ class HomeViewModel(
             recentTransactionCount = transactions.size,
             pendingInboxCount = inboxItems.size,
             recentCandidateCount = candidates.size,
-            recentTransactions = transactions.take(5).map { transaction ->
-                HomeTransactionRow(
-                    headline = transaction.merchantName ?: "Unnamed transaction",
-                    subline = listOfNotNull(
-                        transaction.mode?.name?.replace('_', ' '),
-                        transaction.sourceSummary,
-                    ).joinToString(" • ").ifBlank { transaction.occurredAt },
-                    amountLabel = formatMinor(transaction.amountMinor),
-                )
-            },
+            selectedTab = tab,
+            selectedInboxItemId = activeInboxItemId ?: inboxRows.firstOrNull()?.id,
+            selectedTransactionId = activeTransactionId ?: transactionRows.firstOrNull()?.id,
+            inboxItems = inboxRows,
+            recentTransactions = transactionRows,
             recentCandidates = candidates.take(5).map { candidate ->
                 HomeCandidateRow(
                     headline = candidate.toEntityName ?: "Unresolved candidate",
@@ -119,6 +186,59 @@ class HomeViewModel(
         viewModelScope.launch {
             repository.ensureBaseData()
             isSeeding.value = false
+        }
+    }
+
+    fun selectTab(tab: HomeTab) {
+        selectedTab.value = tab
+    }
+
+    fun selectInboxItem(id: String) {
+        selectedInboxItemId.value = id
+    }
+
+    fun updateInboxMerchantDraft(id: String, value: String) {
+        inboxMerchantDrafts.value = inboxMerchantDrafts.value + (id to value)
+    }
+
+    fun confirmInboxItem(id: String) {
+        viewModelScope.launch {
+            repository.confirmInboxItem(
+                inboxItemId = id,
+                merchantNameOverride = inboxMerchantDrafts.value[id],
+            )
+            inboxMerchantDrafts.value = inboxMerchantDrafts.value - id
+            selectedInboxItemId.value = null
+        }
+    }
+
+    fun dismissInboxItem(id: String) {
+        viewModelScope.launch {
+            repository.dismissInboxItem(id)
+            inboxMerchantDrafts.value = inboxMerchantDrafts.value - id
+            selectedInboxItemId.value = null
+        }
+    }
+
+    fun selectTransaction(id: String) {
+        selectedTransactionId.value = id
+    }
+
+    fun updateTransactionMerchantDraft(id: String, value: String) {
+        transactionMerchantDrafts.value = transactionMerchantDrafts.value + (id to value)
+    }
+
+    fun updateTransactionNotesDraft(id: String, value: String) {
+        transactionNotesDrafts.value = transactionNotesDrafts.value + (id to value)
+    }
+
+    fun saveTransactionEdits(id: String) {
+        viewModelScope.launch {
+            repository.updateTransactionDetails(
+                transactionId = id,
+                merchantName = transactionMerchantDrafts.value[id].orEmpty(),
+                notes = transactionNotesDrafts.value[id].orEmpty(),
+            )
         }
     }
 

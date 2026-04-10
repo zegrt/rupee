@@ -16,9 +16,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -43,7 +45,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.zegrt.rupee.home.HomeInboxRow
 import com.zegrt.rupee.home.HomeUiState
+import com.zegrt.rupee.home.HomeTab
+import com.zegrt.rupee.home.HomeTransactionRow
 import com.zegrt.rupee.home.HomeViewModel
 import com.zegrt.rupee.home.HomeViewModelFactory
 import com.zegrt.rupee.onboarding.OnboardingStep
@@ -136,7 +141,18 @@ private fun RupeeApp(
             onFinish = onboardingViewModel::finishSetup,
         )
 
-        OnboardingStep.HOME -> RupeeHome(uiState = homeUiState)
+        OnboardingStep.HOME -> RupeeHome(
+            uiState = homeUiState,
+            onSelectTab = homeViewModel::selectTab,
+            onSelectInboxItem = homeViewModel::selectInboxItem,
+            onInboxMerchantDraftChange = homeViewModel::updateInboxMerchantDraft,
+            onConfirmInboxItem = homeViewModel::confirmInboxItem,
+            onDismissInboxItem = homeViewModel::dismissInboxItem,
+            onSelectTransaction = homeViewModel::selectTransaction,
+            onTransactionMerchantDraftChange = homeViewModel::updateTransactionMerchantDraft,
+            onTransactionNotesDraftChange = homeViewModel::updateTransactionNotesDraft,
+            onSaveTransaction = homeViewModel::saveTransactionEdits,
+        )
     }
 }
 
@@ -410,7 +426,18 @@ private fun SetupToggleCard(
 }
 
 @Composable
-private fun RupeeHome(uiState: HomeUiState) {
+private fun RupeeHome(
+    uiState: HomeUiState,
+    onSelectTab: (HomeTab) -> Unit,
+    onSelectInboxItem: (String) -> Unit,
+    onInboxMerchantDraftChange: (String, String) -> Unit,
+    onConfirmInboxItem: (String) -> Unit,
+    onDismissInboxItem: (String) -> Unit,
+    onSelectTransaction: (String) -> Unit,
+    onTransactionMerchantDraftChange: (String, String) -> Unit,
+    onTransactionNotesDraftChange: (String, String) -> Unit,
+    onSaveTransaction: (String) -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -424,67 +451,279 @@ private fun RupeeHome(uiState: HomeUiState) {
             modifier = Modifier.padding(top = 12.dp),
         )
         Spacer(modifier = Modifier.height(24.dp))
-        Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Text("Hello, ${uiState.userName}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-                Text(
-                    text = if (uiState.isSeeding) "Seeding local defaults..." else "Local store is ready.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        MetricPill(label = "Accounts", value = uiState.accountCount.toString(), modifier = Modifier.weight(1f))
-                        MetricPill(label = "Cards", value = uiState.cardCount.toString(), modifier = Modifier.weight(1f))
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        MetricPill(label = "Categories", value = uiState.categoryCount.toString(), modifier = Modifier.weight(1f))
-                        MetricPill(label = "Buckets", value = uiState.bucketCount.toString(), modifier = Modifier.weight(1f))
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        MetricPill(label = "Canonical", value = uiState.recentTransactionCount.toString(), modifier = Modifier.weight(1f))
-                        MetricPill(label = "Inbox", value = uiState.pendingInboxCount.toString(), modifier = Modifier.weight(1f))
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        MetricPill(label = "Candidates", value = uiState.recentCandidateCount.toString(), modifier = Modifier.weight(1f))
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            HomeTabChip(
+                label = "Home",
+                selected = uiState.selectedTab == HomeTab.HOME,
+                onClick = { onSelectTab(HomeTab.HOME) },
+            )
+            HomeTabChip(
+                label = "Inbox",
+                selected = uiState.selectedTab == HomeTab.INBOX,
+                onClick = { onSelectTab(HomeTab.INBOX) },
+            )
+            HomeTabChip(
+                label = "Transactions",
+                selected = uiState.selectedTab == HomeTab.TRANSACTIONS,
+                onClick = { onSelectTab(HomeTab.TRANSACTIONS) },
+            )
+        }
+        Spacer(modifier = Modifier.height(20.dp))
+        when (uiState.selectedTab) {
+            HomeTab.HOME -> HomeSummaryTab(uiState = uiState)
+            HomeTab.INBOX -> InboxTab(
+                uiState = uiState,
+                onSelectInboxItem = onSelectInboxItem,
+                onInboxMerchantDraftChange = onInboxMerchantDraftChange,
+                onConfirmInboxItem = onConfirmInboxItem,
+                onDismissInboxItem = onDismissInboxItem,
+            )
+            HomeTab.TRANSACTIONS -> TransactionsTab(
+                uiState = uiState,
+                onSelectTransaction = onSelectTransaction,
+                onTransactionMerchantDraftChange = onTransactionMerchantDraftChange,
+                onTransactionNotesDraftChange = onTransactionNotesDraftChange,
+                onSaveTransaction = onSaveTransaction,
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeSummaryTab(uiState: HomeUiState) {
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text("Hello, ${uiState.userName}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+            Text(
+                text = if (uiState.isSeeding) "Seeding local defaults..." else "Local store is ready.",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MetricPill(label = "Accounts", value = uiState.accountCount.toString(), modifier = Modifier.weight(1f))
+                    MetricPill(label = "Cards", value = uiState.cardCount.toString(), modifier = Modifier.weight(1f))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MetricPill(label = "Categories", value = uiState.categoryCount.toString(), modifier = Modifier.weight(1f))
+                    MetricPill(label = "Buckets", value = uiState.bucketCount.toString(), modifier = Modifier.weight(1f))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MetricPill(label = "Canonical", value = uiState.recentTransactionCount.toString(), modifier = Modifier.weight(1f))
+                    MetricPill(label = "Inbox", value = uiState.pendingInboxCount.toString(), modifier = Modifier.weight(1f))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MetricPill(label = "Candidates", value = uiState.recentCandidateCount.toString(), modifier = Modifier.weight(1f))
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
-        Spacer(modifier = Modifier.height(20.dp))
-        InspectionSection(
-            title = "Recent canonical transactions",
-            hasItems = uiState.recentTransactions.isNotEmpty(),
-            emptyLabel = "No canonical transactions yet.",
-        ) {
-            uiState.recentTransactions.forEach { row ->
-                InspectionRow(
-                    headline = row.headline,
-                    subline = row.subline,
-                    trailing = row.amountLabel,
-                )
-            }
+    }
+    Spacer(modifier = Modifier.height(20.dp))
+    InspectionSection(
+        title = "Recent canonical transactions",
+        hasItems = uiState.recentTransactions.isNotEmpty(),
+        emptyLabel = "No canonical transactions yet.",
+    ) {
+        uiState.recentTransactions.take(5).forEach { row ->
+            InspectionRow(
+                headline = row.headline,
+                subline = row.subline,
+                trailing = row.amountLabel,
+            )
         }
-        Spacer(modifier = Modifier.height(16.dp))
-        InspectionSection(
-            title = "Recent candidates",
-            hasItems = uiState.recentCandidates.isNotEmpty(),
-            emptyLabel = "No transaction candidates yet.",
-        ) {
-            uiState.recentCandidates.forEach { row ->
-                InspectionRow(
-                    headline = row.headline,
-                    subline = row.subline,
-                    trailing = row.decisionLabel,
+    }
+    Spacer(modifier = Modifier.height(16.dp))
+    InspectionSection(
+        title = "Recent candidates",
+        hasItems = uiState.recentCandidates.isNotEmpty(),
+        emptyLabel = "No transaction candidates yet.",
+    ) {
+        uiState.recentCandidates.forEach { row ->
+            InspectionRow(
+                headline = row.headline,
+                subline = row.subline,
+                trailing = row.decisionLabel,
+            )
+        }
+    }
+}
+
+@Composable
+private fun InboxTab(
+    uiState: HomeUiState,
+    onSelectInboxItem: (String) -> Unit,
+    onInboxMerchantDraftChange: (String, String) -> Unit,
+    onConfirmInboxItem: (String) -> Unit,
+    onDismissInboxItem: (String) -> Unit,
+) {
+    InspectionSection(
+        title = "Inbox review",
+        hasItems = uiState.inboxItems.isNotEmpty(),
+        emptyLabel = "Inbox is clear.",
+    ) {
+        uiState.inboxItems.forEach { row ->
+            InboxRow(
+                row = row,
+                selected = row.id == uiState.selectedInboxItemId,
+                onSelect = { onSelectInboxItem(row.id) },
+                onMerchantChange = { onInboxMerchantDraftChange(row.id, it) },
+                onConfirm = { onConfirmInboxItem(row.id) },
+                onDismiss = { onDismissInboxItem(row.id) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun TransactionsTab(
+    uiState: HomeUiState,
+    onSelectTransaction: (String) -> Unit,
+    onTransactionMerchantDraftChange: (String, String) -> Unit,
+    onTransactionNotesDraftChange: (String, String) -> Unit,
+    onSaveTransaction: (String) -> Unit,
+) {
+    InspectionSection(
+        title = "Transactions",
+        hasItems = uiState.recentTransactions.isNotEmpty(),
+        emptyLabel = "No canonical transactions yet.",
+    ) {
+        uiState.recentTransactions.forEach { row ->
+            TransactionRow(
+                row = row,
+                selected = row.id == uiState.selectedTransactionId,
+                onSelect = { onSelectTransaction(row.id) },
+                onMerchantChange = { onTransactionMerchantDraftChange(row.id, it) },
+                onNotesChange = { onTransactionNotesDraftChange(row.id, it) },
+                onSave = { onSaveTransaction(row.id) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeTabChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    AssistChip(
+        onClick = onClick,
+        label = { Text(label) },
+    )
+}
+
+@Composable
+private fun InboxRow(
+    row: HomeInboxRow,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    onMerchantChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+        ),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        onClick = onSelect,
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(row.headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(row.subline, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+            Text(row.reasonLabel, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 8.dp))
+            if (selected) {
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = row.merchantDraft,
+                    onValueChange = onMerchantChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Merchant / payee") },
+                    singleLine = true,
                 )
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(onClick = onConfirm) { Text("Confirm") }
+                    OutlinedButton(onClick = onDismiss) { Text("Dismiss") }
+                }
             }
         }
     }
+    Spacer(modifier = Modifier.height(12.dp))
+}
+
+@Composable
+private fun TransactionRow(
+    row: HomeTransactionRow,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    onMerchantChange: (String) -> Unit,
+    onNotesChange: (String) -> Unit,
+    onSave: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+        ),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        onClick = onSelect,
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(row.headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(row.subline, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = row.amountLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier
+                        .background(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = RoundedCornerShape(12.dp),
+                        )
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
+            if (selected) {
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = row.merchantDraft,
+                    onValueChange = onMerchantChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Merchant") },
+                    singleLine = true,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = row.notesDraft,
+                    onValueChange = onNotesChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Notes") },
+                    minLines = 2,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(onClick = onSave) { Text("Save changes") }
+            }
+        }
+    }
+    Spacer(modifier = Modifier.height(12.dp))
 }
 
 @Composable
@@ -622,6 +861,15 @@ private fun HomeScreenPreview() {
                 recentTransactionCount = 0,
                 isSeeding = false,
             ),
+            onSelectTab = {},
+            onSelectInboxItem = {},
+            onInboxMerchantDraftChange = { _, _ -> },
+            onConfirmInboxItem = {},
+            onDismissInboxItem = {},
+            onSelectTransaction = {},
+            onTransactionMerchantDraftChange = { _, _ -> },
+            onTransactionNotesDraftChange = { _, _ -> },
+            onSaveTransaction = {},
         )
     }
 }

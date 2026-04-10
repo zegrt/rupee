@@ -12,6 +12,9 @@ interface TransactionCandidateDao {
     @Query("SELECT * FROM transaction_candidates ORDER BY createdAt DESC LIMIT :limit")
     fun observeRecentTransactionCandidates(limit: Int = 50): Flow<List<TransactionCandidateEntity>>
 
+    @Query("SELECT * FROM transaction_candidates WHERE id = :id LIMIT 1")
+    suspend fun getTransactionCandidateById(id: String): TransactionCandidateEntity?
+
     @Query(
         """
         SELECT * FROM transaction_candidates

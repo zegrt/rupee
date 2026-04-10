@@ -38,6 +38,22 @@ Rupee is meant to make it easier to answer:
 - SMS planned later, not in the current preview build
 - bank linking not required for v1
 
+## Comparison Learnings
+
+From reviewing a focused workflow app, Rupee should preserve:
+
+- narrow product framing around a specific recurring user job
+- obvious, task-based top-level modules
+- a main screen that answers the most important questions immediately
+- clear separation between daily-use product surfaces and future admin or import tooling
+
+Rupee should avoid:
+
+- relying on a heavy client-only shell for product clarity
+- shipping privileged setup or admin elevation paths in production
+- letting non-core operational tooling bloat the initial user experience
+- trusting client-side access checks for sensitive capabilities
+
 ## Current Status
 
 Right now the project has:

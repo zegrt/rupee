@@ -6,11 +6,16 @@ import com.zegrt.rupee.data.local.entity.AccountType
 import com.zegrt.rupee.data.local.entity.BucketEntity
 import com.zegrt.rupee.data.local.entity.BudgetEntity
 import com.zegrt.rupee.data.local.entity.BudgetType
+import com.zegrt.rupee.data.local.entity.CandidateDecisionState
 import com.zegrt.rupee.data.local.entity.CanonicalTransactionEntity
+import com.zegrt.rupee.data.local.entity.CanonicalTransactionStatus
+import com.zegrt.rupee.data.local.entity.CanonicalTransactionType
 import com.zegrt.rupee.data.local.entity.CategoryEntity
+import com.zegrt.rupee.data.local.entity.ConfidenceTier
 import com.zegrt.rupee.data.local.entity.CreditCardEntity
 import com.zegrt.rupee.data.local.entity.InboxDecisionState
 import com.zegrt.rupee.data.local.entity.InboxItemEntity
+import com.zegrt.rupee.data.local.entity.Mode
 import com.zegrt.rupee.data.local.entity.SyncStatus
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
 import com.zegrt.rupee.data.local.entity.UserEntity
@@ -29,6 +34,10 @@ data class OnboardingSetupInput(
 class LocalFinanceRepository(
     private val database: RupeeDatabase,
 ) {
+    companion object {
+        private const val USER_ID = "local-user"
+    }
+
     fun observeUser(): Flow<UserEntity?> = database.userDao().observeUser()
 
     fun observeAccounts(): Flow<List<AccountEntity>> = database.accountDao().observeActiveAccounts()
@@ -55,7 +64,7 @@ class LocalFinanceRepository(
         if (database.userDao().countUsers() > 0) return
 
         val now = Instant.now().toString()
-        val userId = "local-user"
+        val userId = USER_ID
 
         database.userDao().upsertUser(
             UserEntity(
@@ -145,7 +154,7 @@ class LocalFinanceRepository(
         ensureBaseData()
 
         val now = Instant.now().toString()
-        val userId = "local-user"
+        val userId = USER_ID
 
         if (input.bankAccountName.isNotBlank()) {
             val existingBanks = database.accountDao().countAccountsByType(userId, AccountType.BANK)
@@ -205,5 +214,109 @@ class LocalFinanceRepository(
                 )
             }
         }
+    }
+
+    suspend fun confirmInboxItem(
+        inboxItemId: String,
+        merchantNameOverride: String? = null,
+    ) {
+        val now = Instant.now().toString()
+        val inboxItem = database.inboxItemDao().getInboxItemById(inboxItemId) ?: return
+        val candidate = database.transactionCandidateDao()
+            .getTransactionCandidateById(inboxItem.transactionCandidateId) ?: return
+
+        val existingCanonical = candidate.linkedCanonicalTransactionId?.let { linkedCanonicalId ->
+            database.canonicalTransactionDao().getTransactionById(linkedCanonicalId)
+        }
+
+        val canonicalId = existingCanonical?.id ?: "txn-${candidate.id}"
+        val canonical = (existingCanonical ?: CanonicalTransactionEntity(
+            id = canonicalId,
+            userId = USER_ID,
+            type = candidate.toCanonicalType(),
+            status = CanonicalTransactionStatus.CONFIRMED,
+            amountMinor = candidate.amountMinor ?: 0L,
+            currencyCode = candidate.currencyCode ?: "INR",
+            merchantName = candidate.toEntityName,
+            mode = candidate.mode ?: Mode.OTHER,
+            occurredAt = candidate.occurredAt ?: inboxItem.createdAt,
+            sourceSummary = "Confirmed from Inbox review",
+            createdBy = "user_review",
+            confidenceTier = candidate.confidenceTier ?: ConfidenceTier.MEDIUM,
+            dedupeFingerprint = candidate.candidateFingerprint,
+            createdAt = now,
+            updatedAt = now,
+            syncStatus = SyncStatus.LOCAL_ONLY,
+        )).copy(
+            merchantName = merchantNameOverride?.trim()?.ifBlank { null } ?: existingCanonical?.merchantName ?: candidate.toEntityName,
+            amountMinor = candidate.amountMinor ?: existingCanonical?.amountMinor ?: 0L,
+            currencyCode = candidate.currencyCode ?: existingCanonical?.currencyCode ?: "INR",
+            mode = candidate.mode ?: existingCanonical?.mode ?: Mode.OTHER,
+            occurredAt = candidate.occurredAt ?: existingCanonical?.occurredAt ?: inboxItem.createdAt,
+            status = CanonicalTransactionStatus.CONFIRMED,
+            updatedAt = now,
+        )
+
+        database.canonicalTransactionDao().upsertTransactions(listOf(canonical))
+        database.transactionCandidateDao().upsertTransactionCandidate(
+            candidate.copy(
+                decisionState = CandidateDecisionState.AUTO_CREATED,
+                linkedCanonicalTransactionId = canonical.id,
+                updatedAt = now,
+            ),
+        )
+        database.inboxItemDao().upsertInboxItem(
+            inboxItem.copy(
+                decisionState = InboxDecisionState.CONFIRMED,
+                linkedCanonicalTransactionId = canonical.id,
+                resolvedAt = now,
+                updatedAt = now,
+            ),
+        )
+    }
+
+    suspend fun dismissInboxItem(inboxItemId: String) {
+        val now = Instant.now().toString()
+        val inboxItem = database.inboxItemDao().getInboxItemById(inboxItemId) ?: return
+        val candidate = database.transactionCandidateDao()
+            .getTransactionCandidateById(inboxItem.transactionCandidateId) ?: return
+
+        database.transactionCandidateDao().upsertTransactionCandidate(
+            candidate.copy(
+                decisionState = CandidateDecisionState.IGNORED,
+                updatedAt = now,
+            ),
+        )
+        database.inboxItemDao().upsertInboxItem(
+            inboxItem.copy(
+                decisionState = InboxDecisionState.DISMISSED,
+                resolvedAt = now,
+                updatedAt = now,
+            ),
+        )
+    }
+
+    suspend fun updateTransactionDetails(
+        transactionId: String,
+        merchantName: String,
+        notes: String,
+    ) {
+        val now = Instant.now().toString()
+        val transaction = database.canonicalTransactionDao().getTransactionById(transactionId) ?: return
+        database.canonicalTransactionDao().upsertTransactions(
+            listOf(
+                transaction.copy(
+                    merchantName = merchantName.trim().ifBlank { null },
+                    notes = notes.trim().ifBlank { null },
+                    updatedAt = now,
+                ),
+            ),
+        )
+    }
+
+    private fun TransactionCandidateEntity.toCanonicalType(): CanonicalTransactionType = when (candidateType) {
+        com.zegrt.rupee.data.local.entity.TransactionCandidateType.TRANSFER -> CanonicalTransactionType.TRANSFER
+        com.zegrt.rupee.data.local.entity.TransactionCandidateType.CASH_WITHDRAWAL -> CanonicalTransactionType.CASH_ADJUSTMENT
+        else -> CanonicalTransactionType.EXPENSE
     }
 }

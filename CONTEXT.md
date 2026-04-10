@@ -1,6 +1,6 @@
 # Rupee Context
 
-Date: March 27, 2026
+Date: April 11, 2026
 Status: Working memory
 
 ## Product Snapshot
@@ -159,6 +159,22 @@ References:
   - treat notifications as evidence, not source of truth
   - longer-term robustness likely requires stronger owned channels or integrations beyond notification listening alone
 
+## Comparative Product Notes
+
+Takeaways from reviewing a focused admissions tracker:
+
+- strong product framing matters: users should understand the workflow from the primary navigation alone
+- clear, task-based modules are useful when each one maps to a real repeated job
+- the main dashboard should answer the highest-frequency questions immediately
+- supporting bulk, admin, or maintenance tools should stay outside the primary user journey
+
+Boundaries to preserve in Rupee:
+
+- do not drift into a generic finance super-app because the architecture can support more modules
+- do not ship privileged setup or admin elevation paths in production clients
+- do not trust client-side role checks for sensitive capabilities
+- do not let non-core tooling bloat the core capture -> explain -> review -> trust loop
+
 ## Notes For Future Codex Sessions
 
 - Do not reframe this as a generic finance super-app.
@@ -166,4 +182,6 @@ References:
 - Do not make bank sync a dependency for usefulness.
 - Treat deduplication and trust as first-order product problems.
 - Keep raw source evidence separate from canonical finance records.
+- Keep the top-level navigation obvious and tied to user jobs, not internal implementation buckets.
+- Keep any future admin, import, debug, or migration tooling out of the main end-user flow.
 - Before every commit, update `CONTEXT.md` and `README.md` if project scope or artifact inventory changed.
