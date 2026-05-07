@@ -30,7 +30,10 @@ class RupeeNotificationListenerService : NotificationListenerService() {
         val body = extras?.getCharSequence(NotificationCompat.EXTRA_TEXT)?.toString()?.trim().orEmpty()
 
         if (body.isBlank()) return
-        if (sbn.packageName == packageName) return
+
+        val isDebugMock = sbn.notification.extras
+            ?.getBoolean(RupeeApplication.DEBUG_MOCK_EXTRA, false) == true
+        if (sbn.packageName == packageName && !isDebugMock) return
 
         val writer = this.writer ?: return
         val normalizer = this.normalizer ?: return

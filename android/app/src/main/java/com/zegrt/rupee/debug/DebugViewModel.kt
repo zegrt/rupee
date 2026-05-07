@@ -1,8 +1,13 @@
 package com.zegrt.rupee.debug
 
+import android.app.NotificationManager
+import android.content.Context
+import android.os.Bundle
+import androidx.core.app.NotificationCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.zegrt.rupee.RupeeApplication
 import com.zegrt.rupee.data.local.entity.RawCaptureEventEntity
 import com.zegrt.rupee.data.local.entity.RawCaptureSourceType
 import com.zegrt.rupee.data.local.entity.SyncStatus
@@ -131,6 +136,30 @@ class DebugViewModel(
 
     fun clearMessage() {
         _uiState.value = _uiState.value.copy(message = null)
+    }
+
+    fun postMockNotification(context: Context, sample: SampleNotification = DebugSamples.gpay) {
+        val nm = context.getSystemService(NotificationManager::class.java)
+        if (nm == null) {
+            _uiState.value = _uiState.value.copy(message = "NotificationManager unavailable")
+            return
+        }
+        val extras = Bundle().apply { putBoolean(RupeeApplication.DEBUG_MOCK_EXTRA, true) }
+        val notification = NotificationCompat.Builder(context, RupeeApplication.DEBUG_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.sym_def_app_icon)
+            .setContentTitle(sample.title ?: "Rupee mock")
+            .setContentText(sample.body)
+            .addExtras(extras)
+            .setAutoCancel(true)
+            .build()
+        nm.notify(MOCK_NOTIFICATION_ID, notification)
+        _uiState.value = _uiState.value.copy(
+            message = "Posted real notification → check Inbox in a second",
+        )
+    }
+
+    companion object {
+        private const val MOCK_NOTIFICATION_ID = 4001
     }
 }
 

@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -39,6 +40,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -208,6 +212,9 @@ private fun RupeeApp(
             onDebugUpdateParseTitle = debugViewModel::updateParseTitle,
             onDebugUpdateParseBody = debugViewModel::updateParseBody,
             onDebugRunParseTest = { debugViewModel.runParseTest() },
+            onCloseTransaction = homeViewModel::closeTransactionDetail,
+            onDeleteTransaction = homeViewModel::deleteTransaction,
+            onPostMockNotification = { debugViewModel.postMockNotification(context) },
         )
     }
 }
@@ -512,63 +519,75 @@ private fun RupeeHome(
     onDebugUpdateParseTitle: (String) -> Unit,
     onDebugUpdateParseBody: (String) -> Unit,
     onDebugRunParseTest: () -> Unit,
+    onCloseTransaction: () -> Unit,
+    onDeleteTransaction: (String) -> Unit,
+    onPostMockNotification: () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 24.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+    var showDebug by remember { mutableStateOf(false) }
+    androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 24.dp),
         ) {
-            HomeTabChip("Home", uiState.selectedTab == HomeTab.HOME) { onSelectTab(HomeTab.HOME) }
-            HomeTabChip("Inbox", uiState.selectedTab == HomeTab.INBOX) { onSelectTab(HomeTab.INBOX) }
-            HomeTabChip("Transactions", uiState.selectedTab == HomeTab.TRANSACTIONS) { onSelectTab(HomeTab.TRANSACTIONS) }
-            HomeTabChip("Settings", uiState.selectedTab == HomeTab.SETTINGS) { onSelectTab(HomeTab.SETTINGS) }
-            HomeTabChip("Debug", uiState.selectedTab == HomeTab.DEBUG) { onSelectTab(HomeTab.DEBUG) }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                HomeTabChip("Home", uiState.selectedTab == HomeTab.HOME) { onSelectTab(HomeTab.HOME) }
+                HomeTabChip("Inbox", uiState.selectedTab == HomeTab.INBOX) { onSelectTab(HomeTab.INBOX) }
+                HomeTabChip("Transactions", uiState.selectedTab == HomeTab.TRANSACTIONS) { onSelectTab(HomeTab.TRANSACTIONS) }
+                HomeTabChip("Settings", uiState.selectedTab == HomeTab.SETTINGS) { onSelectTab(HomeTab.SETTINGS) }
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+            when (uiState.selectedTab) {
+                HomeTab.HOME -> HomeSummaryTab(
+                    uiState = uiState,
+                    versionLabel = versionLabel,
+                    onReviewInbox = { onSelectTab(HomeTab.INBOX) },
+                    onAddTransaction = onOpenManualEntry,
+                )
+                HomeTab.INBOX -> ReviewTab(
+                    uiState = uiState,
+                    onSelectReviewRow = onSelectReviewRow,
+                    onMerchantChange = onReviewMerchantDraftChange,
+                    onAmountChange = onReviewAmountDraftChange,
+                    onCategoryChange = onReviewCategoryDraftChange,
+                    onConfirm = onConfirmReviewRow,
+                    onDismiss = onDismissReviewRow,
+                )
+                HomeTab.TRANSACTIONS -> TransactionsTab(
+                    uiState = uiState,
+                    onSelectTransaction = onSelectTransaction,
+                )
+                HomeTab.SETTINGS -> SettingsScreen(
+                    state = settingsState,
+                    onNameDraftChange = onSettingsNameDraftChange,
+                    onSaveName = onSettingsSaveName,
+                    onBudgetDraftChange = onSettingsBudgetDraftChange,
+                    onSaveBudget = onSettingsSaveBudget,
+                    onOpenNotificationSettings = onOpenNotificationSettings,
+                    onOpenDebug = { showDebug = true },
+                )
+            }
+            Spacer(modifier = Modifier.height(80.dp))
         }
-        Spacer(modifier = Modifier.height(20.dp))
-        when (uiState.selectedTab) {
-            HomeTab.HOME -> HomeSummaryTab(
-                uiState = uiState,
-                versionLabel = versionLabel,
-                onReviewInbox = { onSelectTab(HomeTab.INBOX) },
-                onAddTransaction = onOpenManualEntry,
-            )
-            HomeTab.INBOX -> ReviewTab(
-                uiState = uiState,
-                onSelectReviewRow = onSelectReviewRow,
-                onMerchantChange = onReviewMerchantDraftChange,
-                onAmountChange = onReviewAmountDraftChange,
-                onCategoryChange = onReviewCategoryDraftChange,
-                onConfirm = onConfirmReviewRow,
-                onDismiss = onDismissReviewRow,
-            )
-            HomeTab.TRANSACTIONS -> TransactionsTab(
-                uiState = uiState,
-                onSelectTransaction = onSelectTransaction,
-                onTransactionMerchantDraftChange = onTransactionMerchantDraftChange,
-                onTransactionNotesDraftChange = onTransactionNotesDraftChange,
-                onSaveTransaction = onSaveTransaction,
-            )
-            HomeTab.SETTINGS -> SettingsScreen(
-                state = settingsState,
-                onNameDraftChange = onSettingsNameDraftChange,
-                onSaveName = onSettingsSaveName,
-                onBudgetDraftChange = onSettingsBudgetDraftChange,
-                onSaveBudget = onSettingsSaveBudget,
-                onOpenNotificationSettings = onOpenNotificationSettings,
-                onOpenDebug = { onSelectTab(HomeTab.DEBUG) },
-            )
-            HomeTab.DEBUG -> DebugScreen(
-                state = debugState,
-                onReset = onDebugReset,
-                onSendSample = onDebugSendSample,
-                onUpdateParseTitle = onDebugUpdateParseTitle,
-                onUpdateParseBody = onDebugUpdateParseBody,
-                onRunParseTest = onDebugRunParseTest,
+
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.85f),
+            modifier = Modifier
+                .align(androidx.compose.ui.Alignment.BottomEnd)
+                .padding(20.dp)
+                .clickable { showDebug = true },
+        ) {
+            Text(
+                "Debug",
+                color = MaterialTheme.colorScheme.onTertiary,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
             )
         }
     }
@@ -581,6 +600,57 @@ private fun RupeeHome(
             onUpdate = onUpdateManualEntry,
             onSubmit = onSubmitManualEntry,
         )
+    }
+
+    val selectedTxn = uiState.selectedTransactionId
+        ?.let { id -> uiState.recentTransactions.firstOrNull { it.id == id } }
+    if (selectedTxn != null && uiState.selectedTab == HomeTab.TRANSACTIONS) {
+        TransactionDetailSheet(
+            row = selectedTxn,
+            onClose = onCloseTransaction,
+            onMerchantChange = { onTransactionMerchantDraftChange(selectedTxn.id, it) },
+            onNotesChange = { onTransactionNotesDraftChange(selectedTxn.id, it) },
+            onSave = { onSaveTransaction(selectedTxn.id) },
+            onDelete = { onDeleteTransaction(selectedTxn.id) },
+        )
+    }
+
+    if (showDebug) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showDebug = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp, vertical = 24.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Debug", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                        androidx.compose.material3.TextButton(onClick = { showDebug = false }) { Text("Close") }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    DebugScreen(
+                        state = debugState,
+                        onReset = onDebugReset,
+                        onSendSample = onDebugSendSample,
+                        onUpdateParseTitle = onDebugUpdateParseTitle,
+                        onUpdateParseBody = onDebugUpdateParseBody,
+                        onRunParseTest = onDebugRunParseTest,
+                        onPostMockNotification = onPostMockNotification,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -979,9 +1049,6 @@ private fun ReviewTab(
 private fun TransactionsTab(
     uiState: HomeUiState,
     onSelectTransaction: (String) -> Unit,
-    onTransactionMerchantDraftChange: (String, String) -> Unit,
-    onTransactionNotesDraftChange: (String, String) -> Unit,
-    onSaveTransaction: (String) -> Unit,
 ) {
     InspectionSection(
         title = "Transactions",
@@ -991,11 +1058,7 @@ private fun TransactionsTab(
         uiState.recentTransactions.forEach { row ->
             TransactionRow(
                 row = row,
-                selected = row.id == uiState.selectedTransactionId,
                 onSelect = { onSelectTransaction(row.id) },
-                onMerchantChange = { onTransactionMerchantDraftChange(row.id, it) },
-                onNotesChange = { onTransactionNotesDraftChange(row.id, it) },
-                onSave = { onSaveTransaction(row.id) },
             )
         }
     }
@@ -1080,7 +1143,7 @@ private fun ReviewRowCard(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                CategoryChipRow(
+                CategoryDropdown(
                     selectedId = row.categoryIdDraft,
                     categories = categories,
                     onSelect = onCategoryChange,
@@ -1094,6 +1157,54 @@ private fun ReviewRowCard(
         }
     }
     Spacer(modifier = Modifier.height(12.dp))
+}
+
+@Composable
+private fun CategoryDropdown(
+    selectedId: String?,
+    categories: List<com.zegrt.rupee.home.CategoryOption>,
+    onSelect: (String?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedLabel = categories.firstOrNull { it.id == selectedId }?.name ?: "None"
+    androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = selectedLabel,
+            onValueChange = {},
+            readOnly = true,
+            enabled = false,
+            label = { Text("Category") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = true },
+            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                disabledBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
+        )
+        androidx.compose.material3.DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text("None") },
+                onClick = {
+                    onSelect(null)
+                    expanded = false
+                },
+            )
+            categories.forEach { option ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(option.name) },
+                    onClick = {
+                        onSelect(option.id)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -1129,46 +1240,78 @@ private fun CategoryChipRow(
 @Composable
 private fun TransactionRow(
     row: HomeTransactionRow,
-    selected: Boolean,
     onSelect: () -> Unit,
-    onMerchantChange: (String) -> Unit,
-    onNotesChange: (String) -> Unit,
-    onSave: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         onClick = onSelect,
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(row.headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text(row.subline, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = row.amountLabel,
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier
-                        .background(
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            shape = RoundedCornerShape(12.dp),
-                        )
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(row.headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(row.subline, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
             }
-            if (selected) {
-                Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = row.amountLabel,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun TransactionDetailSheet(
+    row: HomeTransactionRow,
+    onClose: () -> Unit,
+    onMerchantChange: (String) -> Unit,
+    onNotesChange: (String) -> Unit,
+    onSave: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var editing by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onClose) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(row.amountLabel, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+            Text(row.headline, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text(row.subline, style = MaterialTheme.typography.bodyMedium)
+            if (!editing) {
+                if (row.notes.isNotBlank()) {
+                    Text("Notes", style = MaterialTheme.typography.labelMedium)
+                    Text(row.notes, style = MaterialTheme.typography.bodyMedium)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(onClick = { editing = true }, modifier = Modifier.weight(1f)) { Text("Edit") }
+                    OutlinedButton(
+                        onClick = { confirmDelete = true },
+                        modifier = Modifier.weight(1f),
+                        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                    ) {
+                        Text("Delete")
+                    }
+                }
+            } else {
                 OutlinedTextField(
                     value = row.merchantDraft,
                     onValueChange = onMerchantChange,
@@ -1176,7 +1319,6 @@ private fun TransactionRow(
                     label = { Text("Merchant") },
                     singleLine = true,
                 )
-                Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = row.notesDraft,
                     onValueChange = onNotesChange,
@@ -1184,12 +1326,33 @@ private fun TransactionRow(
                     label = { Text("Notes") },
                     minLines = 2,
                 )
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(onClick = onSave) { Text("Save changes") }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(onClick = {
+                        onSave()
+                        editing = false
+                    }, modifier = Modifier.weight(1f)) { Text("Save") }
+                    OutlinedButton(onClick = { editing = false }, modifier = Modifier.weight(1f)) { Text("Cancel") }
+                }
             }
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
-    Spacer(modifier = Modifier.height(12.dp))
+    if (confirmDelete) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete this transaction?") },
+            text = { Text("It will be hidden from the dashboard and totals. There is no undo from the UI.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    confirmDelete = false
+                    onDelete()
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
+            },
+        )
+    }
 }
 
 @Composable

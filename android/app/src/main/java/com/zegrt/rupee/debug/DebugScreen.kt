@@ -35,6 +35,7 @@ fun DebugScreen(
     onUpdateParseTitle: (String) -> Unit,
     onUpdateParseBody: (String) -> Unit,
     onRunParseTest: () -> Unit,
+    onPostMockNotification: () -> Unit = {},
 ) {
     var resetConfirmOpen by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -60,6 +61,16 @@ fun DebugScreen(
             }
             state.sampleSent?.let {
                 Text("Last sent: $it", style = MaterialTheme.typography.labelMedium)
+            }
+        }
+        DebugCard(title = "Post real system notification") {
+            Text(
+                "Posts an actual Android notification (with a sentinel extra) so the listener service runs end-to-end. Verifies the listener is actually bound and ingests live alerts. Requires notification access to be granted.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(onClick = onPostMockNotification, modifier = Modifier.fillMaxWidth()) {
+                Text("Post mock notification (real path)")
             }
         }
         DebugCard(title = "Parser playground") {

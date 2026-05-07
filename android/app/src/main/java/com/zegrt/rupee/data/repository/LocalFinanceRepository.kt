@@ -352,6 +352,10 @@ class LocalFinanceRepository(
     }
 
     suspend fun dismissSuggestedTransaction(transactionId: String) {
+        deleteTransaction(transactionId)
+    }
+
+    suspend fun deleteTransaction(transactionId: String) {
         val now = Instant.now().toString()
         val txn = database.canonicalTransactionDao().getTransactionById(transactionId) ?: return
         database.canonicalTransactionDao().upsertTransactions(
