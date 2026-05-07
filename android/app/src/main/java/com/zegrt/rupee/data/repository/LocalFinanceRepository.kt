@@ -19,10 +19,15 @@ import com.zegrt.rupee.data.local.entity.Mode
 import com.zegrt.rupee.data.local.entity.SyncStatus
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
 import com.zegrt.rupee.data.local.entity.UserEntity
+import com.zegrt.rupee.ingestion.NotificationSignalNormalizer
+import com.zegrt.rupee.ingestion.RawCaptureWriter
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
+import java.util.UUID
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 
 data class OnboardingSetupInput(
     val bankAccountName: String,
@@ -63,6 +68,9 @@ class LocalFinanceRepository(
             state = InboxDecisionState.PENDING,
             limit = limit,
         )
+
+    fun observeSuggestedTransactions(limit: Int = 50): Flow<List<CanonicalTransactionEntity>> =
+        database.canonicalTransactionDao().observeSuggestedTransactions(USER_ID, limit)
 
     fun observeMonthlyTotalBudget(today: LocalDate = LocalDate.now()): Flow<BudgetEntity?> =
         database.budgetDao().observeMonthlyTotalBudgetForDate(
@@ -251,6 +259,8 @@ class LocalFinanceRepository(
     suspend fun confirmInboxItem(
         inboxItemId: String,
         merchantNameOverride: String? = null,
+        amountMinorOverride: Long? = null,
+        categoryIdOverride: String? = null,
     ) {
         val now = Instant.now().toString()
         val inboxItem = database.inboxItemDao().getInboxItemById(inboxItemId) ?: return
@@ -262,14 +272,23 @@ class LocalFinanceRepository(
         }
 
         val canonicalId = existingCanonical?.id ?: "txn-${candidate.id}"
+        val resolvedMerchant = merchantNameOverride?.trim()?.ifBlank { null }
+            ?: existingCanonical?.merchantName ?: candidate.toEntityName
+        val resolvedAmount = amountMinorOverride
+            ?: candidate.amountMinor
+            ?: existingCanonical?.amountMinor
+            ?: 0L
+        val resolvedCategory = categoryIdOverride ?: existingCanonical?.categoryId
+
         val canonical = (existingCanonical ?: CanonicalTransactionEntity(
             id = canonicalId,
             userId = USER_ID,
             type = candidate.toCanonicalType(),
             status = CanonicalTransactionStatus.CONFIRMED,
-            amountMinor = candidate.amountMinor ?: 0L,
+            amountMinor = resolvedAmount,
             currencyCode = candidate.currencyCode ?: "INR",
-            merchantName = candidate.toEntityName,
+            merchantName = resolvedMerchant,
+            categoryId = resolvedCategory,
             mode = candidate.mode ?: Mode.OTHER,
             occurredAt = candidate.occurredAt ?: inboxItem.createdAt,
             sourceSummary = "Confirmed from Inbox review",
@@ -280,8 +299,9 @@ class LocalFinanceRepository(
             updatedAt = now,
             syncStatus = SyncStatus.LOCAL_ONLY,
         )).copy(
-            merchantName = merchantNameOverride?.trim()?.ifBlank { null } ?: existingCanonical?.merchantName ?: candidate.toEntityName,
-            amountMinor = candidate.amountMinor ?: existingCanonical?.amountMinor ?: 0L,
+            merchantName = resolvedMerchant,
+            amountMinor = resolvedAmount,
+            categoryId = resolvedCategory,
             currencyCode = candidate.currencyCode ?: existingCanonical?.currencyCode ?: "INR",
             mode = candidate.mode ?: existingCanonical?.mode ?: Mode.OTHER,
             occurredAt = candidate.occurredAt ?: existingCanonical?.occurredAt ?: inboxItem.createdAt,
@@ -304,6 +324,38 @@ class LocalFinanceRepository(
                 resolvedAt = now,
                 updatedAt = now,
             ),
+        )
+    }
+
+    suspend fun confirmSuggestedTransaction(
+        transactionId: String,
+        merchantNameOverride: String? = null,
+        amountMinorOverride: Long? = null,
+        categoryIdOverride: String? = null,
+    ) {
+        val now = Instant.now().toString()
+        val txn = database.canonicalTransactionDao().getTransactionById(transactionId) ?: return
+        val resolvedMerchant = merchantNameOverride?.trim()?.ifBlank { null } ?: txn.merchantName
+        val resolvedAmount = amountMinorOverride ?: txn.amountMinor
+        val resolvedCategory = categoryIdOverride ?: txn.categoryId
+        database.canonicalTransactionDao().upsertTransactions(
+            listOf(
+                txn.copy(
+                    status = CanonicalTransactionStatus.CONFIRMED,
+                    merchantName = resolvedMerchant,
+                    amountMinor = resolvedAmount,
+                    categoryId = resolvedCategory,
+                    updatedAt = now,
+                ),
+            ),
+        )
+    }
+
+    suspend fun dismissSuggestedTransaction(transactionId: String) {
+        val now = Instant.now().toString()
+        val txn = database.canonicalTransactionDao().getTransactionById(transactionId) ?: return
+        database.canonicalTransactionDao().upsertTransactions(
+            listOf(txn.copy(status = CanonicalTransactionStatus.IGNORED, updatedAt = now)),
         )
     }
 
@@ -332,6 +384,8 @@ class LocalFinanceRepository(
         transactionId: String,
         merchantName: String,
         notes: String,
+        categoryId: String? = null,
+        applyCategory: Boolean = false,
     ) {
         val now = Instant.now().toString()
         val transaction = database.canonicalTransactionDao().getTransactionById(transactionId) ?: return
@@ -340,10 +394,86 @@ class LocalFinanceRepository(
                 transaction.copy(
                     merchantName = merchantName.trim().ifBlank { null },
                     notes = notes.trim().ifBlank { null },
+                    categoryId = if (applyCategory) categoryId else transaction.categoryId,
                     updatedAt = now,
                 ),
             ),
         )
+    }
+
+    suspend fun createManualTransaction(
+        merchantName: String,
+        amountMinor: Long,
+        mode: Mode,
+        categoryId: String?,
+        notes: String?,
+        occurredAt: Instant = Instant.now(),
+    ) {
+        val now = Instant.now().toString()
+        val txnId = "txn-manual-${UUID.randomUUID()}"
+        database.canonicalTransactionDao().upsertTransactions(
+            listOf(
+                CanonicalTransactionEntity(
+                    id = txnId,
+                    userId = USER_ID,
+                    type = CanonicalTransactionType.EXPENSE,
+                    status = CanonicalTransactionStatus.CONFIRMED,
+                    amountMinor = amountMinor,
+                    currencyCode = "INR",
+                    merchantName = merchantName.trim().ifBlank { null },
+                    categoryId = categoryId,
+                    mode = mode,
+                    notes = notes?.trim()?.ifBlank { null },
+                    occurredAt = occurredAt.toString(),
+                    sourceSummary = "Manual entry",
+                    createdBy = "manual",
+                    confidenceTier = ConfidenceTier.HIGH,
+                    createdAt = now,
+                    updatedAt = now,
+                    syncStatus = SyncStatus.LOCAL_ONLY,
+                ),
+            ),
+        )
+    }
+
+    suspend fun updateUserDisplayName(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return
+        val user = database.userDao().getUserOnce(USER_ID) ?: return
+        val now = Instant.now().toString()
+        database.userDao().upsertUser(user.copy(displayName = trimmed, updatedAt = now))
+    }
+
+    suspend fun setMonthlyBudgetLimit(limitMinor: Long, today: LocalDate = LocalDate.now()) {
+        if (limitMinor <= 0L) return
+        ensureMonthlyBudgetForToday(today)
+        val isoDate = today.toString()
+        val existing = database.budgetDao().getMonthlyTotalBudgetForDate(USER_ID, isoDate) ?: return
+        val now = Instant.now().toString()
+        database.budgetDao().upsertBudgets(
+            listOf(existing.copy(limitMinor = limitMinor, updatedAt = now)),
+        )
+    }
+
+    suspend fun resetAllData() {
+        withContext(Dispatchers.IO) { database.clearAllTables() }
+        ensureBaseData()
+    }
+
+    suspend fun debugIngestNotification(
+        packageName: String,
+        title: String?,
+        body: String,
+    ) {
+        val writer = RawCaptureWriter(database)
+        val normalizer = NotificationSignalNormalizer(database)
+        val rawEvent = writer.storeNotificationEvent(
+            packageName = packageName,
+            title = title,
+            body = body,
+            postedAtMillis = System.currentTimeMillis(),
+        ) ?: return
+        normalizer.normalize(rawEvent)
     }
 
     private fun TransactionCandidateEntity.toCanonicalType(): CanonicalTransactionType = when (candidateType) {

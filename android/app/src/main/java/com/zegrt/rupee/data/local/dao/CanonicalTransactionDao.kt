@@ -57,6 +57,20 @@ interface CanonicalTransactionDao {
         fingerprint: String,
     ): CanonicalTransactionEntity?
 
+    @Query(
+        """
+        SELECT * FROM canonical_transactions
+        WHERE userId = :userId
+          AND status = 'SUGGESTED'
+        ORDER BY occurredAt DESC
+        LIMIT :limit
+        """
+    )
+    fun observeSuggestedTransactions(
+        userId: String,
+        limit: Int = 50,
+    ): Flow<List<CanonicalTransactionEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertTransactions(transactions: List<CanonicalTransactionEntity>)
 }
