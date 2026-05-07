@@ -22,21 +22,43 @@ class RupeeNotificationListenerService : NotificationListenerService() {
         rupeeApp?.let { NotificationSignalNormalizer(it.database) }
     }
 
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        Log.i(TAG, "Listener connected")
+    }
+
+    override fun onListenerDisconnected() {
+        Log.w(TAG, "Listener disconnected")
+        super.onListenerDisconnected()
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         super.onNotificationPosted(sbn)
 
         val extras = sbn.notification.extras
         val title = extras?.getCharSequence(NotificationCompat.EXTRA_TITLE)?.toString()?.trim()
         val body = extras?.getCharSequence(NotificationCompat.EXTRA_TEXT)?.toString()?.trim().orEmpty()
+        val isDebugMock = extras?.getBoolean(RupeeApplication.DEBUG_MOCK_EXTRA, false) == true
 
-        if (body.isBlank()) return
+        Log.d(TAG, "onPosted pkg=${sbn.packageName} mock=$isDebugMock body=${body.take(60)}")
 
-        val isDebugMock = sbn.notification.extras
-            ?.getBoolean(RupeeApplication.DEBUG_MOCK_EXTRA, false) == true
-        if (sbn.packageName == packageName && !isDebugMock) return
+        if (body.isBlank()) {
+            Log.d(TAG, "Skipped: empty body")
+            return
+        }
+        if (sbn.packageName == packageName && !isDebugMock) {
+            Log.d(TAG, "Skipped: self-package without mock extra")
+            return
+        }
 
-        val writer = this.writer ?: return
-        val normalizer = this.normalizer ?: return
+        val writer = this.writer ?: run {
+            Log.w(TAG, "Skipped: writer not initialized")
+            return
+        }
+        val normalizer = this.normalizer ?: run {
+            Log.w(TAG, "Skipped: normalizer not initialized")
+            return
+        }
 
         serviceScope.launch {
             try {
@@ -46,7 +68,10 @@ class RupeeNotificationListenerService : NotificationListenerService() {
                     body = body,
                     postedAtMillis = sbn.postTime,
                 )
-                if (rawEvent != null) {
+                if (rawEvent == null) {
+                    Log.d(TAG, "Skipped: duplicate fingerprint already stored")
+                } else {
+                    Log.i(TAG, "Ingested raw event ${rawEvent.id}")
                     normalizer.normalize(rawEvent)
                 }
             } catch (t: Throwable) {

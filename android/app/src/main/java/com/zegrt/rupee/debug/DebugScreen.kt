@@ -36,6 +36,9 @@ fun DebugScreen(
     onUpdateParseBody: (String) -> Unit,
     onRunParseTest: () -> Unit,
     onPostMockNotification: () -> Unit = {},
+    onUpdateMockTitle: (String) -> Unit = {},
+    onUpdateMockBody: (String) -> Unit = {},
+    onLoadMockSample: (SampleNotification) -> Unit = {},
 ) {
     var resetConfirmOpen by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -65,11 +68,43 @@ fun DebugScreen(
         }
         DebugCard(title = "Post real system notification") {
             Text(
-                "Posts an actual Android notification (with a sentinel extra) so the listener service runs end-to-end. Verifies the listener is actually bound and ingests live alerts. Requires notification access to be granted.",
+                "Posts an actual Android notification (with a sentinel extra) so the listener service runs end-to-end. Edit the title and body below before posting. Run `adb logcat -s RupeeNotifListener` to confirm the listener fired.",
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(modifier = Modifier.height(12.dp))
-            Button(onClick = onPostMockNotification, modifier = Modifier.fillMaxWidth()) {
+            Text("Load from a sample", style = MaterialTheme.typography.labelMedium)
+            Spacer(modifier = Modifier.height(6.dp))
+            DebugSamples.all.forEach { sample ->
+                OutlinedButton(
+                    onClick = { onLoadMockSample(sample) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(sample.label)
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            OutlinedTextField(
+                value = state.mockTitle,
+                onValueChange = onUpdateMockTitle,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Title") },
+                singleLine = true,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = state.mockBody,
+                onValueChange = onUpdateMockBody,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Body") },
+                minLines = 3,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(
+                onClick = onPostMockNotification,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = state.mockBody.isNotBlank(),
+            ) {
                 Text("Post mock notification (real path)")
             }
         }
