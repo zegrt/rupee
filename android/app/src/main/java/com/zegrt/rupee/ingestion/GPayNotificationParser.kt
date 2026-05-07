@@ -12,9 +12,16 @@ class GPayNotificationParser : NotificationParser {
         val title = rawEvent.title.orEmpty().lowercase()
         val body = rawEvent.body.lowercase()
 
-        return packageName.contains("google.android.apps.nbu.paisa") ||
-            title.contains("gpay") ||
-            body.contains("upi") && body.contains("google pay")
+        if (packageName.contains("google.android.apps.nbu.paisa")) return true
+        if (title.contains("gpay") || title.contains("google pay")) return true
+        if (body.contains("google pay")) return true
+        // Generic UPI "you paid …" / "paid … to … using UPI" body — the canonical GPay
+        // notification phrasing even when the package or title doesn't say so (e.g. when
+        // posted from our debug surface).
+        val mentionsUpi = body.contains("upi")
+        val mentionsPayment = body.contains("paid") || body.contains("you paid") ||
+            body.contains("payment to") || body.contains("paying ")
+        return mentionsUpi && mentionsPayment
     }
 
     override fun parse(rawEvent: RawCaptureEventEntity): NotificationParseResult {
