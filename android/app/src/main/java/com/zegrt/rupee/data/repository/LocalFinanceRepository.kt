@@ -20,6 +20,8 @@ import com.zegrt.rupee.data.local.entity.SyncStatus
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
 import com.zegrt.rupee.data.local.entity.UserEntity
 import java.time.Instant
+import java.time.LocalDate
+import java.time.YearMonth
 import kotlinx.coroutines.flow.Flow
 
 data class OnboardingSetupInput(
@@ -59,6 +61,19 @@ class LocalFinanceRepository(
             userId = USER_ID,
             state = InboxDecisionState.PENDING,
             limit = limit,
+        )
+
+    fun observeMonthlyTotalBudget(today: LocalDate = LocalDate.now()): Flow<BudgetEntity?> =
+        database.budgetDao().observeMonthlyTotalBudgetForDate(
+            userId = USER_ID,
+            date = today.toString(),
+        )
+
+    fun observeSpentInPeriod(fromIso: String, untilIso: String): Flow<Long> =
+        database.canonicalTransactionDao().observeSpentInPeriod(
+            userId = USER_ID,
+            fromIso = fromIso,
+            untilIso = untilIso,
         )
 
     suspend fun ensureBaseData() {
@@ -132,16 +147,17 @@ class LocalFinanceRepository(
             },
         )
 
+        val thisMonth = YearMonth.now()
         database.budgetDao().upsertBudgets(
             listOf(
                 BudgetEntity(
-                    id = "budget-monthly-total",
+                    id = "budget-monthly-total-${thisMonth}",
                     userId = userId,
                     budgetType = BudgetType.MONTHLY_TOTAL,
-                    limitMinor = 400000,
+                    limitMinor = 4_000_000,
                     currencyCode = "INR",
-                    periodStart = "2026-03-01",
-                    periodEnd = "2026-03-31",
+                    periodStart = thisMonth.atDay(1).toString(),
+                    periodEnd = thisMonth.atEndOfMonth().toString(),
                     alertThresholdPercent = 0.8,
                     createdAt = now,
                     updatedAt = now,

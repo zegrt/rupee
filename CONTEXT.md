@@ -117,9 +117,9 @@ References:
 
 ## Immediate Next Work
 
-1. replace the current Home debug shell with the first real daily dashboard (budget remaining, this-week spend, recent activity, upcoming dues) — Milestone 7
+1. round out the dashboard: upcoming dues strip (cards + EMIs + recurring), custom bucket progress cards, "Add transaction" wired to a manual-entry sheet
 2. deepen the Inbox review flow beyond confirm and dismiss (edit-before-confirm, merge-with-existing, recategorize, "always trust this merchant" rule)
-3. promote auto-suggested canonical transactions to confirmed via review (current state: notifications create rows in `SUGGESTED`, not `CONFIRMED`)
+3. surface the SUGGESTED → CONFIRMED promotion in the Inbox (today only `INBOX_PENDING` candidates appear; `SUGGESTED` canonical rows from auto-creation also need a review path)
 4. refine canonical transaction editing — category, split, attach to EMI, link back to source notification
 5. parser refinement using real notification samples (depends on collecting real fixtures)
 6. richer dedupe rules for fuzzy multi-source collisions (depends on observing real collisions)
@@ -152,7 +152,9 @@ References:
 - the app now has a basic Home / Inbox / Transactions shell — currently rendered as inline composables in `MainActivity` with chip-based tab switching, not a bottom-nav structure yet
 - the Inbox surface supports initial confirm and dismiss review actions
 - the Transactions surface supports initial merchant and notes editing for canonical transactions
-- the Home surface still doubles as a pipeline inspection view rather than the final daily dashboard
+- the Home surface is now a real daily dashboard: greeting + month label, hero monthly budget card with progress bar and over/near-limit accents, this-week spend module, quick actions row (Review Inbox, Add transaction placeholder), and recent activity list with a "Suggested" badge for unreviewed auto-created entries
+- the seeded monthly-total budget is now scoped to the current month dynamically (previously hardcoded to March 2026), at ₹40,000 default; users can edit later
+- new repository flows: `observeMonthlyTotalBudget(today)` and `observeSpentInPeriod(fromIso, untilIso)` — DAO-level SUM excludes IGNORED and `isHiddenFromBudget` rows
 - auto-created canonical transactions from notifications now land in `SUGGESTED` status (not `CONFIRMED`) and are promoted to `CONFIRMED` only via the Inbox review path
 - candidate decision states now include `USER_CONFIRMED` to distinguish system auto-creation from user confirmation
 - DAO queries for recent transactions and inbox items now scope by `userId`

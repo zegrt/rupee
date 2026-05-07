@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.zegrt.rupee.data.local.entity.AccountEntity
 import com.zegrt.rupee.data.local.entity.BucketEntity
+import com.zegrt.rupee.data.local.entity.BudgetEntity
 import com.zegrt.rupee.data.local.entity.CanonicalTransactionEntity
 import com.zegrt.rupee.data.local.entity.CategoryEntity
 import com.zegrt.rupee.data.local.entity.CreditCardEntity
@@ -13,11 +14,19 @@ import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
 import com.zegrt.rupee.data.local.entity.UserEntity
 import com.zegrt.rupee.data.repository.LocalFinanceRepository
 import java.text.NumberFormat
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.format.TextStyle
+import java.time.temporal.TemporalAdjusters
 import java.util.Locale
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -45,10 +54,29 @@ data class HomeTransactionRow(
     val notesDraft: String,
 )
 
-data class HomeCandidateRow(
-    val headline: String,
+data class HomeRecentRow(
+    val id: String,
+    val merchant: String,
     val subline: String,
-    val decisionLabel: String,
+    val amountLabel: String,
+    val isSuggested: Boolean,
+)
+
+data class HomeDashboard(
+    val greeting: String = "Hello",
+    val monthLabel: String = "",
+    val hasMonthlyBudget: Boolean = false,
+    val monthlyBudgetLabel: String = "",
+    val monthlySpentLabel: String = "",
+    val monthlyRemainingLabel: String = "",
+    val monthlyProgress: Float = 0f,
+    val isOverBudget: Boolean = false,
+    val isNearLimit: Boolean = false,
+    val weeklySpentLabel: String = "",
+    val weekRangeLabel: String = "",
+    val pendingInboxCount: Int = 0,
+    val recentTransactions: List<HomeRecentRow> = emptyList(),
+    val hasAnyTransactions: Boolean = false,
 )
 
 data class HomeUiState(
@@ -59,21 +87,21 @@ data class HomeUiState(
     val bucketCount: Int = 0,
     val recentTransactionCount: Int = 0,
     val pendingInboxCount: Int = 0,
-    val recentCandidateCount: Int = 0,
     val selectedTab: HomeTab = HomeTab.HOME,
     val selectedInboxItemId: String? = null,
     val selectedTransactionId: String? = null,
     val inboxItems: List<HomeInboxRow> = emptyList(),
     val recentTransactions: List<HomeTransactionRow> = emptyList(),
-    val recentCandidates: List<HomeCandidateRow> = emptyList(),
+    val dashboard: HomeDashboard = HomeDashboard(),
     val isSeeding: Boolean = true,
 )
 
 class HomeViewModel(
     private val repository: LocalFinanceRepository,
+    private val clock: () -> LocalDate = { LocalDate.now() },
 ) : ViewModel() {
     private val currencyFormatter = NumberFormat.getCurrencyInstance(Locale("en", "IN")).apply {
-        maximumFractionDigits = 2
+        maximumFractionDigits = 0
         currency = java.util.Currency.getInstance("INR")
     }
 
@@ -85,23 +113,45 @@ class HomeViewModel(
     private val transactionMerchantDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
     private val transactionNotesDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
 
+    private val today: LocalDate get() = clock()
+    private val month: YearMonth get() = YearMonth.from(today)
+    private val monthStart: LocalDate get() = month.atDay(1)
+    private val nextMonthStart: LocalDate get() = month.plusMonths(1).atDay(1)
+    private val weekStart: LocalDate get() = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+    private val nextWeekStart: LocalDate get() = weekStart.plusDays(7)
+
+    private val monthlySpend: Flow<Long> = repository.observeSpentInPeriod(
+        fromIso = monthStart.toString(),
+        untilIso = nextMonthStart.toString(),
+    )
+    private val weeklySpend: Flow<Long> = repository.observeSpentInPeriod(
+        fromIso = weekStart.toString(),
+        untilIso = nextWeekStart.toString(),
+    )
+    private val monthlyBudget: Flow<BudgetEntity?> = repository.observeMonthlyTotalBudget(today)
+
     @Suppress("UNCHECKED_CAST")
     val uiState: StateFlow<HomeUiState> = combine(
-        repository.observeUser(),
-        repository.observeAccounts(),
-        repository.observeCards(),
-        repository.observeCategories(),
-        repository.observeBuckets(),
-        repository.observeRecentTransactions(),
-        repository.observeRecentTransactionCandidates(),
-        repository.observePendingInboxItems(),
-        isSeeding,
-        selectedTab,
-        selectedInboxItemId,
-        selectedTransactionId,
-        inboxMerchantDrafts,
-        transactionMerchantDrafts,
-        transactionNotesDrafts,
+        listOf(
+            repository.observeUser(),
+            repository.observeAccounts(),
+            repository.observeCards(),
+            repository.observeCategories(),
+            repository.observeBuckets(),
+            repository.observeRecentTransactions(),
+            repository.observeRecentTransactionCandidates(),
+            repository.observePendingInboxItems(),
+            monthlyBudget,
+            monthlySpend,
+            weeklySpend,
+            isSeeding,
+            selectedTab,
+            selectedInboxItemId,
+            selectedTransactionId,
+            inboxMerchantDrafts,
+            transactionMerchantDrafts,
+            transactionNotesDrafts,
+        ),
     ) { values ->
         val user = values[0] as UserEntity?
         val accounts = values[1] as List<AccountEntity>
@@ -111,17 +161,20 @@ class HomeViewModel(
         val transactions = values[5] as List<CanonicalTransactionEntity>
         val candidates = values[6] as List<TransactionCandidateEntity>
         val inboxItems = values[7] as List<InboxItemEntity>
-        val seeding = values[8] as Boolean
-        val tab = values[9] as HomeTab
-        val activeInboxItemId = values[10] as String?
-        val activeTransactionId = values[11] as String?
-        val inboxDrafts = values[12] as Map<String, String>
-        val transactionMerchantDraftMap = values[13] as Map<String, String>
-        val transactionNotesDraftMap = values[14] as Map<String, String>
+        val budget = values[8] as BudgetEntity?
+        val spentMonth = values[9] as Long
+        val spentWeek = values[10] as Long
+        val seeding = values[11] as Boolean
+        val tab = values[12] as HomeTab
+        val activeInboxItemId = values[13] as String?
+        val activeTransactionId = values[14] as String?
+        val inboxDrafts = values[15] as Map<String, String>
+        val transactionMerchantDraftMap = values[16] as Map<String, String>
+        val transactionNotesDraftMap = values[17] as Map<String, String>
 
-        val candidateById = candidates.associateBy { it.id }
+        val candidatesById = candidates.associateBy { it.id }
         val inboxRows = inboxItems.map { inboxItem ->
-            val candidate = candidateById[inboxItem.transactionCandidateId]
+            val candidate = candidatesById[inboxItem.transactionCandidateId]
             HomeInboxRow(
                 id = inboxItem.id,
                 headline = candidate?.toEntityName ?: "Review transaction",
@@ -150,6 +203,15 @@ class HomeViewModel(
             )
         }
 
+        val dashboard = buildDashboard(
+            user = user,
+            transactions = transactions,
+            inboxItems = inboxItems,
+            budget = budget,
+            spentMonth = spentMonth,
+            spentWeek = spentWeek,
+        )
+
         HomeUiState(
             userName = user?.displayName ?: "Rupee",
             accountCount = accounts.size,
@@ -158,22 +220,12 @@ class HomeViewModel(
             bucketCount = buckets.size,
             recentTransactionCount = transactions.size,
             pendingInboxCount = inboxItems.size,
-            recentCandidateCount = candidates.size,
             selectedTab = tab,
             selectedInboxItemId = activeInboxItemId ?: inboxRows.firstOrNull()?.id,
             selectedTransactionId = activeTransactionId ?: transactionRows.firstOrNull()?.id,
             inboxItems = inboxRows,
             recentTransactions = transactionRows,
-            recentCandidates = candidates.take(5).map { candidate ->
-                HomeCandidateRow(
-                    headline = candidate.toEntityName ?: "Unresolved candidate",
-                    subline = listOfNotNull(
-                        candidate.mode?.name?.replace('_', ' '),
-                        candidate.amountMinor?.let(::formatMinor),
-                    ).joinToString(" • ").ifBlank { candidate.occurredAt ?: "No event time" },
-                    decisionLabel = "${candidate.decisionState.name} / ${candidate.decisionReason.name}",
-                )
-            },
+            dashboard = dashboard,
             isSeeding = seeding,
         )
     }.stateIn(
@@ -240,6 +292,63 @@ class HomeViewModel(
                 notes = transactionNotesDrafts.value[id].orEmpty(),
             )
         }
+    }
+
+    private fun buildDashboard(
+        user: UserEntity?,
+        transactions: List<CanonicalTransactionEntity>,
+        inboxItems: List<InboxItemEntity>,
+        budget: BudgetEntity?,
+        spentMonth: Long,
+        spentWeek: Long,
+    ): HomeDashboard {
+        val limit = budget?.limitMinor ?: 0L
+        val remaining = (limit - spentMonth).coerceAtLeast(0L)
+        val progress = if (limit > 0L) {
+            (spentMonth.toDouble() / limit.toDouble()).toFloat().coerceIn(0f, 1f)
+        } else 0f
+        val isOver = limit > 0L && spentMonth > limit
+        val isNear = !isOver && limit > 0L && progress >= (budget?.alertThresholdPercent?.toFloat() ?: 0.8f)
+
+        val recents = transactions.take(5).map { txn ->
+            HomeRecentRow(
+                id = txn.id,
+                merchant = txn.merchantName ?: "Unnamed",
+                subline = listOfNotNull(
+                    txn.mode?.name?.replace('_', ' ')?.lowercase()?.replaceFirstChar { it.uppercase() },
+                    txn.sourceSummary,
+                ).joinToString(" • ").ifBlank { txn.occurredAt.take(10) },
+                amountLabel = formatMinor(txn.amountMinor),
+                isSuggested = txn.status.name == "SUGGESTED",
+            )
+        }
+
+        return HomeDashboard(
+            greeting = greetingFor(user?.displayName),
+            monthLabel = month.month.getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + month.year,
+            hasMonthlyBudget = budget != null,
+            monthlyBudgetLabel = if (budget != null) formatMinor(limit) else "Set a monthly budget",
+            monthlySpentLabel = formatMinor(spentMonth),
+            monthlyRemainingLabel = formatMinor(remaining),
+            monthlyProgress = progress,
+            isOverBudget = isOver,
+            isNearLimit = isNear,
+            weeklySpentLabel = formatMinor(spentWeek),
+            weekRangeLabel = "${weekStart.dayOfMonth} ${weekStart.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)} – ${nextWeekStart.minusDays(1).dayOfMonth} ${nextWeekStart.minusDays(1).month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)}",
+            pendingInboxCount = inboxItems.size,
+            recentTransactions = recents,
+            hasAnyTransactions = transactions.isNotEmpty(),
+        )
+    }
+
+    private fun greetingFor(name: String?): String {
+        val hour = java.time.LocalTime.now().hour
+        val timeOfDay = when {
+            hour < 12 -> "Good morning"
+            hour < 17 -> "Good afternoon"
+            else -> "Good evening"
+        }
+        return if (!name.isNullOrBlank()) "$timeOfDay, $name" else timeOfDay
     }
 
     private fun formatMinor(value: Long): String = currencyFormatter.format(value / 100.0)

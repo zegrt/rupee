@@ -27,6 +27,24 @@ interface CanonicalTransactionDao {
 
     @Query(
         """
+        SELECT COALESCE(SUM(amountMinor), 0)
+        FROM canonical_transactions
+        WHERE userId = :userId
+          AND type = 'EXPENSE'
+          AND status != 'IGNORED'
+          AND isHiddenFromBudget = 0
+          AND occurredAt >= :fromIso
+          AND occurredAt < :untilIso
+        """
+    )
+    fun observeSpentInPeriod(
+        userId: String,
+        fromIso: String,
+        untilIso: String,
+    ): Flow<Long>
+
+    @Query(
+        """
         SELECT * FROM canonical_transactions
         WHERE userId = :userId
           AND dedupeFingerprint = :fingerprint
