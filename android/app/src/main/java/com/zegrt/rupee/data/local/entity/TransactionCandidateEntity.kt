@@ -16,6 +16,7 @@ enum class TransactionCandidateType {
 enum class CandidateDecisionState {
     AUTO_CREATED,
     INBOX_PENDING,
+    USER_CONFIRMED,
     IGNORED,
 }
 

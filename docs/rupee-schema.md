@@ -24,8 +24,8 @@ This schema is designed for:
 
 Related docs:
 
-- [PRD](/Users/cyril/Personal/webdev/wallet/docs/rupee-prd.md)
-- [Architecture](/Users/cyril/Personal/webdev/wallet/docs/rupee-architecture.md)
+- [PRD](rupee-prd.md)
+- [Architecture](rupee-architecture.md)
 
 ## 2. Schema Design Principles
 

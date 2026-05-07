@@ -10,8 +10,17 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface InboxItemDao {
-    @Query("SELECT * FROM inbox_items WHERE decisionState = :state ORDER BY createdAt DESC LIMIT :limit")
+    @Query(
+        """
+        SELECT * FROM inbox_items
+        WHERE userId = :userId
+          AND decisionState = :state
+        ORDER BY createdAt DESC
+        LIMIT :limit
+        """
+    )
     fun observeInboxItems(
+        userId: String,
         state: InboxDecisionState = InboxDecisionState.PENDING,
         limit: Int = 50,
     ): Flow<List<InboxItemEntity>>

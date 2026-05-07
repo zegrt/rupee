@@ -49,13 +49,14 @@ class LocalFinanceRepository(
     fun observeBuckets(): Flow<List<BucketEntity>> = database.bucketDao().observeBuckets()
 
     fun observeRecentTransactions(limit: Int = 20): Flow<List<CanonicalTransactionEntity>> =
-        database.canonicalTransactionDao().observeRecentTransactions(limit)
+        database.canonicalTransactionDao().observeRecentTransactions(USER_ID, limit)
 
     fun observeRecentTransactionCandidates(limit: Int = 20): Flow<List<TransactionCandidateEntity>> =
         database.transactionCandidateDao().observeRecentTransactionCandidates(limit)
 
     fun observePendingInboxItems(limit: Int = 20): Flow<List<InboxItemEntity>> =
         database.inboxItemDao().observeInboxItems(
+            userId = USER_ID,
             state = InboxDecisionState.PENDING,
             limit = limit,
         )
@@ -260,7 +261,7 @@ class LocalFinanceRepository(
         database.canonicalTransactionDao().upsertTransactions(listOf(canonical))
         database.transactionCandidateDao().upsertTransactionCandidate(
             candidate.copy(
-                decisionState = CandidateDecisionState.AUTO_CREATED,
+                decisionState = CandidateDecisionState.USER_CONFIRMED,
                 linkedCanonicalTransactionId = canonical.id,
                 updatedAt = now,
             ),

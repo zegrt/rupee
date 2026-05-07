@@ -9,8 +9,18 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CanonicalTransactionDao {
-    @Query("SELECT * FROM canonical_transactions ORDER BY occurredAt DESC LIMIT :limit")
-    fun observeRecentTransactions(limit: Int = 20): Flow<List<CanonicalTransactionEntity>>
+    @Query(
+        """
+        SELECT * FROM canonical_transactions
+        WHERE userId = :userId
+        ORDER BY occurredAt DESC
+        LIMIT :limit
+        """
+    )
+    fun observeRecentTransactions(
+        userId: String,
+        limit: Int = 20,
+    ): Flow<List<CanonicalTransactionEntity>>
 
     @Query("SELECT * FROM canonical_transactions WHERE id = :id LIMIT 1")
     suspend fun getTransactionById(id: String): CanonicalTransactionEntity?

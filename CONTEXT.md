@@ -1,6 +1,6 @@
 # Rupee Context
 
-Date: April 11, 2026
+Date: May 7, 2026
 Status: Working memory
 
 ## Product Snapshot
@@ -109,19 +109,22 @@ References:
 
 ## Current Docs
 
-- [PRD](/Users/cyril/Personal/webdev/wallet/docs/rupee-prd.md)
-- [Architecture](/Users/cyril/Personal/webdev/wallet/docs/rupee-architecture.md)
-- [Schema](/Users/cyril/Personal/webdev/wallet/docs/rupee-schema.md)
-- [Android Screen Spec](/Users/cyril/Personal/webdev/wallet/docs/rupee-android-screens.md)
-- [Engineering Roadmap](/Users/cyril/Personal/webdev/wallet/docs/rupee-roadmap.md)
+- [PRD](docs/rupee-prd.md)
+- [Architecture](docs/rupee-architecture.md)
+- [Schema](docs/rupee-schema.md)
+- [Android Screen Spec](docs/rupee-android-screens.md)
+- [Engineering Roadmap](docs/rupee-roadmap.md)
 
 ## Immediate Next Work
 
-1. deepen the Inbox review flow beyond confirm and dismiss
-2. refine canonical transaction editing and transaction detail behavior
-3. parser refinement using real notification samples
-4. richer dedupe rules for fuzzy multi-source collisions
-5. replace the current Home debug shell with the first real daily dashboard
+1. replace the current Home debug shell with the first real daily dashboard (budget remaining, this-week spend, recent activity, upcoming dues) — Milestone 7
+2. deepen the Inbox review flow beyond confirm and dismiss (edit-before-confirm, merge-with-existing, recategorize, "always trust this merchant" rule)
+3. promote auto-suggested canonical transactions to confirmed via review (current state: notifications create rows in `SUGGESTED`, not `CONFIRMED`)
+4. refine canonical transaction editing — category, split, attach to EMI, link back to source notification
+5. parser refinement using real notification samples (depends on collecting real fixtures)
+6. richer dedupe rules for fuzzy multi-source collisions (depends on observing real collisions)
+7. wire `EmiPlanEntity` (currently registered in `RupeeDatabase` with no DAO)
+8. add the missing schema entities once their UI surfaces are scoped: `canonical_transaction_source_links`, `dedupe_groups` / `dedupe_group_members`, `recurring_patterns`, `alert_rules` / `alert_events`, `monthly_recaps`
 
 ## Current Implementation State
 
@@ -146,10 +149,28 @@ References:
 - GPay, CRED, and ICICI parsers exist alongside the generic fallback parser
 - a first decision layer now routes candidates to auto-created canonical transactions, Inbox, or ignore
 - a first dedupe layer now suppresses repeated alerts using candidate fingerprints built from amount, mode, merchant/counterparty, masked digits, and a five-minute time bucket
-- the app now has a basic Home / Inbox / Transactions shell
+- the app now has a basic Home / Inbox / Transactions shell — currently rendered as inline composables in `MainActivity` with chip-based tab switching, not a bottom-nav structure yet
 - the Inbox surface supports initial confirm and dismiss review actions
 - the Transactions surface supports initial merchant and notes editing for canonical transactions
 - the Home surface still doubles as a pipeline inspection view rather than the final daily dashboard
+- auto-created canonical transactions from notifications now land in `SUGGESTED` status (not `CONFIRMED`) and are promoted to `CONFIRMED` only via the Inbox review path
+- candidate decision states now include `USER_CONFIRMED` to distinguish system auto-creation from user confirmation
+- DAO queries for recent transactions and inbox items now scope by `userId`
+
+## Known Gaps vs Schema and Architecture
+
+These are intentional or unintentional omissions surfaced by a deep review. They are not bugs in current behavior; they are work that has not happened yet.
+
+- `EmiPlanEntity` is registered in `RupeeDatabase` but has no DAO and no repository methods.
+- Schema entities not yet implemented in code: `canonical_transaction_source_links`, `dedupe_groups`, `dedupe_group_members`, `recurring_patterns`, `alert_rules`, `alert_events`, `monthly_recaps`, `emi_transaction_links`, `budget_category_assignments`.
+- `CanonicalTransactionEntity` carries a flat `dedupeFingerprint` field; the schema models duplicate clusters via dedupe_groups join tables. The current flat field is a pragmatic shortcut, not the long-term shape.
+- Architecture spec calls for a five-tab bottom nav (Home, Inbox, Transactions, Calendar, Settings); the app currently has Home/Inbox/Transactions only, rendered as chip tabs inside `MainActivity` rather than as separate routes.
+- No NavHost / navigation-compose in use yet. Onboarding → Home transitions are driven by an `OnboardingStep` enum in `MainActivity`.
+- `HomeViewModel` is monolithic — owns Home summary, Inbox review, and Transaction edit state. Should split when surfaces grow.
+- `LocalFinanceRepository.completeInitialSetup` hardcodes seed IDs (`account-bank-1`, `card-1`, `account-cash`) and a single 2026-03 budget period; needs a proper seeding service before MVP.
+- No alerting/notification-posting from the app yet. `POST_NOTIFICATIONS` permission is intentionally absent until budget/due alerts are implemented.
+- SMS ingestion is deferred; no manifest permissions, no reader, but a `RawCaptureSourceType.SMS` enum value exists for the future.
+- Hardcoded confidence thresholds (`HIGH_CONFIDENCE = 0.85`, `MEDIUM_CONFIDENCE = 0.6`) live in `NotificationDecisionEngine`; no remote config or runtime tuning.
 
 ## External Product Research Notes
 

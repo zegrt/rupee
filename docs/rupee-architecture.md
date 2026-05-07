@@ -17,7 +17,7 @@ It is meant to answer:
 - how budgets, cards, EMIs, and recurring spend attach to transaction data
 - what should stay local vs what syncs to backend
 
-This is the implementation companion to the product PRD in [rupee-prd.md](/Users/cyril/Personal/webdev/wallet/docs/rupee-prd.md).
+This is the implementation companion to the product PRD in [rupee-prd.md](rupee-prd.md).
 
 ## 2. Architecture Goals
 

@@ -150,7 +150,7 @@ class NotificationSignalNormalizer(
             id = UUID.randomUUID().toString(),
             userId = rawEvent.userId,
             type = CanonicalTransactionType.EXPENSE,
-            status = CanonicalTransactionStatus.CONFIRMED,
+            status = CanonicalTransactionStatus.SUGGESTED,
             amountMinor = parseResult.amountMinor ?: 0L,
             currencyCode = parseResult.currencyCode ?: "INR",
             merchantName = parseResult.toEntityName ?: parseResult.merchantRaw,

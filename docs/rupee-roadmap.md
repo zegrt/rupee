@@ -18,10 +18,10 @@ It defines:
 
 Related docs:
 
-- [PRD](/Users/cyril/Personal/webdev/wallet/docs/rupee-prd.md)
-- [Architecture](/Users/cyril/Personal/webdev/wallet/docs/rupee-architecture.md)
-- [Schema](/Users/cyril/Personal/webdev/wallet/docs/rupee-schema.md)
-- [Android Screen Spec](/Users/cyril/Personal/webdev/wallet/docs/rupee-android-screens.md)
+- [PRD](rupee-prd.md)
+- [Architecture](rupee-architecture.md)
+- [Schema](rupee-schema.md)
+- [Android Screen Spec](rupee-android-screens.md)
 
 ## 2. Delivery Philosophy
 
