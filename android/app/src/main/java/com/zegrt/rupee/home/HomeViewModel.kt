@@ -14,9 +14,12 @@ import com.zegrt.rupee.data.local.entity.UserEntity
 import com.zegrt.rupee.data.repository.LocalFinanceRepository
 import java.text.NumberFormat
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
@@ -35,7 +38,6 @@ enum class HomeTab {
     INBOX,
     TRANSACTIONS,
     SETTINGS,
-    DEBUG,
 }
 
 enum class ReviewSource { INBOX, SUGGESTED }
@@ -348,6 +350,17 @@ class HomeViewModel(
         }
     }
 
+    fun deleteTransaction(id: String) {
+        viewModelScope.launch {
+            repository.deleteTransaction(id)
+            if (selectedTransactionId.value == id) selectedTransactionId.value = null
+        }
+    }
+
+    fun closeTransactionDetail() {
+        selectedTransactionId.value = null
+    }
+
     // Manual entry
     fun openManualEntry() {
         manualEntry.value = ManualEntryDraft(isOpen = true)
@@ -405,18 +418,18 @@ class HomeViewModel(
             .filter { it.status != CanonicalTransactionStatus.IGNORED }
             .take(20)
             .map { transaction ->
+                val cleanedMerchant = cleanMerchant(transaction.merchantName)
                 HomeTransactionRow(
                     id = transaction.id,
-                    headline = transaction.merchantName ?: "Unnamed transaction",
+                    headline = cleanedMerchant,
                     subline = listOfNotNull(
                         transaction.mode?.name?.replace('_', ' '),
-                        transaction.sourceSummary,
-                        transaction.occurredAt,
-                    ).joinToString(" • ").ifBlank { transaction.occurredAt },
+                        formatOccurredAt(transaction.occurredAt),
+                    ).joinToString(" • "),
                     amountLabel = formatRowAmount(transaction.amountMinor),
                     notes = transaction.notes.orEmpty(),
                     merchantDraft = selection.transactionMerchantDrafts[transaction.id]
-                        ?: transaction.merchantName.orEmpty(),
+                        ?: cleanedMerchant,
                     notesDraft = selection.transactionNotesDrafts[transaction.id]
                         ?: transaction.notes.orEmpty(),
                 )
@@ -427,7 +440,7 @@ class HomeViewModel(
             pendingReviewCount = reviewRows.size,
             selectedTab = selection.tab,
             selectedReviewRowId = selection.selectedReviewRowId ?: reviewRows.firstOrNull()?.id,
-            selectedTransactionId = selection.selectedTransactionId ?: transactionRows.firstOrNull()?.id,
+            selectedTransactionId = selection.selectedTransactionId,
             reviewRows = reviewRows,
             recentTransactions = transactionRows,
             categories = categoryOptions,
@@ -445,12 +458,12 @@ class HomeViewModel(
         val inboxRows = data.inboxItems.map { inboxItem ->
             val candidate = candidatesById[inboxItem.transactionCandidateId]
             val rawAmount = candidate?.amountMinor
+            val merchantClean = cleanMerchant(candidate?.toEntityName)
             HomeReviewRow(
                 id = inboxItem.id,
                 source = ReviewSource.INBOX,
-                merchant = candidate?.toEntityName ?: "Review transaction",
-                merchantDraft = selection.merchantDrafts[inboxItem.id]
-                    ?: candidate?.toEntityName.orEmpty(),
+                merchant = merchantClean,
+                merchantDraft = selection.merchantDrafts[inboxItem.id] ?: merchantClean,
                 amountLabel = rawAmount?.let(::formatRowAmount) ?: "—",
                 amountDraftRupees = selection.amountDrafts[inboxItem.id]
                     ?: rawAmount?.let { (it / 100.0).toRupeeInput() } ?: "",
@@ -458,17 +471,18 @@ class HomeViewModel(
                 categoryIdDraft = selection.categoryDrafts[inboxItem.id],
                 subline = listOfNotNull(
                     candidate?.mode?.name?.replace('_', ' '),
-                    candidate?.occurredAt?.take(10),
-                ).joinToString(" • ").ifBlank { inboxItem.createdAt.take(10) },
+                    candidate?.occurredAt?.let(::formatOccurredAt),
+                ).joinToString(" • ").ifBlank { formatOccurredAt(inboxItem.createdAt) },
                 reasonLabel = inboxItem.reasonCode.name.replace('_', ' '),
             )
         }
         val suggestedRows = data.suggestedTxns.map { txn ->
+            val merchantClean = cleanMerchant(txn.merchantName)
             HomeReviewRow(
                 id = txn.id,
                 source = ReviewSource.SUGGESTED,
-                merchant = txn.merchantName ?: "Auto-captured transaction",
-                merchantDraft = selection.merchantDrafts[txn.id] ?: txn.merchantName.orEmpty(),
+                merchant = merchantClean,
+                merchantDraft = selection.merchantDrafts[txn.id] ?: merchantClean,
                 amountLabel = formatRowAmount(txn.amountMinor),
                 amountDraftRupees = selection.amountDrafts[txn.id]
                     ?: (txn.amountMinor / 100.0).toRupeeInput(),
@@ -476,8 +490,7 @@ class HomeViewModel(
                 categoryIdDraft = selection.categoryDrafts.getOrElse(txn.id) { txn.categoryId },
                 subline = listOfNotNull(
                     txn.mode?.name?.replace('_', ' '),
-                    txn.sourceSummary,
-                    txn.occurredAt.take(10),
+                    formatOccurredAt(txn.occurredAt),
                 ).joinToString(" • "),
                 reasonLabel = "AUTO CAPTURED",
             )
@@ -508,11 +521,11 @@ class HomeViewModel(
             .map { txn ->
                 HomeRecentRow(
                     id = txn.id,
-                    merchant = txn.merchantName ?: "Unnamed",
+                    merchant = cleanMerchant(txn.merchantName),
                     subline = listOfNotNull(
                         txn.mode?.name?.replace('_', ' ')?.lowercase()?.replaceFirstChar { it.uppercase() },
-                        txn.sourceSummary,
-                    ).joinToString(" • ").ifBlank { txn.occurredAt.take(10) },
+                        formatOccurredAt(txn.occurredAt),
+                    ).joinToString(" • "),
                     amountLabel = formatRowAmount(txn.amountMinor),
                     isSuggested = txn.status == CanonicalTransactionStatus.SUGGESTED,
                 )
@@ -559,6 +572,30 @@ class HomeViewModel(
         } else {
             "${start.dayOfMonth} $startMonth – ${end.dayOfMonth} $endMonth"
         }
+    }
+
+    private fun cleanMerchant(raw: String?): String {
+        if (raw.isNullOrBlank()) return "Unnamed"
+        var s = raw.trim()
+        // CRED-style: "HDFC Credit Card xx1234 at Zomato on 06 May" → take after the last " at "
+        val atIdx = s.lastIndexOf(" at ", ignoreCase = true)
+        if (atIdx >= 0) s = s.substring(atIdx + 4)
+        // Then trim metadata tails: " on …", " using …", " via …", " through …"
+        val tails = listOf(" on ", " using ", " via ", " through ")
+        var earliest = Int.MAX_VALUE
+        for (tail in tails) {
+            val idx = s.indexOf(tail, ignoreCase = true)
+            if (idx in 0 until earliest) earliest = idx
+        }
+        if (earliest != Int.MAX_VALUE) s = s.substring(0, earliest)
+        return s.trim().ifBlank { "Unnamed" }
+    }
+
+    private fun formatOccurredAt(iso: String): String = try {
+        val dt = Instant.parse(iso).atZone(ZoneId.systemDefault())
+        DateTimeFormatter.ofPattern("d MMM, h:mm a", Locale.ENGLISH).format(dt)
+    } catch (_: Exception) {
+        iso.take(10)
     }
 
     private fun parseRupeesToMinor(raw: String?): Long? {
