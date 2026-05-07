@@ -6,16 +6,22 @@ import com.zegrt.rupee.data.local.entity.ParsedTransactionKind
 import com.zegrt.rupee.data.local.entity.RawCaptureEventEntity
 import com.zegrt.rupee.data.local.entity.TransactionCandidateType
 
-class GPayNotificationParser : NotificationParser {
+/**
+ * Catches UPI payment notifications that aren't attributed to a known UPI app
+ * (PhonePe, Paytm, BHIM, banking apps with their own UPI flows, mocks posted
+ * from our own debug surface). The phrasing varies but always pairs an amount
+ * with a "paid" verb and "UPI". Stays after the GPay parser so a real Google
+ * Pay alert still gets the gpay provider hint.
+ */
+class GenericUpiNotificationParser : NotificationParser {
     override fun canParse(rawEvent: RawCaptureEventEntity): Boolean {
-        val packageName = rawEvent.sourceAppPackage.orEmpty()
         val title = rawEvent.title.orEmpty().lowercase()
         val body = rawEvent.body.lowercase()
-
-        if (packageName.contains("google.android.apps.nbu.paisa")) return true
-        if (title.contains("gpay") || title.contains("google pay")) return true
-        if (body.contains("google pay")) return true
-        return false
+        val mentionsUpi = body.contains("upi") || title.contains("upi")
+        if (!mentionsUpi) return false
+        val mentionsPayment = body.contains("paid") || body.contains("payment to") ||
+            body.contains("paying") || title.contains("paid")
+        return mentionsPayment
     }
 
     override fun parse(rawEvent: RawCaptureEventEntity): NotificationParseResult {
@@ -23,18 +29,18 @@ class GPayNotificationParser : NotificationParser {
         val merchant = NotificationParsingUtils.extractMerchant(rawEvent.body, merchantRegexes)
 
         return NotificationParseResult(
-            parserKey = "notification_gpay",
+            parserKey = "notification_upi_generic",
             parserVersion = "v1",
-            providerHint = "gpay",
+            providerHint = "upi",
             transactionKind = if (amountMinor != null) ParsedTransactionKind.SPEND else ParsedTransactionKind.UNKNOWN,
             candidateType = if (amountMinor != null) TransactionCandidateType.SPEND else TransactionCandidateType.UNKNOWN,
             amountMinor = amountMinor,
             currencyCode = if (amountMinor != null) "INR" else null,
             merchantRaw = merchant,
             mode = Mode.UPI,
-            parseConfidence = if (amountMinor != null && merchant != null) 0.8 else 0.6,
+            parseConfidence = if (amountMinor != null && merchant != null) 0.7 else 0.5,
             fromEntityType = AccountType.BANK,
-            fromEntityHint = "gpay",
+            fromEntityHint = "upi",
             toEntityName = merchant,
         )
     }
