@@ -10,6 +10,7 @@ import com.zegrt.rupee.data.local.dao.CategoryDao
 import com.zegrt.rupee.data.local.dao.CreditCardDao
 import com.zegrt.rupee.data.local.dao.BudgetDao
 import com.zegrt.rupee.data.local.dao.InboxItemDao
+import com.zegrt.rupee.data.local.dao.MerchantTrustRuleDao
 import com.zegrt.rupee.data.local.dao.ParsedSignalDao
 import com.zegrt.rupee.data.local.dao.RawCaptureEventDao
 import com.zegrt.rupee.data.local.dao.TransactionCandidateDao
@@ -22,6 +23,7 @@ import com.zegrt.rupee.data.local.entity.CategoryEntity
 import com.zegrt.rupee.data.local.entity.CreditCardEntity
 import com.zegrt.rupee.data.local.entity.EmiPlanEntity
 import com.zegrt.rupee.data.local.entity.InboxItemEntity
+import com.zegrt.rupee.data.local.entity.MerchantTrustRuleEntity
 import com.zegrt.rupee.data.local.entity.ParsedSignalEntity
 import com.zegrt.rupee.data.local.entity.RawCaptureEventEntity
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
@@ -43,8 +45,9 @@ import com.zegrt.rupee.data.local.entity.UserEntity
         RawCaptureEventEntity::class,
         ParsedSignalEntity::class,
         TransactionCandidateEntity::class,
+        MerchantTrustRuleEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(RupeeTypeConverters::class)
@@ -60,4 +63,5 @@ abstract class RupeeDatabase : RoomDatabase() {
     abstract fun rawCaptureEventDao(): RawCaptureEventDao
     abstract fun parsedSignalDao(): ParsedSignalDao
     abstract fun transactionCandidateDao(): TransactionCandidateDao
+    abstract fun merchantTrustRuleDao(): MerchantTrustRuleDao
 }
