@@ -12,6 +12,7 @@ import com.zegrt.rupee.data.local.entity.Mode
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
 import com.zegrt.rupee.data.local.entity.UserEntity
 import com.zegrt.rupee.data.repository.LocalFinanceRepository
+import com.zegrt.rupee.ingestion.MerchantNameUtils
 import java.text.NumberFormat
 import java.time.DayOfWeek
 import java.time.Instant
@@ -53,6 +54,7 @@ data class HomeReviewRow(
     val categoryIdDraft: String?,
     val subline: String,
     val reasonLabel: String,
+    val alwaysTrust: Boolean,
 )
 
 data class HomeTransactionRow(
@@ -132,6 +134,13 @@ private data class DashboardData(
     val weeklySpent: Long,
 )
 
+private data class ReviewDraftBundle(
+    val merchant: Map<String, String>,
+    val amount: Map<String, String>,
+    val category: Map<String, String?>,
+    val alwaysTrust: Set<String>,
+)
+
 private data class ViewSelection(
     val isSeeding: Boolean,
     val tab: HomeTab,
@@ -140,6 +149,7 @@ private data class ViewSelection(
     val merchantDrafts: Map<String, String>,
     val amountDrafts: Map<String, String>,
     val categoryDrafts: Map<String, String?>,
+    val alwaysTrust: Set<String>,
     val transactionMerchantDrafts: Map<String, String>,
     val transactionNotesDrafts: Map<String, String>,
     val manualEntry: ManualEntryDraft,
@@ -161,6 +171,7 @@ class HomeViewModel(
     private val reviewMerchantDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
     private val reviewAmountDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
     private val reviewCategoryDrafts = MutableStateFlow<Map<String, String?>>(emptyMap())
+    private val reviewAlwaysTrust = MutableStateFlow<Set<String>>(emptySet())
     private val transactionMerchantDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
     private val transactionNotesDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
     private val manualEntry = MutableStateFlow(ManualEntryDraft())
@@ -216,6 +227,13 @@ class HomeViewModel(
         )
     }
 
+    private val reviewDrafts: Flow<ReviewDraftBundle> = combine(
+        reviewMerchantDrafts,
+        reviewAmountDrafts,
+        reviewCategoryDrafts,
+        reviewAlwaysTrust,
+    ) { m, a, c, t -> ReviewDraftBundle(m, a, c, t) }
+
     private val viewSelection: Flow<ViewSelection> = combine(
         combine(
             isSeeding,
@@ -227,14 +245,10 @@ class HomeViewModel(
             arrayOf<Any?>(seeding, tab, rid, tid, manual)
         },
         combine(
-            reviewMerchantDrafts,
-            reviewAmountDrafts,
-            reviewCategoryDrafts,
+            reviewDrafts,
             transactionMerchantDrafts,
             transactionNotesDrafts,
-        ) { rm, ra, rc, tm, tn ->
-            arrayOf<Any?>(rm, ra, rc, tm, tn)
-        },
+        ) { review, tm, tn -> Triple(review, tm, tn) },
     ) { selection, drafts ->
         @Suppress("UNCHECKED_CAST")
         ViewSelection(
@@ -243,11 +257,12 @@ class HomeViewModel(
             selectedReviewRowId = selection[2] as String?,
             selectedTransactionId = selection[3] as String?,
             manualEntry = selection[4] as ManualEntryDraft,
-            merchantDrafts = drafts[0] as Map<String, String>,
-            amountDrafts = drafts[1] as Map<String, String>,
-            categoryDrafts = drafts[2] as Map<String, String?>,
-            transactionMerchantDrafts = drafts[3] as Map<String, String>,
-            transactionNotesDrafts = drafts[4] as Map<String, String>,
+            merchantDrafts = drafts.first.merchant,
+            amountDrafts = drafts.first.amount,
+            categoryDrafts = drafts.first.category,
+            alwaysTrust = drafts.first.alwaysTrust,
+            transactionMerchantDrafts = drafts.second,
+            transactionNotesDrafts = drafts.third,
         )
     }
 
@@ -295,23 +310,31 @@ class HomeViewModel(
         reviewCategoryDrafts.value = reviewCategoryDrafts.value + (id to categoryId)
     }
 
+    fun toggleAlwaysTrust(id: String) {
+        val current = reviewAlwaysTrust.value
+        reviewAlwaysTrust.value = if (id in current) current - id else current + id
+    }
+
     fun confirmReviewRow(id: String, source: ReviewSource) {
         viewModelScope.launch {
             val merchant = reviewMerchantDrafts.value[id]
             val amountMinor = reviewAmountDrafts.value[id]?.let(::parseRupeesToMinor)
             val categoryId = reviewCategoryDrafts.value[id]
+            val trust = id in reviewAlwaysTrust.value
             when (source) {
                 ReviewSource.INBOX -> repository.confirmInboxItem(
                     inboxItemId = id,
                     merchantNameOverride = merchant,
                     amountMinorOverride = amountMinor,
                     categoryIdOverride = categoryId,
+                    addTrustRule = trust,
                 )
                 ReviewSource.SUGGESTED -> repository.confirmSuggestedTransaction(
                     transactionId = id,
                     merchantNameOverride = merchant,
                     amountMinorOverride = amountMinor,
                     categoryIdOverride = categoryId,
+                    addTrustRule = trust,
                 )
             }
             clearReviewDrafts(id)
@@ -402,6 +425,7 @@ class HomeViewModel(
         reviewMerchantDrafts.value = reviewMerchantDrafts.value - id
         reviewAmountDrafts.value = reviewAmountDrafts.value - id
         reviewCategoryDrafts.value = reviewCategoryDrafts.value - id
+        reviewAlwaysTrust.value = reviewAlwaysTrust.value - id
         if (selectedReviewRowId.value == id) selectedReviewRowId.value = null
     }
 
@@ -474,6 +498,7 @@ class HomeViewModel(
                     candidate?.occurredAt?.let(::formatOccurredAt),
                 ).joinToString(" • ").ifBlank { formatOccurredAt(inboxItem.createdAt) },
                 reasonLabel = inboxItem.reasonCode.name.replace('_', ' '),
+                alwaysTrust = inboxItem.id in selection.alwaysTrust,
             )
         }
         val suggestedRows = data.suggestedTxns.map { txn ->
@@ -493,6 +518,7 @@ class HomeViewModel(
                     formatOccurredAt(txn.occurredAt),
                 ).joinToString(" • "),
                 reasonLabel = "AUTO CAPTURED",
+                alwaysTrust = txn.id in selection.alwaysTrust,
             )
         }
         return inboxRows + suggestedRows
@@ -574,22 +600,7 @@ class HomeViewModel(
         }
     }
 
-    private fun cleanMerchant(raw: String?): String {
-        if (raw.isNullOrBlank()) return "Unnamed"
-        var s = raw.trim()
-        // CRED-style: "HDFC Credit Card xx1234 at Zomato on 06 May" → take after the last " at "
-        val atIdx = s.lastIndexOf(" at ", ignoreCase = true)
-        if (atIdx >= 0) s = s.substring(atIdx + 4)
-        // Then trim metadata tails: " on …", " using …", " via …", " through …"
-        val tails = listOf(" on ", " using ", " via ", " through ")
-        var earliest = Int.MAX_VALUE
-        for (tail in tails) {
-            val idx = s.indexOf(tail, ignoreCase = true)
-            if (idx in 0 until earliest) earliest = idx
-        }
-        if (earliest != Int.MAX_VALUE) s = s.substring(0, earliest)
-        return s.trim().ifBlank { "Unnamed" }
-    }
+    private fun cleanMerchant(raw: String?): String = MerchantNameUtils.clean(raw)
 
     private fun formatOccurredAt(iso: String): String = try {
         val dt = Instant.parse(iso).atZone(ZoneId.systemDefault())

@@ -15,6 +15,7 @@ import com.zegrt.rupee.data.local.entity.ConfidenceTier
 import com.zegrt.rupee.data.local.entity.CreditCardEntity
 import com.zegrt.rupee.data.local.entity.InboxDecisionState
 import com.zegrt.rupee.data.local.entity.InboxItemEntity
+import com.zegrt.rupee.data.local.entity.MerchantTrustRuleEntity
 import com.zegrt.rupee.data.local.entity.Mode
 import com.zegrt.rupee.data.local.entity.SyncStatus
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
@@ -256,11 +257,39 @@ class LocalFinanceRepository(
         }
     }
 
+    fun observeMerchantTrustRules(): Flow<List<MerchantTrustRuleEntity>> =
+        database.merchantTrustRuleDao().observeRules(USER_ID)
+
+    suspend fun addMerchantTrustRule(merchantPattern: String, autoCategoryId: String? = null) {
+        val pattern = merchantPattern.trim()
+        if (pattern.isBlank()) return
+        val now = Instant.now().toString()
+        database.merchantTrustRuleDao().upsertRule(
+            MerchantTrustRuleEntity(
+                id = "trust-${UUID.randomUUID()}",
+                userId = USER_ID,
+                merchantPattern = pattern,
+                autoCategoryId = autoCategoryId,
+                createdAt = now,
+                updatedAt = now,
+                syncStatus = SyncStatus.LOCAL_ONLY,
+            ),
+        )
+    }
+
+    suspend fun removeMerchantTrustRule(id: String) {
+        database.merchantTrustRuleDao().deleteRule(id)
+    }
+
+    suspend fun getMerchantTrustRulesSnapshot(): List<MerchantTrustRuleEntity> =
+        database.merchantTrustRuleDao().getRulesForUser(USER_ID)
+
     suspend fun confirmInboxItem(
         inboxItemId: String,
         merchantNameOverride: String? = null,
         amountMinorOverride: Long? = null,
         categoryIdOverride: String? = null,
+        addTrustRule: Boolean = false,
     ) {
         val now = Instant.now().toString()
         val inboxItem = database.inboxItemDao().getInboxItemById(inboxItemId) ?: return
@@ -325,6 +354,9 @@ class LocalFinanceRepository(
                 updatedAt = now,
             ),
         )
+        if (addTrustRule && resolvedMerchant != null) {
+            addMerchantTrustRule(resolvedMerchant, resolvedCategory)
+        }
     }
 
     suspend fun confirmSuggestedTransaction(
@@ -332,6 +364,7 @@ class LocalFinanceRepository(
         merchantNameOverride: String? = null,
         amountMinorOverride: Long? = null,
         categoryIdOverride: String? = null,
+        addTrustRule: Boolean = false,
     ) {
         val now = Instant.now().toString()
         val txn = database.canonicalTransactionDao().getTransactionById(transactionId) ?: return
@@ -349,6 +382,9 @@ class LocalFinanceRepository(
                 ),
             ),
         )
+        if (addTrustRule && resolvedMerchant != null) {
+            addMerchantTrustRule(resolvedMerchant, resolvedCategory)
+        }
     }
 
     suspend fun dismissSuggestedTransaction(transactionId: String) {

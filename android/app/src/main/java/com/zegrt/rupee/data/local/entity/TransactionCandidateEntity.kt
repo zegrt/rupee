@@ -27,6 +27,7 @@ enum class CandidateDecisionReason {
     NON_SPEND_REVIEW,
     MISSING_AMOUNT,
     DUPLICATE_IGNORED,
+    MERCHANT_TRUSTED,
 }
 
 @Entity(

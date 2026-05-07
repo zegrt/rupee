@@ -30,14 +30,25 @@ class NotificationSignalNormalizer(
             val parseResult = parserRegistry.parse(rawEvent)
             val dedupeResult = dedupeEngine.detect(rawEvent, parseResult)
             val baseDecision = decisionEngine.decide(parseResult)
-            val decision = if (dedupeResult.isDuplicate) {
-                CandidateDecision(
+            val trustRule = if (parseResult.amountMinor != null && !dedupeResult.isDuplicate) {
+                database.merchantTrustRuleDao().getRulesForUser(rawEvent.userId)
+                    .firstOrNull { rule ->
+                        MerchantNameUtils.matchesPattern(parseResult.toEntityName, rule.merchantPattern) ||
+                            MerchantNameUtils.matchesPattern(parseResult.merchantRaw, rule.merchantPattern)
+                    }
+            } else null
+            val decision = when {
+                dedupeResult.isDuplicate -> CandidateDecision(
                     confidenceTier = baseDecision.confidenceTier,
                     decisionState = CandidateDecisionState.IGNORED,
                     decisionReason = CandidateDecisionReason.DUPLICATE_IGNORED,
                 )
-            } else {
-                baseDecision
+                trustRule != null -> CandidateDecision(
+                    confidenceTier = ConfidenceTier.HIGH,
+                    decisionState = CandidateDecisionState.AUTO_CREATED,
+                    decisionReason = CandidateDecisionReason.MERCHANT_TRUSTED,
+                )
+                else -> baseDecision
             }
             val parsedSignalId = UUID.randomUUID().toString()
             val candidateId = UUID.randomUUID().toString()
@@ -86,6 +97,9 @@ class NotificationSignalNormalizer(
                     confidenceTier = decision.confidenceTier,
                     dedupeFingerprint = dedupeResult.fingerprint,
                     now = now,
+                    status = if (trustRule != null) CanonicalTransactionStatus.CONFIRMED
+                    else CanonicalTransactionStatus.SUGGESTED,
+                    overrideCategoryId = trustRule?.autoCategoryId,
                 )
                 else -> null
             }
@@ -145,19 +159,24 @@ class NotificationSignalNormalizer(
         confidenceTier: ConfidenceTier?,
         dedupeFingerprint: String,
         now: String,
+        status: CanonicalTransactionStatus = CanonicalTransactionStatus.SUGGESTED,
+        overrideCategoryId: String? = null,
     ): String {
         val canonicalTransaction = CanonicalTransactionEntity(
             id = UUID.randomUUID().toString(),
             userId = rawEvent.userId,
             type = CanonicalTransactionType.EXPENSE,
-            status = CanonicalTransactionStatus.SUGGESTED,
+            status = status,
             amountMinor = parseResult.amountMinor ?: 0L,
             currencyCode = parseResult.currencyCode ?: "INR",
             merchantName = parseResult.toEntityName ?: parseResult.merchantRaw,
+            categoryId = overrideCategoryId,
             mode = parseResult.mode,
             occurredAt = rawEvent.deviceEventTime ?: rawEvent.receivedAt,
-            sourceSummary = parseResult.providerHint,
-            createdBy = "notification_auto",
+            sourceSummary = if (status == CanonicalTransactionStatus.CONFIRMED)
+                "${parseResult.providerHint ?: "notification"} • trusted merchant"
+            else parseResult.providerHint,
+            createdBy = if (status == CanonicalTransactionStatus.CONFIRMED) "trust_rule" else "notification_auto",
             confidenceTier = confidenceTier,
             dedupeFingerprint = dedupeFingerprint,
             createdAt = now,
@@ -182,6 +201,8 @@ class NotificationSignalNormalizer(
                 InboxReasonCode.AMBIGUOUS_KIND
             CandidateDecisionReason.DUPLICATE_IGNORED ->
                 InboxReasonCode.POSSIBLE_DUPLICATE_CONFLICT
+            CandidateDecisionReason.MERCHANT_TRUSTED ->
+                InboxReasonCode.MEDIUM_CONFIDENCE
         }
     }
 }

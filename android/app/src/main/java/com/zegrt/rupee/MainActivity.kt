@@ -192,6 +192,7 @@ private fun RupeeApp(
             onReviewMerchantDraftChange = homeViewModel::updateReviewMerchantDraft,
             onReviewAmountDraftChange = homeViewModel::updateReviewAmountDraft,
             onReviewCategoryDraftChange = homeViewModel::updateReviewCategoryDraft,
+            onToggleAlwaysTrust = homeViewModel::toggleAlwaysTrust,
             onConfirmReviewRow = homeViewModel::confirmReviewRow,
             onDismissReviewRow = homeViewModel::dismissReviewRow,
             onSelectTransaction = homeViewModel::selectTransaction,
@@ -502,6 +503,7 @@ private fun RupeeHome(
     onReviewMerchantDraftChange: (String, String) -> Unit,
     onReviewAmountDraftChange: (String, String) -> Unit,
     onReviewCategoryDraftChange: (String, String?) -> Unit,
+    onToggleAlwaysTrust: (String) -> Unit,
     onConfirmReviewRow: (String, ReviewSource) -> Unit,
     onDismissReviewRow: (String, ReviewSource) -> Unit,
     onSelectTransaction: (String) -> Unit,
@@ -560,6 +562,7 @@ private fun RupeeHome(
                     onMerchantChange = onReviewMerchantDraftChange,
                     onAmountChange = onReviewAmountDraftChange,
                     onCategoryChange = onReviewCategoryDraftChange,
+                    onToggleAlwaysTrust = onToggleAlwaysTrust,
                     onConfirm = onConfirmReviewRow,
                     onDismiss = onDismissReviewRow,
                 )
@@ -1030,6 +1033,7 @@ private fun ReviewTab(
     onMerchantChange: (String, String) -> Unit,
     onAmountChange: (String, String) -> Unit,
     onCategoryChange: (String, String?) -> Unit,
+    onToggleAlwaysTrust: (String) -> Unit,
     onConfirm: (String, ReviewSource) -> Unit,
     onDismiss: (String, ReviewSource) -> Unit,
 ) {
@@ -1047,6 +1051,7 @@ private fun ReviewTab(
                 onMerchantChange = { onMerchantChange(row.id, it) },
                 onAmountChange = { onAmountChange(row.id, it) },
                 onCategoryChange = { onCategoryChange(row.id, it) },
+                onToggleAlwaysTrust = { onToggleAlwaysTrust(row.id) },
                 onConfirm = { onConfirm(row.id, row.source) },
                 onDismiss = { onDismiss(row.id, row.source) },
             )
@@ -1094,6 +1099,7 @@ private fun ReviewRowCard(
     onMerchantChange: (String) -> Unit,
     onAmountChange: (String) -> Unit,
     onCategoryChange: (String?) -> Unit,
+    onToggleAlwaysTrust: () -> Unit,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -1157,7 +1163,32 @@ private fun ReviewRowCard(
                     categories = categories,
                     onSelect = onCategoryChange,
                 )
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onToggleAlwaysTrust)
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Always trust ${row.merchantDraft.ifBlank { row.merchant }}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            "Future notifications from this merchant skip the Inbox and land as Confirmed.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = row.alwaysTrust,
+                        onCheckedChange = { onToggleAlwaysTrust() },
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(onClick = onConfirm) { Text("Confirm") }
                     OutlinedButton(onClick = onDismiss) { Text("Dismiss") }
