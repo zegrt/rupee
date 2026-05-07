@@ -215,6 +215,9 @@ private fun RupeeApp(
             onCloseTransaction = homeViewModel::closeTransactionDetail,
             onDeleteTransaction = homeViewModel::deleteTransaction,
             onPostMockNotification = { debugViewModel.postMockNotification(context) },
+            onDebugUpdateMockTitle = debugViewModel::updateMockTitle,
+            onDebugUpdateMockBody = debugViewModel::updateMockBody,
+            onDebugLoadMockSample = debugViewModel::loadMockFromSample,
         )
     }
 }
@@ -522,6 +525,9 @@ private fun RupeeHome(
     onCloseTransaction: () -> Unit,
     onDeleteTransaction: (String) -> Unit,
     onPostMockNotification: () -> Unit,
+    onDebugUpdateMockTitle: (String) -> Unit,
+    onDebugUpdateMockBody: (String) -> Unit,
+    onDebugLoadMockSample: (com.zegrt.rupee.debug.SampleNotification) -> Unit,
 ) {
     var showDebug by remember { mutableStateOf(false) }
     androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
@@ -647,6 +653,9 @@ private fun RupeeHome(
                         onUpdateParseBody = onDebugUpdateParseBody,
                         onRunParseTest = onDebugRunParseTest,
                         onPostMockNotification = onPostMockNotification,
+                        onUpdateMockTitle = onDebugUpdateMockTitle,
+                        onUpdateMockBody = onDebugUpdateMockBody,
+                        onLoadMockSample = onDebugLoadMockSample,
                     )
                 }
             }

@@ -55,6 +55,8 @@ data class DebugUiState(
     val parseInputTitle: String = "",
     val parseInputBody: String = "",
     val parseOutput: String? = null,
+    val mockTitle: String = DebugSamples.gpay.title.orEmpty(),
+    val mockBody: String = DebugSamples.gpay.body,
     val message: String? = null,
 )
 
@@ -138,23 +140,43 @@ class DebugViewModel(
         _uiState.value = _uiState.value.copy(message = null)
     }
 
-    fun postMockNotification(context: Context, sample: SampleNotification = DebugSamples.gpay) {
+    fun updateMockTitle(value: String) {
+        _uiState.value = _uiState.value.copy(mockTitle = value)
+    }
+
+    fun updateMockBody(value: String) {
+        _uiState.value = _uiState.value.copy(mockBody = value)
+    }
+
+    fun loadMockFromSample(sample: SampleNotification) {
+        _uiState.value = _uiState.value.copy(
+            mockTitle = sample.title.orEmpty(),
+            mockBody = sample.body,
+        )
+    }
+
+    fun postMockNotification(context: Context) {
+        val state = _uiState.value
+        if (state.mockBody.isBlank()) {
+            _uiState.value = state.copy(message = "Body is required")
+            return
+        }
         val nm = context.getSystemService(NotificationManager::class.java)
         if (nm == null) {
-            _uiState.value = _uiState.value.copy(message = "NotificationManager unavailable")
+            _uiState.value = state.copy(message = "NotificationManager unavailable")
             return
         }
         val extras = Bundle().apply { putBoolean(RupeeApplication.DEBUG_MOCK_EXTRA, true) }
         val notification = NotificationCompat.Builder(context, RupeeApplication.DEBUG_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.sym_def_app_icon)
-            .setContentTitle(sample.title ?: "Rupee mock")
-            .setContentText(sample.body)
+            .setContentTitle(state.mockTitle.ifBlank { "Rupee mock" })
+            .setContentText(state.mockBody)
             .addExtras(extras)
             .setAutoCancel(true)
             .build()
         nm.notify(MOCK_NOTIFICATION_ID, notification)
-        _uiState.value = _uiState.value.copy(
-            message = "Posted real notification → check Inbox in a second",
+        _uiState.value = state.copy(
+            message = "Posted. Filter logcat for 'RupeeNotifListener' to confirm the service fired.",
         )
     }
 
