@@ -1,7 +1,7 @@
 # Rupee Settings & Debug
 
-Date: May 7, 2026
-Status: Initial scope
+Date: May 8, 2026
+Status: Reflects v0.5.3
 
 ## 1. Purpose
 
@@ -27,9 +27,9 @@ Two surfaces that sit alongside Home / Inbox / Transactions:
 - **Categories** — read-only list of seeded categories
 - **Buckets** — read-only list of seeded buckets
 - **About**
-  - App version (TODO: read from BuildConfig.VERSION_NAME — currently hardcoded `0.1.0-debug`)
+  - App version, read from `BuildConfig.VERSION_NAME` (with `-debug` appended when `BuildConfig.DEBUG`)
   - Currency
-  - Open Debug button
+  - Open Debug button (opens the same fullscreen Debug surface that the floating pill does)
 
 ### Out of scope for v1
 
@@ -42,9 +42,14 @@ Two surfaces that sit alongside Home / Inbox / Transactions:
 
 ### Sections
 
-- **Send sample notification**
+- **Send sample notification (synthetic)**
   - Three preset payloads (GPay, CRED, ICICI) hardcoded in `DebugSamples`
-  - Each tap calls `LocalFinanceRepository.debugIngestNotification(packageName, title, body)` which goes through the *real* ingestion path: `RawCaptureWriter.storeNotificationEvent` → `NotificationSignalNormalizer.normalize`. Useful end-to-end test without needing a real device notification.
+  - Each tap calls `LocalFinanceRepository.debugIngestNotification(packageName, title, body)` which goes through the *application-side* ingestion path: `RawCaptureWriter.storeNotificationEvent` → `NotificationSignalNormalizer.normalize`. Bypasses the actual `NotificationListenerService`, so this is the right tool when you want to test parser/normalizer/dedupe changes without involving the OS.
+- **Post real system notification**
+  - Editable Title and Body fields, plus three "Load from sample" buttons that prefill the GPay/CRED/ICICI presets
+  - Posts an actual `NotificationManager.notify()` on the `rupee_debug` channel with a `RupeeApplication.DEBUG_MOCK_EXTRA` bool extra
+  - The listener service (`RupeeNotificationListenerService`) explicitly bypasses its self-package filter when that extra is set, so the *real* listener path runs end-to-end. This is the right tool when you want to verify the listener is bound and that a particular body actually flows through the Android side
+  - Logcat: `adb logcat -s RupeeNotifListener` shows `Listener connected`, per-event `onPosted pkg=… mock=… body=…`, skip reasons, and `Ingested raw event …` when normalization runs
 - **Parser playground**
   - Free-form title + body inputs
   - Runs `NotificationParserRegistry.default().parse(rawEvent)` on a synthetic `RawCaptureEventEntity` *without* persisting anything
@@ -70,7 +75,14 @@ Before public release the Debug tab should be:
 
 ## 4. Navigation
 
-For now, Settings and Debug are two more chips in the existing chip-row tab switcher on the Home screen. The architecture spec calls for a 5-tab bottom nav (Home / Inbox / Transactions / Calendar / Settings); a future task will migrate from chips to bottom nav. Debug should not appear in the bottom nav — when nav lands, Debug should move behind a hidden gesture or be removed.
+Settings is the rightmost chip in the chip-row tab switcher on the Home screen (Home / Inbox / Transactions / Settings — four chips, fits on a normal-width device).
+
+Debug is **not** a tab. It opens as a fullscreen Compose `Dialog` from two entry points:
+
+1. A small "Debug" floating pill at the bottom-right of every Home tab — currently visible always; before any external test build it should be wrapped in `if (BuildConfig.DEBUG)`.
+2. Settings → About → "Open debug tools" button.
+
+The architecture spec calls for a 5-tab bottom nav (Home / Inbox / Transactions / Calendar / Settings); a future task will migrate from chips to bottom nav. The Debug entry points migrate alongside.
 
 ## 5. Deferred — design captured for later
 
@@ -78,6 +90,7 @@ These were considered for this round but not built:
 
 - **"Always trust this merchant" rule** — needs a new `MerchantTrustRule` entity (`{ userId, merchantPattern, autoCategoryId, createdAt }`) and a check in `NotificationDecisionEngine` that elevates matched signals to `AUTO_CREATED` + `CONFIRMED`. Confirm flow on Inbox should add a checkbox "Always trust [merchant]" that creates the rule.
 - **Merge with existing transaction** — when an Inbox item duplicates a transaction the dedupe layer missed, the user should be able to pick the target canonical row (a search-then-select UI) and merge. Repository contract: `mergeInboxIntoTransaction(inboxItemId, targetTransactionId)` — sets the target's `dedupeFingerprint` to include the source candidate, links the candidate via `linkedCanonicalTransactionId`, and resolves the inbox item with `decisionState = MERGED`.
-- **Recategorize on Transactions tab** — a category chip row inside the Transaction edit sheet, mirroring the one in the Inbox review row.
+- **Recategorize on Transactions tab** — the `TransactionDetailSheet` Edit form has Merchant + Notes today; add a `CategoryDropdown` row mirroring the Inbox review row.
+- **PhonePe / Paytm parsers** — their notifications currently fall into `GenericUpiNotificationParser` with `providerHint = "upi"`. Dedicated parsers would give better merchant extraction and a branded provider hint.
 - **Upcoming dues strip on Home** — needs cards/EMI plumbing from Milestone 8.
 - **Custom bucket progress cards on Home** — needs per-bucket budgets which are not seeded yet, plus a `transaction_bucket_assignments` DAO.

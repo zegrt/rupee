@@ -1,6 +1,6 @@
 # Rupee Context
 
-Date: May 7, 2026
+Date: May 8, 2026
 Status: Working memory
 
 ## Product Snapshot
@@ -117,16 +117,18 @@ References:
 
 ## Immediate Next Work
 
-1. "Always trust this merchant" rule — new `MerchantTrustRule` entity + decision-engine integration; Inbox confirm gets a checkbox to create the rule (design in `docs/rupee-settings-debug.md` § 5)
-2. "Merge with existing transaction" in Inbox — needs a transaction picker UX
-3. Recategorize action on the Transactions tab (mirror the Inbox category chip row)
-4. Upcoming dues strip on Home — blocked on Milestone 8 (cards/EMIs)
-5. Custom bucket progress cards on Home — blocked on per-bucket budgets being seeded + a `transaction_bucket_assignments` DAO
-6. Parser refinement using real notification samples (Debug parser playground now makes this easier)
-7. Richer dedupe rules for fuzzy multi-source collisions (depends on observing real collisions)
-8. Wire `EmiPlanEntity` (currently registered in `RupeeDatabase` with no DAO)
-9. Add the missing schema entities once their UI surfaces are scoped: `canonical_transaction_source_links`, `dedupe_groups` / `dedupe_group_members`, `recurring_patterns`, `alert_rules` / `alert_events`, `monthly_recaps`
-10. Bottom-nav migration (replace chip-row tab switcher); hide Debug behind `BuildConfig.DEBUG` at the same time
+1. Recategorize on the Transactions tab — the `TransactionDetailSheet` Edit form has Merchant + Notes today; add a `CategoryDropdown` row mirroring the one in Inbox review
+2. "Always trust this merchant" rule — new `MerchantTrustRule` entity + decision-engine integration; Inbox confirm gets a checkbox to create the rule (design in `docs/rupee-settings-debug.md` § 5)
+3. "Merge with existing transaction" in Inbox — needs a transaction picker UX
+4. Dedicated PhonePe and Paytm parsers — currently their bodies hit `GenericUpiNotificationParser` with `providerHint = "upi"`. Real parsers would give a branded hint and a more reliable merchant extraction
+5. Hide the Debug pill behind `BuildConfig.DEBUG` before any external test build (the floating pill is highly visible right now)
+6. Bottom-nav migration to replace the chip-row tab switcher
+7. Upcoming dues strip on Home — blocked on Milestone 8 (cards/EMIs)
+8. Custom bucket progress cards on Home — blocked on per-bucket budgets being seeded + a `transaction_bucket_assignments` DAO
+9. Parser refinement using real notification samples — both the Debug parser playground and the editable real-mock-notification surface make this easier
+10. Richer dedupe rules for fuzzy multi-source collisions (depends on observing real collisions)
+11. Wire `EmiPlanEntity` (currently registered in `RupeeDatabase` with no DAO)
+12. Add the missing schema entities once their UI surfaces are scoped: `canonical_transaction_source_links`, `dedupe_groups` / `dedupe_group_members`, `recurring_patterns`, `alert_rules` / `alert_events`, `monthly_recaps`
 
 ## Current Implementation State
 
@@ -164,6 +166,17 @@ References:
 - Manual transaction entry is wired to the dashboard "Add transaction" button via a `ModalBottomSheet` form (merchant, amount, mode chip selector, category chips, notes)
 - Settings tab exists with profile (display name), monthly budget edit, notification permission re-check, and read-only category/bucket lists; documented in `docs/rupee-settings-debug.md`
 - Debug tab exists with three preset sample notifications (GPay/CRED/ICICI) that exercise the real ingestion pipeline, a parser playground that runs the parser registry against arbitrary input without persisting, and a confirm-gated reset that wipes the DB and re-seeds defaults
+- Build now exposes versionName (currently `0.5.3`) via `BuildConfig`; the Home greeting renders a small `v0.5.3-debug` pill top-right and Settings → About reflects the same value. The debug APK output is renamed to `rupee-{versionName}-{buildType}.apk` so the file itself carries the version
+- Recent activity, Inbox review, and Transactions tab all show cleaner merchant text via `cleanMerchant()` (trims " on / using / via" tails, prefers segment after " at " for CRED-style bodies). DB-level `merchantName` is left untouched
+- Sublines now use `formatOccurredAt()` to render ISO instants as friendly local-time labels ("7 May, 11:29 PM") instead of raw timestamps
+- Inbox review row uses a Material3 `DropdownMenu` for category selection; manual entry still uses chips since that form has more vertical room
+- Transactions tab is now tap-to-view-modal: tap a row → `ModalBottomSheet` with formatted amount + merchant + subline + notes, plus Edit and Delete buttons. Edit toggles into the form. Delete soft-deletes via `status = IGNORED` behind an `AlertDialog` confirm. Inline editing on the list is gone
+- Debug is no longer a top-level chip. It opens as a fullscreen Compose `Dialog` from a small "Debug" floating pill at the bottom-right of every tab, and from Settings → About → Open debug tools. The chip row is back to four entries (Home / Inbox / Transactions / Settings)
+- `Manifest` declares `POST_NOTIFICATIONS`. `RupeeApplication.onCreate` registers a `rupee_debug` notification channel. The listener service bypasses its self-package filter when the incoming notification carries `RupeeApplication.DEBUG_MOCK_EXTRA`. A new Debug button posts an actual `NotificationManager.notify()` with editable Title/Body fields (plus three "Load from sample" buttons) so the *real* listener path can be exercised end-to-end without needing a third-party app on the device
+- `RupeeNotificationListenerService` logs at INFO/DEBUG/WARN under the `RupeeNotifListener` tag. Filter logcat with `adb logcat -s RupeeNotifListener` to see whether the listener is bound, whether a posted notification reached `onNotificationPosted`, and why an event was skipped (empty body, self-pkg without mock extra, writer not initialized, duplicate fingerprint)
+- New `GenericUpiNotificationParser` handles UPI-style "paid to … using UPI" bodies that are not from Google Pay (PhonePe, Paytm, BHIM, debug mocks attributed to our own package). `parserKey = "notification_upi_generic"`, `providerHint = "upi"`. Slotted in the registry between `GPayNotificationParser` (now strict) and `GenericNotificationParser`
+- `CredNotificationParser.canParse` now matches a `\bCRED\b` word boundary (case-insensitive) plus a `com.dreamplug.androidapp` package check — previously `body.contains("cred")` was firing on the substring of "Credit Card", silently mis-routing every ICICI/HDFC card notification to the CRED parser
+- First unit tests in the repo at `android/app/src/test/java/com/zegrt/rupee/ingestion/NotificationParserCanParseTest.kt`. Pure JVM, no Android dependencies. Run with `./gradlew :android:app:testDebugUnitTest`
 
 ## Known Gaps vs Schema and Architecture
 
@@ -176,7 +189,7 @@ These are intentional or unintentional omissions surfaced by a deep review. They
 - No NavHost / navigation-compose in use yet. Onboarding → Home transitions are driven by an `OnboardingStep` enum in `MainActivity`.
 - `HomeViewModel` is monolithic — owns Home summary, Inbox review, and Transaction edit state. Should split when surfaces grow.
 - `LocalFinanceRepository.completeInitialSetup` hardcodes seed IDs (`account-bank-1`, `card-1`, `account-cash`) and a single 2026-03 budget period; needs a proper seeding service before MVP.
-- No alerting/notification-posting from the app yet. `POST_NOTIFICATIONS` permission is intentionally absent until budget/due alerts are implemented.
+- No real alerting (budget/due/recurring) yet. `POST_NOTIFICATIONS` is now declared in the manifest, but only the Debug surface uses it — to post a mock notification the listener round-trips. Budget/due alert logic still has to be built.
 - SMS ingestion is deferred; no manifest permissions, no reader, but a `RawCaptureSourceType.SMS` enum value exists for the future.
 - Hardcoded confidence thresholds (`HIGH_CONFIDENCE = 0.85`, `MEDIUM_CONFIDENCE = 0.6`) live in `NotificationDecisionEngine`; no remote config or runtime tuning.
 
