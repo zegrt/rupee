@@ -20,6 +20,8 @@ import com.zegrt.rupee.data.local.entity.SyncStatus
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
 import com.zegrt.rupee.data.local.entity.UserEntity
 import java.time.Instant
+import java.time.LocalDate
+import java.time.YearMonth
 import kotlinx.coroutines.flow.Flow
 
 data class OnboardingSetupInput(
@@ -36,6 +38,7 @@ class LocalFinanceRepository(
 ) {
     companion object {
         private const val USER_ID = "local-user"
+        private const val DEFAULT_MONTHLY_BUDGET_MINOR = 4_000_000L
     }
 
     fun observeUser(): Flow<UserEntity?> = database.userDao().observeUser()
@@ -59,6 +62,19 @@ class LocalFinanceRepository(
             userId = USER_ID,
             state = InboxDecisionState.PENDING,
             limit = limit,
+        )
+
+    fun observeMonthlyTotalBudget(today: LocalDate = LocalDate.now()): Flow<BudgetEntity?> =
+        database.budgetDao().observeMonthlyTotalBudgetForDate(
+            userId = USER_ID,
+            date = today.toString(),
+        )
+
+    fun observeSpentInPeriod(fromIso: String, untilIso: String): Flow<Long> =
+        database.canonicalTransactionDao().observeSpentInPeriod(
+            userId = USER_ID,
+            fromIso = fromIso,
+            untilIso = untilIso,
         )
 
     suspend fun ensureBaseData() {
@@ -132,16 +148,31 @@ class LocalFinanceRepository(
             },
         )
 
+        ensureMonthlyBudgetForToday()
+    }
+
+    suspend fun ensureMonthlyBudgetForToday(today: LocalDate = LocalDate.now()) {
+        val isoDate = today.toString()
+        val existing = database.budgetDao().getMonthlyTotalBudgetForDate(USER_ID, isoDate)
+        if (existing != null) return
+
+        val carryForwardLimit = database.budgetDao()
+            .getLatestMonthlyTotalBudget(USER_ID)
+            ?.limitMinor
+            ?: DEFAULT_MONTHLY_BUDGET_MINOR
+
+        val now = Instant.now().toString()
+        val month = YearMonth.from(today)
         database.budgetDao().upsertBudgets(
             listOf(
                 BudgetEntity(
-                    id = "budget-monthly-total",
-                    userId = userId,
+                    id = "budget-monthly-total-$month",
+                    userId = USER_ID,
                     budgetType = BudgetType.MONTHLY_TOTAL,
-                    limitMinor = 400000,
+                    limitMinor = carryForwardLimit,
                     currencyCode = "INR",
-                    periodStart = "2026-03-01",
-                    periodEnd = "2026-03-31",
+                    periodStart = month.atDay(1).toString(),
+                    periodEnd = month.atEndOfMonth().toString(),
                     alertThresholdPercent = 0.8,
                     createdAt = now,
                     updatedAt = now,

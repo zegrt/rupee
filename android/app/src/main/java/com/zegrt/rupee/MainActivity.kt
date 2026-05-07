@@ -25,6 +25,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -45,7 +46,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.zegrt.rupee.home.HomeDashboard
 import com.zegrt.rupee.home.HomeInboxRow
+import com.zegrt.rupee.home.HomeRecentRow
 import com.zegrt.rupee.home.HomeUiState
 import com.zegrt.rupee.home.HomeTab
 import com.zegrt.rupee.home.HomeTransactionRow
@@ -106,6 +109,7 @@ private fun RupeeApp(
                 onboardingViewModel.syncPermissionState(
                     notificationGranted = PermissionStateChecker.hasNotificationAccess(context),
                 )
+                homeViewModel.refreshOnResume()
             }
         }
 
@@ -470,7 +474,10 @@ private fun RupeeHome(
         }
         Spacer(modifier = Modifier.height(20.dp))
         when (uiState.selectedTab) {
-            HomeTab.HOME -> HomeSummaryTab(uiState = uiState)
+            HomeTab.HOME -> HomeSummaryTab(
+                uiState = uiState,
+                onReviewInbox = { onSelectTab(HomeTab.INBOX) },
+            )
             HomeTab.INBOX -> InboxTab(
                 uiState = uiState,
                 onSelectInboxItem = onSelectInboxItem,
@@ -490,66 +497,250 @@ private fun RupeeHome(
 }
 
 @Composable
-private fun HomeSummaryTab(uiState: HomeUiState) {
+private fun HomeSummaryTab(
+    uiState: HomeUiState,
+    onReviewInbox: () -> Unit,
+) {
+    val dashboard = uiState.dashboard
+    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        DashboardGreeting(
+            greeting = dashboard.greeting,
+            monthLabel = dashboard.monthLabel,
+            isSeeding = uiState.isSeeding,
+        )
+        HeroBudgetCard(dashboard = dashboard)
+        WeeklySpendCard(dashboard = dashboard)
+        QuickActionsRow(
+            pendingInboxCount = dashboard.pendingInboxCount,
+            onReviewInbox = onReviewInbox,
+        )
+        RecentActivityCard(
+            recents = dashboard.recentTransactions,
+            hasAny = dashboard.hasAnyTransactions,
+        )
+    }
+}
+
+@Composable
+private fun DashboardGreeting(
+    greeting: String,
+    monthLabel: String,
+    isSeeding: Boolean,
+) {
+    Column {
+        Text(greeting, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text(
+            text = if (isSeeding) "Setting up your local store..." else monthLabel,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+@Composable
+private fun HeroBudgetCard(dashboard: HomeDashboard) {
+    val accent = when {
+        dashboard.isOverBudget -> MaterialTheme.colorScheme.error
+        dashboard.isNearLimit -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.primary
+    }
     Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(modifier = Modifier.padding(24.dp)) {
+            Text(
+                text = if (dashboard.hasMonthlyBudget) "Remaining this month" else "Monthly budget",
+                style = MaterialTheme.typography.labelLarge,
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = if (dashboard.hasMonthlyBudget) dashboard.monthlyRemainingLabel else dashboard.monthlyBudgetLabel,
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Bold,
+                color = accent,
+            )
+            if (dashboard.hasMonthlyBudget) {
+                Spacer(modifier = Modifier.height(16.dp))
+                LinearProgressIndicator(
+                    progress = { dashboard.monthlyProgress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp),
+                    color = accent,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column {
+                        Text("Spent", style = MaterialTheme.typography.labelMedium)
+                        Text(
+                            dashboard.monthlySpentLabel,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("Budget", style = MaterialTheme.typography.labelMedium)
+                        Text(
+                            dashboard.monthlyBudgetLabel,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+                if (dashboard.isOverBudget) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "Over budget — review spending in Inbox.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                } else if (dashboard.isNearLimit) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "Approaching the monthly limit.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+            } else {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Add a monthly target to see remaining and progress.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeeklySpendCard(dashboard: HomeDashboard) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column {
+                Text("This week", style = MaterialTheme.typography.labelLarge)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    dashboard.weeklySpentLabel,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(dashboard.weekRangeLabel, style = MaterialTheme.typography.bodySmall)
+            }
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+            ) {
+                Text(
+                    "Spent",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickActionsRow(
+    pendingInboxCount: Int,
+    onReviewInbox: () -> Unit,
+) {
+    if (pendingInboxCount <= 0) return
+    Button(
+        onClick = onReviewInbox,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text("Review Inbox ($pendingInboxCount)")
+    }
+}
+
+@Composable
+private fun RecentActivityCard(
+    recents: List<HomeRecentRow>,
+    hasAny: Boolean,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Text("Hello, ${uiState.userName}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-            Text(
-                text = if (uiState.isSeeding) "Seeding local defaults..." else "Local store is ready.",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MetricPill(label = "Accounts", value = uiState.accountCount.toString(), modifier = Modifier.weight(1f))
-                    MetricPill(label = "Cards", value = uiState.cardCount.toString(), modifier = Modifier.weight(1f))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MetricPill(label = "Categories", value = uiState.categoryCount.toString(), modifier = Modifier.weight(1f))
-                    MetricPill(label = "Buckets", value = uiState.bucketCount.toString(), modifier = Modifier.weight(1f))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MetricPill(label = "Canonical", value = uiState.recentTransactionCount.toString(), modifier = Modifier.weight(1f))
-                    MetricPill(label = "Inbox", value = uiState.pendingInboxCount.toString(), modifier = Modifier.weight(1f))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MetricPill(label = "Candidates", value = uiState.recentCandidateCount.toString(), modifier = Modifier.weight(1f))
-                    Spacer(modifier = Modifier.weight(1f))
+            Text("Recent activity", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(12.dp))
+            if (!hasAny) {
+                Text(
+                    "Rupee will start filling this in once it sees transaction notifications. Make sure notification access is granted.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else if (recents.isEmpty()) {
+                Text("No transactions in the last few entries.", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                recents.forEachIndexed { index, row ->
+                    RecentRow(row = row)
+                    if (index < recents.lastIndex) {
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                            modifier = Modifier.padding(vertical = 12.dp),
+                        )
+                    }
                 }
             }
         }
     }
-    Spacer(modifier = Modifier.height(20.dp))
-    InspectionSection(
-        title = "Recent canonical transactions",
-        hasItems = uiState.recentTransactions.isNotEmpty(),
-        emptyLabel = "No canonical transactions yet.",
+}
+
+@Composable
+private fun RecentRow(row: HomeRecentRow) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top,
     ) {
-        uiState.recentTransactions.take(5).forEach { row ->
-            InspectionRow(
-                headline = row.headline,
-                subline = row.subline,
-                trailing = row.amountLabel,
-            )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(row.merchant, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(row.subline, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+            if (row.isSuggested) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f),
+                ) {
+                    Text(
+                        "Suggested",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+            }
         }
-    }
-    Spacer(modifier = Modifier.height(16.dp))
-    InspectionSection(
-        title = "Recent candidates",
-        hasItems = uiState.recentCandidates.isNotEmpty(),
-        emptyLabel = "No transaction candidates yet.",
-    ) {
-        uiState.recentCandidates.forEach { row ->
-            InspectionRow(
-                headline = row.headline,
-                subline = row.subline,
-                trailing = row.decisionLabel,
-            )
-        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = row.amountLabel,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 
@@ -727,24 +918,6 @@ private fun TransactionRow(
 }
 
 @Composable
-private fun MetricPill(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(label, style = MaterialTheme.typography.labelMedium)
-        }
-    }
-}
-
-@Composable
 private fun InspectionSection(
     title: String,
     hasItems: Boolean,
@@ -854,11 +1027,6 @@ private fun HomeScreenPreview() {
         RupeeHome(
             uiState = HomeUiState(
                 userName = "Cyril",
-                accountCount = 1,
-                cardCount = 1,
-                categoryCount = 11,
-                bucketCount = 7,
-                recentTransactionCount = 0,
                 isSeeding = false,
             ),
             onSelectTab = {},
