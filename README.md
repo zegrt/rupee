@@ -59,17 +59,20 @@ Rupee should avoid:
 Right now the project has:
 
 - product and technical planning docs
-- Android app scaffold
+- Android app scaffold (Compose, Room, Kotlin)
 - onboarding flow
 - local database foundation
 - notification ingestion foundation
-- early provider-specific parsing for GPay, CRED, and ICICI notifications
-- a first decision layer for auto-create vs Inbox vs ignore
-- a first dedupe layer to suppress repeated transaction alerts
-- a Home / Inbox / Transactions shell inside the app
-- basic inbox confirm / dismiss actions
-- basic transaction merchant / notes editing
-- local Android toolchain setup for repeatable debug builds
+- provider-specific parsing for GPay, CRED, and ICICI notifications, plus a generic UPI fallback for PhonePe/Paytm-style bodies
+- a decision layer for auto-create vs Inbox vs ignore, and a dedupe layer that suppresses repeated alerts
+- a daily dashboard (hero monthly budget, this-week spend, recent activity, Inbox CTA) on Home
+- a unified review queue on Inbox: pending items plus auto-created `SUGGESTED` transactions, with edit-before-confirm (merchant, amount, category dropdown)
+- transactions surface with tap-to-view modal (Edit + Delete)
+- manual transaction entry through a bottom sheet
+- a Settings page (display name, monthly budget, notification permission re-check, version, category/bucket lists)
+- a Debug page (preset + editable mock notifications, parser playground, DB reset) accessible via a floating pill and from Settings
+- versioned APK output (`rupee-{version}-debug.apk`) and a version pill rendered on Home
+- first unit tests in `src/test/java` for parser canParse routing
 - a buildable debug APK
 
 ## Current Preview
@@ -78,17 +81,17 @@ The current preview build:
 
 - uses notification access
 - does not request SMS access
-- includes basic Inbox and Transactions surfaces
 - can be built locally as a debug APK
 
 APK output:
 
-- [app-debug.apk](./android/app/build/outputs/apk/debug/app-debug.apk)
+- [rupee-0.5.3-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.5.3-debug.apk)
 
 ## Main Docs
 
 - [Product PRD](./docs/rupee-prd.md)
 - [Technical Architecture](./docs/rupee-architecture.md)
+- [Settings & Debug surfaces](./docs/rupee-settings-debug.md)
 - [Schema Spec](./docs/rupee-schema.md)
 - [Android Screen Spec](./docs/rupee-android-screens.md)
 - [Engineering Roadmap](./docs/rupee-roadmap.md)
