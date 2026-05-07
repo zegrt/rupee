@@ -29,6 +29,34 @@ interface BudgetDao {
         date: String,
     ): Flow<BudgetEntity?>
 
+    @Query(
+        """
+        SELECT * FROM budgets
+        WHERE userId = :userId
+          AND isActive = 1
+          AND budgetType = 'MONTHLY_TOTAL'
+          AND periodStart <= :date
+          AND periodEnd >= :date
+        ORDER BY periodStart DESC
+        LIMIT 1
+        """
+    )
+    suspend fun getMonthlyTotalBudgetForDate(
+        userId: String,
+        date: String,
+    ): BudgetEntity?
+
+    @Query(
+        """
+        SELECT * FROM budgets
+        WHERE userId = :userId
+          AND budgetType = 'MONTHLY_TOTAL'
+        ORDER BY periodStart DESC
+        LIMIT 1
+        """
+    )
+    suspend fun getLatestMonthlyTotalBudget(userId: String): BudgetEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertBudgets(budgets: List<BudgetEntity>)
 }

@@ -38,6 +38,7 @@ class LocalFinanceRepository(
 ) {
     companion object {
         private const val USER_ID = "local-user"
+        private const val DEFAULT_MONTHLY_BUDGET_MINOR = 4_000_000L
     }
 
     fun observeUser(): Flow<UserEntity?> = database.userDao().observeUser()
@@ -147,17 +148,31 @@ class LocalFinanceRepository(
             },
         )
 
-        val thisMonth = YearMonth.now()
+        ensureMonthlyBudgetForToday()
+    }
+
+    suspend fun ensureMonthlyBudgetForToday(today: LocalDate = LocalDate.now()) {
+        val isoDate = today.toString()
+        val existing = database.budgetDao().getMonthlyTotalBudgetForDate(USER_ID, isoDate)
+        if (existing != null) return
+
+        val carryForwardLimit = database.budgetDao()
+            .getLatestMonthlyTotalBudget(USER_ID)
+            ?.limitMinor
+            ?: DEFAULT_MONTHLY_BUDGET_MINOR
+
+        val now = Instant.now().toString()
+        val month = YearMonth.from(today)
         database.budgetDao().upsertBudgets(
             listOf(
                 BudgetEntity(
-                    id = "budget-monthly-total-${thisMonth}",
-                    userId = userId,
+                    id = "budget-monthly-total-$month",
+                    userId = USER_ID,
                     budgetType = BudgetType.MONTHLY_TOTAL,
-                    limitMinor = 4_000_000,
+                    limitMinor = carryForwardLimit,
                     currencyCode = "INR",
-                    periodStart = thisMonth.atDay(1).toString(),
-                    periodEnd = thisMonth.atEndOfMonth().toString(),
+                    periodStart = month.atDay(1).toString(),
+                    periodEnd = month.atEndOfMonth().toString(),
                     alertThresholdPercent = 0.8,
                     createdAt = now,
                     updatedAt = now,

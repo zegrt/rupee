@@ -109,6 +109,7 @@ private fun RupeeApp(
                 onboardingViewModel.syncPermissionState(
                     notificationGranted = PermissionStateChecker.hasNotificationAccess(context),
                 )
+                homeViewModel.refreshOnResume()
             }
         }
 
@@ -664,26 +665,12 @@ private fun QuickActionsRow(
     pendingInboxCount: Int,
     onReviewInbox: () -> Unit,
 ) {
-    Row(
+    if (pendingInboxCount <= 0) return
+    Button(
+        onClick = onReviewInbox,
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Button(
-            onClick = onReviewInbox,
-            modifier = Modifier.weight(1f),
-            enabled = pendingInboxCount > 0,
-        ) {
-            Text(
-                if (pendingInboxCount > 0) "Review Inbox ($pendingInboxCount)" else "Inbox clear",
-            )
-        }
-        OutlinedButton(
-            onClick = { /* manual entry — placeholder until Milestone 6 wraps */ },
-            modifier = Modifier.weight(1f),
-            enabled = false,
-        ) {
-            Text("Add transaction")
-        }
+        Text("Review Inbox ($pendingInboxCount)")
     }
 }
 
@@ -1040,11 +1027,6 @@ private fun HomeScreenPreview() {
         RupeeHome(
             uiState = HomeUiState(
                 userName = "Cyril",
-                accountCount = 1,
-                cardCount = 1,
-                categoryCount = 11,
-                bucketCount = 7,
-                recentTransactionCount = 0,
                 isSeeding = false,
             ),
             onSelectTab = {},
