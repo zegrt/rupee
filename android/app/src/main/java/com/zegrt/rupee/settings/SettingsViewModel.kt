@@ -27,7 +27,7 @@ data class SettingsUiState(
     val categories: List<String> = emptyList(),
     val buckets: List<String> = emptyList(),
     val notificationGranted: Boolean = false,
-    val appVersion: String = "0.1.0-debug",
+    val appVersion: String = "",
     val savingName: Boolean = false,
     val savingBudget: Boolean = false,
     val message: String? = null,
@@ -35,6 +35,7 @@ data class SettingsUiState(
 
 class SettingsViewModel(
     private val repository: LocalFinanceRepository,
+    private val appVersion: String = "",
 ) : ViewModel() {
     private val nameDraft = MutableStateFlow<String?>(null)
     private val budgetDraft = MutableStateFlow<String?>(null)
@@ -90,6 +91,7 @@ class SettingsViewModel(
             categories = cats.map { it.name },
             buckets = buckets.map { it.name },
             notificationGranted = notificationGranted.value,
+            appVersion = appVersion,
             savingName = drafts[2] as Boolean,
             savingBudget = drafts[3] as Boolean,
             message = drafts[4] as String?,
@@ -144,12 +146,13 @@ class SettingsViewModel(
 
 class SettingsViewModelFactory(
     private val repository: LocalFinanceRepository,
+    private val appVersion: String = "",
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         require(modelClass.isAssignableFrom(SettingsViewModel::class.java)) {
             "Unknown ViewModel class: ${modelClass.name}"
         }
-        return SettingsViewModel(repository) as T
+        return SettingsViewModel(repository, appVersion) as T
     }
 }
