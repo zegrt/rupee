@@ -117,14 +117,16 @@ References:
 
 ## Immediate Next Work
 
-1. round out the dashboard: upcoming dues strip (cards + EMIs + recurring), custom bucket progress cards, "Add transaction" wired to a manual-entry sheet
-2. deepen the Inbox review flow beyond confirm and dismiss (edit-before-confirm, merge-with-existing, recategorize, "always trust this merchant" rule)
-3. surface the SUGGESTED → CONFIRMED promotion in the Inbox (today only `INBOX_PENDING` candidates appear; `SUGGESTED` canonical rows from auto-creation also need a review path)
-4. refine canonical transaction editing — category, split, attach to EMI, link back to source notification
-5. parser refinement using real notification samples (depends on collecting real fixtures)
-6. richer dedupe rules for fuzzy multi-source collisions (depends on observing real collisions)
-7. wire `EmiPlanEntity` (currently registered in `RupeeDatabase` with no DAO)
-8. add the missing schema entities once their UI surfaces are scoped: `canonical_transaction_source_links`, `dedupe_groups` / `dedupe_group_members`, `recurring_patterns`, `alert_rules` / `alert_events`, `monthly_recaps`
+1. "Always trust this merchant" rule — new `MerchantTrustRule` entity + decision-engine integration; Inbox confirm gets a checkbox to create the rule (design in `docs/rupee-settings-debug.md` § 5)
+2. "Merge with existing transaction" in Inbox — needs a transaction picker UX
+3. Recategorize action on the Transactions tab (mirror the Inbox category chip row)
+4. Upcoming dues strip on Home — blocked on Milestone 8 (cards/EMIs)
+5. Custom bucket progress cards on Home — blocked on per-bucket budgets being seeded + a `transaction_bucket_assignments` DAO
+6. Parser refinement using real notification samples (Debug parser playground now makes this easier)
+7. Richer dedupe rules for fuzzy multi-source collisions (depends on observing real collisions)
+8. Wire `EmiPlanEntity` (currently registered in `RupeeDatabase` with no DAO)
+9. Add the missing schema entities once their UI surfaces are scoped: `canonical_transaction_source_links`, `dedupe_groups` / `dedupe_group_members`, `recurring_patterns`, `alert_rules` / `alert_events`, `monthly_recaps`
+10. Bottom-nav migration (replace chip-row tab switcher); hide Debug behind `BuildConfig.DEBUG` at the same time
 
 ## Current Implementation State
 
@@ -158,6 +160,10 @@ References:
 - auto-created canonical transactions from notifications now land in `SUGGESTED` status (not `CONFIRMED`) and are promoted to `CONFIRMED` only via the Inbox review path
 - candidate decision states now include `USER_CONFIRMED` to distinguish system auto-creation from user confirmation
 - DAO queries for recent transactions and inbox items now scope by `userId`
+- Inbox is now a unified review queue — pending `InboxItem` candidates plus auto-created `SUGGESTED` canonical transactions both render in one list with edit-before-confirm (merchant + amount + category chips)
+- Manual transaction entry is wired to the dashboard "Add transaction" button via a `ModalBottomSheet` form (merchant, amount, mode chip selector, category chips, notes)
+- Settings tab exists with profile (display name), monthly budget edit, notification permission re-check, and read-only category/bucket lists; documented in `docs/rupee-settings-debug.md`
+- Debug tab exists with three preset sample notifications (GPay/CRED/ICICI) that exercise the real ingestion pipeline, a parser playground that runs the parser registry against arbitrary input without persisting, and a confirm-gated reset that wipes the DB and re-seeds defaults
 
 ## Known Gaps vs Schema and Architecture
 

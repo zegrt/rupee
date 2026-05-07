@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.zegrt.rupee
 
 import android.content.Intent
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -40,21 +43,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.zegrt.rupee.data.local.entity.Mode
+import com.zegrt.rupee.debug.DebugScreen
+import com.zegrt.rupee.debug.DebugViewModel
+import com.zegrt.rupee.debug.DebugViewModelFactory
 import com.zegrt.rupee.home.HomeDashboard
-import com.zegrt.rupee.home.HomeInboxRow
 import com.zegrt.rupee.home.HomeRecentRow
+import com.zegrt.rupee.home.HomeReviewRow
 import com.zegrt.rupee.home.HomeUiState
 import com.zegrt.rupee.home.HomeTab
 import com.zegrt.rupee.home.HomeTransactionRow
 import com.zegrt.rupee.home.HomeViewModel
 import com.zegrt.rupee.home.HomeViewModelFactory
+import com.zegrt.rupee.home.ManualEntryDraft
+import com.zegrt.rupee.home.ReviewSource
 import com.zegrt.rupee.onboarding.OnboardingStep
+import com.zegrt.rupee.settings.SettingsScreen
+import com.zegrt.rupee.settings.SettingsViewModel
+import com.zegrt.rupee.settings.SettingsViewModelFactory
 import com.zegrt.rupee.onboarding.OnboardingUiState
 import com.zegrt.rupee.onboarding.OnboardingViewModel
 import com.zegrt.rupee.onboarding.OnboardingViewModelFactory
@@ -78,6 +91,8 @@ class MainActivity : ComponentActivity() {
                             repository = app.localFinanceRepository,
                             preferences = app.onboardingPreferences,
                         ),
+                        settingsViewModelFactory = SettingsViewModelFactory(app.localFinanceRepository),
+                        debugViewModelFactory = DebugViewModelFactory(app.localFinanceRepository),
                     )
                 }
             }
@@ -89,26 +104,32 @@ class MainActivity : ComponentActivity() {
 private fun RupeeApp(
     homeViewModelFactory: HomeViewModelFactory,
     onboardingViewModelFactory: OnboardingViewModelFactory,
+    settingsViewModelFactory: SettingsViewModelFactory,
+    debugViewModelFactory: DebugViewModelFactory,
 ) {
     val homeViewModel: HomeViewModel = viewModel(factory = homeViewModelFactory)
     val onboardingViewModel: OnboardingViewModel = viewModel(factory = onboardingViewModelFactory)
+    val settingsViewModel: SettingsViewModel = viewModel(factory = settingsViewModelFactory)
+    val debugViewModel: DebugViewModel = viewModel(factory = debugViewModelFactory)
     val homeUiState by homeViewModel.uiState.collectAsState()
     val onboardingUiState by onboardingViewModel.uiState.collectAsState()
+    val settingsUiState by settingsViewModel.uiState.collectAsState()
+    val debugUiState by debugViewModel.uiState.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
     LaunchedEffect(Unit) {
-        onboardingViewModel.syncPermissionState(
-            notificationGranted = PermissionStateChecker.hasNotificationAccess(context),
-        )
+        val granted = PermissionStateChecker.hasNotificationAccess(context)
+        onboardingViewModel.syncPermissionState(notificationGranted = granted)
+        settingsViewModel.setNotificationGranted(granted)
     }
 
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                onboardingViewModel.syncPermissionState(
-                    notificationGranted = PermissionStateChecker.hasNotificationAccess(context),
-                )
+                val granted = PermissionStateChecker.hasNotificationAccess(context)
+                onboardingViewModel.syncPermissionState(notificationGranted = granted)
+                settingsViewModel.setNotificationGranted(granted)
                 homeViewModel.refreshOnResume()
             }
         }
@@ -119,13 +140,15 @@ private fun RupeeApp(
         }
     }
 
+    val openNotificationSettings = {
+        context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+    }
+
     when (onboardingUiState.currentStep) {
         OnboardingStep.WELCOME -> WelcomeScreen(onContinue = onboardingViewModel::advanceFromWelcome)
         OnboardingStep.PERMISSIONS -> PermissionsScreen(
             uiState = onboardingUiState,
-            onGrantNotification = {
-                context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-            },
+            onGrantNotification = openNotificationSettings,
             onContinue = {
                 onboardingViewModel.syncPermissionState(
                     notificationGranted = PermissionStateChecker.hasNotificationAccess(context),
@@ -147,15 +170,33 @@ private fun RupeeApp(
 
         OnboardingStep.HOME -> RupeeHome(
             uiState = homeUiState,
+            settingsState = settingsUiState,
+            debugState = debugUiState,
             onSelectTab = homeViewModel::selectTab,
-            onSelectInboxItem = homeViewModel::selectInboxItem,
-            onInboxMerchantDraftChange = homeViewModel::updateInboxMerchantDraft,
-            onConfirmInboxItem = homeViewModel::confirmInboxItem,
-            onDismissInboxItem = homeViewModel::dismissInboxItem,
+            onSelectReviewRow = homeViewModel::selectReviewRow,
+            onReviewMerchantDraftChange = homeViewModel::updateReviewMerchantDraft,
+            onReviewAmountDraftChange = homeViewModel::updateReviewAmountDraft,
+            onReviewCategoryDraftChange = homeViewModel::updateReviewCategoryDraft,
+            onConfirmReviewRow = homeViewModel::confirmReviewRow,
+            onDismissReviewRow = homeViewModel::dismissReviewRow,
             onSelectTransaction = homeViewModel::selectTransaction,
             onTransactionMerchantDraftChange = homeViewModel::updateTransactionMerchantDraft,
             onTransactionNotesDraftChange = homeViewModel::updateTransactionNotesDraft,
             onSaveTransaction = homeViewModel::saveTransactionEdits,
+            onOpenManualEntry = homeViewModel::openManualEntry,
+            onCloseManualEntry = homeViewModel::closeManualEntry,
+            onUpdateManualEntry = homeViewModel::updateManualEntry,
+            onSubmitManualEntry = homeViewModel::submitManualEntry,
+            onSettingsNameDraftChange = settingsViewModel::updateNameDraft,
+            onSettingsSaveName = settingsViewModel::saveDisplayName,
+            onSettingsBudgetDraftChange = settingsViewModel::updateBudgetDraft,
+            onSettingsSaveBudget = settingsViewModel::saveMonthlyBudget,
+            onOpenNotificationSettings = openNotificationSettings,
+            onDebugReset = debugViewModel::resetAllData,
+            onDebugSendSample = debugViewModel::sendSample,
+            onDebugUpdateParseTitle = debugViewModel::updateParseTitle,
+            onDebugUpdateParseBody = debugViewModel::updateParseBody,
+            onDebugRunParseTest = { debugViewModel.runParseTest() },
         )
     }
 }
@@ -432,58 +473,65 @@ private fun SetupToggleCard(
 @Composable
 private fun RupeeHome(
     uiState: HomeUiState,
+    settingsState: com.zegrt.rupee.settings.SettingsUiState,
+    debugState: com.zegrt.rupee.debug.DebugUiState,
     onSelectTab: (HomeTab) -> Unit,
-    onSelectInboxItem: (String) -> Unit,
-    onInboxMerchantDraftChange: (String, String) -> Unit,
-    onConfirmInboxItem: (String) -> Unit,
-    onDismissInboxItem: (String) -> Unit,
+    onSelectReviewRow: (String) -> Unit,
+    onReviewMerchantDraftChange: (String, String) -> Unit,
+    onReviewAmountDraftChange: (String, String) -> Unit,
+    onReviewCategoryDraftChange: (String, String?) -> Unit,
+    onConfirmReviewRow: (String, ReviewSource) -> Unit,
+    onDismissReviewRow: (String, ReviewSource) -> Unit,
     onSelectTransaction: (String) -> Unit,
     onTransactionMerchantDraftChange: (String, String) -> Unit,
     onTransactionNotesDraftChange: (String, String) -> Unit,
     onSaveTransaction: (String) -> Unit,
+    onOpenManualEntry: () -> Unit,
+    onCloseManualEntry: () -> Unit,
+    onUpdateManualEntry: (ManualEntryDraft.() -> ManualEntryDraft) -> Unit,
+    onSubmitManualEntry: () -> Unit,
+    onSettingsNameDraftChange: (String) -> Unit,
+    onSettingsSaveName: () -> Unit,
+    onSettingsBudgetDraftChange: (String) -> Unit,
+    onSettingsSaveBudget: () -> Unit,
+    onOpenNotificationSettings: () -> Unit,
+    onDebugReset: () -> Unit,
+    onDebugSendSample: (com.zegrt.rupee.debug.SampleNotification) -> Unit,
+    onDebugUpdateParseTitle: (String) -> Unit,
+    onDebugUpdateParseBody: (String) -> Unit,
+    onDebugRunParseTest: () -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+            .padding(horizontal = 24.dp, vertical = 24.dp),
     ) {
-        Text("Rupee", style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold)
-        Text(
-            text = "Pipeline view for the India-first personal finance tracker.",
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(top = 12.dp),
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            HomeTabChip(
-                label = "Home",
-                selected = uiState.selectedTab == HomeTab.HOME,
-                onClick = { onSelectTab(HomeTab.HOME) },
-            )
-            HomeTabChip(
-                label = "Inbox",
-                selected = uiState.selectedTab == HomeTab.INBOX,
-                onClick = { onSelectTab(HomeTab.INBOX) },
-            )
-            HomeTabChip(
-                label = "Transactions",
-                selected = uiState.selectedTab == HomeTab.TRANSACTIONS,
-                onClick = { onSelectTab(HomeTab.TRANSACTIONS) },
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            HomeTabChip("Home", uiState.selectedTab == HomeTab.HOME) { onSelectTab(HomeTab.HOME) }
+            HomeTabChip("Inbox", uiState.selectedTab == HomeTab.INBOX) { onSelectTab(HomeTab.INBOX) }
+            HomeTabChip("Transactions", uiState.selectedTab == HomeTab.TRANSACTIONS) { onSelectTab(HomeTab.TRANSACTIONS) }
+            HomeTabChip("Settings", uiState.selectedTab == HomeTab.SETTINGS) { onSelectTab(HomeTab.SETTINGS) }
+            HomeTabChip("Debug", uiState.selectedTab == HomeTab.DEBUG) { onSelectTab(HomeTab.DEBUG) }
         }
         Spacer(modifier = Modifier.height(20.dp))
         when (uiState.selectedTab) {
             HomeTab.HOME -> HomeSummaryTab(
                 uiState = uiState,
                 onReviewInbox = { onSelectTab(HomeTab.INBOX) },
+                onAddTransaction = onOpenManualEntry,
             )
-            HomeTab.INBOX -> InboxTab(
+            HomeTab.INBOX -> ReviewTab(
                 uiState = uiState,
-                onSelectInboxItem = onSelectInboxItem,
-                onInboxMerchantDraftChange = onInboxMerchantDraftChange,
-                onConfirmInboxItem = onConfirmInboxItem,
-                onDismissInboxItem = onDismissInboxItem,
+                onSelectReviewRow = onSelectReviewRow,
+                onMerchantChange = onReviewMerchantDraftChange,
+                onAmountChange = onReviewAmountDraftChange,
+                onCategoryChange = onReviewCategoryDraftChange,
+                onConfirm = onConfirmReviewRow,
+                onDismiss = onDismissReviewRow,
             )
             HomeTab.TRANSACTIONS -> TransactionsTab(
                 uiState = uiState,
@@ -492,7 +540,34 @@ private fun RupeeHome(
                 onTransactionNotesDraftChange = onTransactionNotesDraftChange,
                 onSaveTransaction = onSaveTransaction,
             )
+            HomeTab.SETTINGS -> SettingsScreen(
+                state = settingsState,
+                onNameDraftChange = onSettingsNameDraftChange,
+                onSaveName = onSettingsSaveName,
+                onBudgetDraftChange = onSettingsBudgetDraftChange,
+                onSaveBudget = onSettingsSaveBudget,
+                onOpenNotificationSettings = onOpenNotificationSettings,
+                onOpenDebug = { onSelectTab(HomeTab.DEBUG) },
+            )
+            HomeTab.DEBUG -> DebugScreen(
+                state = debugState,
+                onReset = onDebugReset,
+                onSendSample = onDebugSendSample,
+                onUpdateParseTitle = onDebugUpdateParseTitle,
+                onUpdateParseBody = onDebugUpdateParseBody,
+                onRunParseTest = onDebugRunParseTest,
+            )
         }
+    }
+
+    if (uiState.manualEntry.isOpen) {
+        ManualEntrySheet(
+            draft = uiState.manualEntry,
+            categories = uiState.categories,
+            onClose = onCloseManualEntry,
+            onUpdate = onUpdateManualEntry,
+            onSubmit = onSubmitManualEntry,
+        )
     }
 }
 
@@ -500,6 +575,7 @@ private fun RupeeHome(
 private fun HomeSummaryTab(
     uiState: HomeUiState,
     onReviewInbox: () -> Unit,
+    onAddTransaction: () -> Unit,
 ) {
     val dashboard = uiState.dashboard
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -511,8 +587,9 @@ private fun HomeSummaryTab(
         HeroBudgetCard(dashboard = dashboard)
         WeeklySpendCard(dashboard = dashboard)
         QuickActionsRow(
-            pendingInboxCount = dashboard.pendingInboxCount,
+            pendingReviewCount = dashboard.pendingReviewCount,
             onReviewInbox = onReviewInbox,
+            onAddTransaction = onAddTransaction,
         )
         RecentActivityCard(
             recents = dashboard.recentTransactions,
@@ -662,15 +739,29 @@ private fun WeeklySpendCard(dashboard: HomeDashboard) {
 
 @Composable
 private fun QuickActionsRow(
-    pendingInboxCount: Int,
+    pendingReviewCount: Int,
     onReviewInbox: () -> Unit,
+    onAddTransaction: () -> Unit,
 ) {
-    if (pendingInboxCount <= 0) return
-    Button(
-        onClick = onReviewInbox,
+    Row(
         modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Review Inbox ($pendingInboxCount)")
+        Button(
+            onClick = onReviewInbox,
+            modifier = Modifier.weight(1f),
+            enabled = pendingReviewCount > 0,
+        ) {
+            Text(
+                if (pendingReviewCount > 0) "Review ($pendingReviewCount)" else "Inbox clear",
+            )
+        }
+        OutlinedButton(
+            onClick = onAddTransaction,
+            modifier = Modifier.weight(1f),
+        ) {
+            Text("Add transaction")
+        }
     }
 }
 
@@ -744,27 +835,107 @@ private fun RecentRow(row: HomeRecentRow) {
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun InboxTab(
+private fun ManualEntrySheet(
+    draft: ManualEntryDraft,
+    categories: List<com.zegrt.rupee.home.CategoryOption>,
+    onClose: () -> Unit,
+    onUpdate: (ManualEntryDraft.() -> ManualEntryDraft) -> Unit,
+    onSubmit: () -> Unit,
+) {
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onClose,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Add transaction", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            OutlinedTextField(
+                value = draft.merchant,
+                onValueChange = { v -> onUpdate { copy(merchant = v) } },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Merchant / payee") },
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = draft.amountRupees,
+                onValueChange = { v -> onUpdate { copy(amountRupees = v.filter { it.isDigit() || it == '.' }) } },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Amount (₹)") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+            Text("Mode", style = MaterialTheme.typography.labelMedium)
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(Mode.UPI, Mode.CREDIT_CARD, Mode.DEBIT_CARD, Mode.CASH, Mode.BANK_TRANSFER, Mode.OTHER).forEach { m ->
+                    androidx.compose.material3.FilterChip(
+                        selected = draft.mode == m,
+                        onClick = { onUpdate { copy(mode = m) } },
+                        label = { Text(m.name.replace('_', ' ')) },
+                    )
+                }
+            }
+            CategoryChipRow(
+                selectedId = draft.categoryId,
+                categories = categories,
+                onSelect = { id -> onUpdate { copy(categoryId = id) } },
+            )
+            OutlinedTextField(
+                value = draft.notes,
+                onValueChange = { v -> onUpdate { copy(notes = v) } },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Notes (optional)") },
+            )
+            draft.error?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(
+                    onClick = onSubmit,
+                    enabled = !draft.isSaving,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(if (draft.isSaving) "Saving..." else "Save")
+                }
+                OutlinedButton(onClick = onClose, modifier = Modifier.weight(1f)) {
+                    Text("Cancel")
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+}
+
+@Composable
+private fun ReviewTab(
     uiState: HomeUiState,
-    onSelectInboxItem: (String) -> Unit,
-    onInboxMerchantDraftChange: (String, String) -> Unit,
-    onConfirmInboxItem: (String) -> Unit,
-    onDismissInboxItem: (String) -> Unit,
+    onSelectReviewRow: (String) -> Unit,
+    onMerchantChange: (String, String) -> Unit,
+    onAmountChange: (String, String) -> Unit,
+    onCategoryChange: (String, String?) -> Unit,
+    onConfirm: (String, ReviewSource) -> Unit,
+    onDismiss: (String, ReviewSource) -> Unit,
 ) {
     InspectionSection(
-        title = "Inbox review",
-        hasItems = uiState.inboxItems.isNotEmpty(),
-        emptyLabel = "Inbox is clear.",
+        title = "Review",
+        hasItems = uiState.reviewRows.isNotEmpty(),
+        emptyLabel = "Nothing to review.",
     ) {
-        uiState.inboxItems.forEach { row ->
-            InboxRow(
+        uiState.reviewRows.forEach { row ->
+            ReviewRowCard(
                 row = row,
-                selected = row.id == uiState.selectedInboxItemId,
-                onSelect = { onSelectInboxItem(row.id) },
-                onMerchantChange = { onInboxMerchantDraftChange(row.id, it) },
-                onConfirm = { onConfirmInboxItem(row.id) },
-                onDismiss = { onDismissInboxItem(row.id) },
+                selected = row.id == uiState.selectedReviewRowId,
+                categories = uiState.categories,
+                onSelect = { onSelectReviewRow(row.id) },
+                onMerchantChange = { onMerchantChange(row.id, it) },
+                onAmountChange = { onAmountChange(row.id, it) },
+                onCategoryChange = { onCategoryChange(row.id, it) },
+                onConfirm = { onConfirm(row.id, row.source) },
+                onDismiss = { onDismiss(row.id, row.source) },
             )
         }
     }
@@ -809,11 +980,14 @@ private fun HomeTabChip(
 }
 
 @Composable
-private fun InboxRow(
-    row: HomeInboxRow,
+private fun ReviewRowCard(
+    row: HomeReviewRow,
     selected: Boolean,
+    categories: List<com.zegrt.rupee.home.CategoryOption>,
     onSelect: () -> Unit,
     onMerchantChange: (String) -> Unit,
+    onAmountChange: (String) -> Unit,
+    onCategoryChange: (String?) -> Unit,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -828,9 +1002,31 @@ private fun InboxRow(
         onClick = onSelect,
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(row.headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(row.subline, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
-            Text(row.reasonLabel, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(row.merchant, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(row.subline, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(row.amountLabel, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = if (row.source == ReviewSource.SUGGESTED)
+                    MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
+                else MaterialTheme.colorScheme.secondaryContainer,
+            ) {
+                Text(
+                    row.reasonLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
             if (selected) {
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
@@ -839,6 +1035,21 @@ private fun InboxRow(
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Merchant / payee") },
                     singleLine = true,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = row.amountDraftRupees,
+                    onValueChange = onAmountChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Amount (₹)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                CategoryChipRow(
+                    selectedId = row.categoryIdDraft,
+                    categories = categories,
+                    onSelect = onCategoryChange,
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -849,6 +1060,36 @@ private fun InboxRow(
         }
     }
     Spacer(modifier = Modifier.height(12.dp))
+}
+
+@Composable
+private fun CategoryChipRow(
+    selectedId: String?,
+    categories: List<com.zegrt.rupee.home.CategoryOption>,
+    onSelect: (String?) -> Unit,
+) {
+    if (categories.isEmpty()) return
+    Column {
+        Text("Category", style = MaterialTheme.typography.labelMedium)
+        Spacer(modifier = Modifier.height(6.dp))
+        androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            androidx.compose.material3.FilterChip(
+                selected = selectedId == null,
+                onClick = { onSelect(null) },
+                label = { Text("None") },
+            )
+            categories.forEach { option ->
+                androidx.compose.material3.FilterChip(
+                    selected = selectedId == option.id,
+                    onClick = { onSelect(option.id) },
+                    label = { Text(option.name) },
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -1024,20 +1265,13 @@ private fun SetupScreenPreview() {
 @Composable
 private fun HomeScreenPreview() {
     RupeeTheme {
-        RupeeHome(
+        HomeSummaryTab(
             uiState = HomeUiState(
                 userName = "Cyril",
                 isSeeding = false,
             ),
-            onSelectTab = {},
-            onSelectInboxItem = {},
-            onInboxMerchantDraftChange = { _, _ -> },
-            onConfirmInboxItem = {},
-            onDismissInboxItem = {},
-            onSelectTransaction = {},
-            onTransactionMerchantDraftChange = { _, _ -> },
-            onTransactionNotesDraftChange = { _, _ -> },
-            onSaveTransaction = {},
+            onReviewInbox = {},
+            onAddTransaction = {},
         )
     }
 }

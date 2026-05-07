@@ -6,7 +6,9 @@ import androidx.lifecycle.viewModelScope
 import com.zegrt.rupee.data.local.entity.BudgetEntity
 import com.zegrt.rupee.data.local.entity.CanonicalTransactionEntity
 import com.zegrt.rupee.data.local.entity.CanonicalTransactionStatus
+import com.zegrt.rupee.data.local.entity.CategoryEntity
 import com.zegrt.rupee.data.local.entity.InboxItemEntity
+import com.zegrt.rupee.data.local.entity.Mode
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
 import com.zegrt.rupee.data.local.entity.UserEntity
 import com.zegrt.rupee.data.repository.LocalFinanceRepository
@@ -32,14 +34,23 @@ enum class HomeTab {
     HOME,
     INBOX,
     TRANSACTIONS,
+    SETTINGS,
+    DEBUG,
 }
 
-data class HomeInboxRow(
+enum class ReviewSource { INBOX, SUGGESTED }
+
+data class HomeReviewRow(
     val id: String,
-    val headline: String,
+    val source: ReviewSource,
+    val merchant: String,
+    val merchantDraft: String,
+    val amountLabel: String,
+    val amountDraftRupees: String,
+    val categoryId: String?,
+    val categoryIdDraft: String?,
     val subline: String,
     val reasonLabel: String,
-    val merchantDraft: String,
 )
 
 data class HomeTransactionRow(
@@ -60,6 +71,22 @@ data class HomeRecentRow(
     val isSuggested: Boolean,
 )
 
+data class CategoryOption(
+    val id: String,
+    val name: String,
+)
+
+data class ManualEntryDraft(
+    val isOpen: Boolean = false,
+    val merchant: String = "",
+    val amountRupees: String = "",
+    val mode: Mode = Mode.UPI,
+    val categoryId: String? = null,
+    val notes: String = "",
+    val isSaving: Boolean = false,
+    val error: String? = null,
+)
+
 data class HomeDashboard(
     val greeting: String = "Hello",
     val monthLabel: String = "",
@@ -72,28 +99,32 @@ data class HomeDashboard(
     val isNearLimit: Boolean = false,
     val weeklySpentLabel: String = "",
     val weekRangeLabel: String = "",
-    val pendingInboxCount: Int = 0,
+    val pendingReviewCount: Int = 0,
     val recentTransactions: List<HomeRecentRow> = emptyList(),
     val hasAnyTransactions: Boolean = false,
 )
 
 data class HomeUiState(
     val userName: String = "Rupee",
-    val pendingInboxCount: Int = 0,
+    val pendingReviewCount: Int = 0,
     val selectedTab: HomeTab = HomeTab.HOME,
-    val selectedInboxItemId: String? = null,
+    val selectedReviewRowId: String? = null,
     val selectedTransactionId: String? = null,
-    val inboxItems: List<HomeInboxRow> = emptyList(),
+    val reviewRows: List<HomeReviewRow> = emptyList(),
     val recentTransactions: List<HomeTransactionRow> = emptyList(),
+    val categories: List<CategoryOption> = emptyList(),
+    val manualEntry: ManualEntryDraft = ManualEntryDraft(),
     val dashboard: HomeDashboard = HomeDashboard(),
     val isSeeding: Boolean = true,
 )
 
 private data class DashboardData(
     val user: UserEntity?,
+    val categories: List<CategoryEntity>,
     val transactions: List<CanonicalTransactionEntity>,
     val candidates: List<TransactionCandidateEntity>,
     val inboxItems: List<InboxItemEntity>,
+    val suggestedTxns: List<CanonicalTransactionEntity>,
     val budget: BudgetEntity?,
     val monthlySpent: Long,
     val weeklySpent: Long,
@@ -102,11 +133,14 @@ private data class DashboardData(
 private data class ViewSelection(
     val isSeeding: Boolean,
     val tab: HomeTab,
-    val selectedInboxItemId: String?,
+    val selectedReviewRowId: String?,
     val selectedTransactionId: String?,
-    val inboxMerchantDrafts: Map<String, String>,
+    val merchantDrafts: Map<String, String>,
+    val amountDrafts: Map<String, String>,
+    val categoryDrafts: Map<String, String?>,
     val transactionMerchantDrafts: Map<String, String>,
     val transactionNotesDrafts: Map<String, String>,
+    val manualEntry: ManualEntryDraft,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -120,11 +154,14 @@ class HomeViewModel(
     private val today = MutableStateFlow(clock())
     private val isSeeding = MutableStateFlow(true)
     private val selectedTab = MutableStateFlow(HomeTab.HOME)
-    private val selectedInboxItemId = MutableStateFlow<String?>(null)
+    private val selectedReviewRowId = MutableStateFlow<String?>(null)
     private val selectedTransactionId = MutableStateFlow<String?>(null)
-    private val inboxMerchantDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
+    private val reviewMerchantDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
+    private val reviewAmountDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
+    private val reviewCategoryDrafts = MutableStateFlow<Map<String, String?>>(emptyMap())
     private val transactionMerchantDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
     private val transactionNotesDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
+    private val manualEntry = MutableStateFlow(ManualEntryDraft())
 
     private val monthlyBudgetFlow: Flow<BudgetEntity?> = today.flatMapLatest { date ->
         repository.observeMonthlyTotalBudget(date)
@@ -147,25 +184,33 @@ class HomeViewModel(
     private val dashboardData: Flow<DashboardData> = combine(
         combine(
             repository.observeUser(),
+            repository.observeCategories(),
             repository.observeRecentTransactions(),
             repository.observeRecentTransactionCandidates(),
             repository.observePendingInboxItems(),
-        ) { user, txns, cands, inbox -> arrayOf<Any?>(user, txns, cands, inbox) },
+        ) { user, cats, txns, cands, inbox ->
+            arrayOf<Any?>(user, cats, txns, cands, inbox)
+        },
         combine(
+            repository.observeSuggestedTransactions(),
             monthlyBudgetFlow,
             monthlySpendFlow,
             weeklySpendFlow,
-        ) { b, m, w -> Triple(b, m, w) },
+        ) { suggested, b, m, w ->
+            arrayOf<Any?>(suggested, b, m, w)
+        },
     ) { entities, periods ->
         @Suppress("UNCHECKED_CAST")
         DashboardData(
             user = entities[0] as UserEntity?,
-            transactions = entities[1] as List<CanonicalTransactionEntity>,
-            candidates = entities[2] as List<TransactionCandidateEntity>,
-            inboxItems = entities[3] as List<InboxItemEntity>,
-            budget = periods.first,
-            monthlySpent = periods.second,
-            weeklySpent = periods.third,
+            categories = entities[1] as List<CategoryEntity>,
+            transactions = entities[2] as List<CanonicalTransactionEntity>,
+            candidates = entities[3] as List<TransactionCandidateEntity>,
+            inboxItems = entities[4] as List<InboxItemEntity>,
+            suggestedTxns = periods[0] as List<CanonicalTransactionEntity>,
+            budget = periods[1] as BudgetEntity?,
+            monthlySpent = periods[2] as Long,
+            weeklySpent = periods[3] as Long,
         )
     }
 
@@ -173,23 +218,34 @@ class HomeViewModel(
         combine(
             isSeeding,
             selectedTab,
-            selectedInboxItemId,
+            selectedReviewRowId,
             selectedTransactionId,
-        ) { seeding, tab, iid, tid -> arrayOf<Any?>(seeding, tab, iid, tid) },
+            manualEntry,
+        ) { seeding, tab, rid, tid, manual ->
+            arrayOf<Any?>(seeding, tab, rid, tid, manual)
+        },
         combine(
-            inboxMerchantDrafts,
+            reviewMerchantDrafts,
+            reviewAmountDrafts,
+            reviewCategoryDrafts,
             transactionMerchantDrafts,
             transactionNotesDrafts,
-        ) { im, tm, tn -> Triple(im, tm, tn) },
+        ) { rm, ra, rc, tm, tn ->
+            arrayOf<Any?>(rm, ra, rc, tm, tn)
+        },
     ) { selection, drafts ->
+        @Suppress("UNCHECKED_CAST")
         ViewSelection(
             isSeeding = selection[0] as Boolean,
             tab = selection[1] as HomeTab,
-            selectedInboxItemId = selection[2] as String?,
+            selectedReviewRowId = selection[2] as String?,
             selectedTransactionId = selection[3] as String?,
-            inboxMerchantDrafts = drafts.first,
-            transactionMerchantDrafts = drafts.second,
-            transactionNotesDrafts = drafts.third,
+            manualEntry = selection[4] as ManualEntryDraft,
+            merchantDrafts = drafts[0] as Map<String, String>,
+            amountDrafts = drafts[1] as Map<String, String>,
+            categoryDrafts = drafts[2] as Map<String, String?>,
+            transactionMerchantDrafts = drafts[3] as Map<String, String>,
+            transactionNotesDrafts = drafts[4] as Map<String, String>,
         )
     }
 
@@ -221,30 +277,52 @@ class HomeViewModel(
         selectedTab.value = tab
     }
 
-    fun selectInboxItem(id: String) {
-        selectedInboxItemId.value = id
+    fun selectReviewRow(id: String) {
+        selectedReviewRowId.value = id
     }
 
-    fun updateInboxMerchantDraft(id: String, value: String) {
-        inboxMerchantDrafts.value = inboxMerchantDrafts.value + (id to value)
+    fun updateReviewMerchantDraft(id: String, value: String) {
+        reviewMerchantDrafts.value = reviewMerchantDrafts.value + (id to value)
     }
 
-    fun confirmInboxItem(id: String) {
+    fun updateReviewAmountDraft(id: String, value: String) {
+        reviewAmountDrafts.value = reviewAmountDrafts.value + (id to value)
+    }
+
+    fun updateReviewCategoryDraft(id: String, categoryId: String?) {
+        reviewCategoryDrafts.value = reviewCategoryDrafts.value + (id to categoryId)
+    }
+
+    fun confirmReviewRow(id: String, source: ReviewSource) {
         viewModelScope.launch {
-            repository.confirmInboxItem(
-                inboxItemId = id,
-                merchantNameOverride = inboxMerchantDrafts.value[id],
-            )
-            inboxMerchantDrafts.value = inboxMerchantDrafts.value - id
-            selectedInboxItemId.value = null
+            val merchant = reviewMerchantDrafts.value[id]
+            val amountMinor = reviewAmountDrafts.value[id]?.let(::parseRupeesToMinor)
+            val categoryId = reviewCategoryDrafts.value[id]
+            when (source) {
+                ReviewSource.INBOX -> repository.confirmInboxItem(
+                    inboxItemId = id,
+                    merchantNameOverride = merchant,
+                    amountMinorOverride = amountMinor,
+                    categoryIdOverride = categoryId,
+                )
+                ReviewSource.SUGGESTED -> repository.confirmSuggestedTransaction(
+                    transactionId = id,
+                    merchantNameOverride = merchant,
+                    amountMinorOverride = amountMinor,
+                    categoryIdOverride = categoryId,
+                )
+            }
+            clearReviewDrafts(id)
         }
     }
 
-    fun dismissInboxItem(id: String) {
+    fun dismissReviewRow(id: String, source: ReviewSource) {
         viewModelScope.launch {
-            repository.dismissInboxItem(id)
-            inboxMerchantDrafts.value = inboxMerchantDrafts.value - id
-            selectedInboxItemId.value = null
+            when (source) {
+                ReviewSource.INBOX -> repository.dismissInboxItem(id)
+                ReviewSource.SUGGESTED -> repository.dismissSuggestedTransaction(id)
+            }
+            clearReviewDrafts(id)
         }
     }
 
@@ -270,59 +348,148 @@ class HomeViewModel(
         }
     }
 
+    // Manual entry
+    fun openManualEntry() {
+        manualEntry.value = ManualEntryDraft(isOpen = true)
+    }
+
+    fun closeManualEntry() {
+        manualEntry.value = ManualEntryDraft()
+    }
+
+    fun updateManualEntry(transform: ManualEntryDraft.() -> ManualEntryDraft) {
+        manualEntry.value = manualEntry.value.transform()
+    }
+
+    fun submitManualEntry() {
+        val draft = manualEntry.value
+        val amountMinor = parseRupeesToMinor(draft.amountRupees)
+        if (amountMinor == null || amountMinor <= 0L) {
+            manualEntry.value = draft.copy(error = "Enter a valid amount")
+            return
+        }
+        if (draft.merchant.isBlank()) {
+            manualEntry.value = draft.copy(error = "Merchant or payee is required")
+            return
+        }
+        manualEntry.value = draft.copy(isSaving = true, error = null)
+        viewModelScope.launch {
+            repository.createManualTransaction(
+                merchantName = draft.merchant,
+                amountMinor = amountMinor,
+                mode = draft.mode,
+                categoryId = draft.categoryId,
+                notes = draft.notes.ifBlank { null },
+            )
+            manualEntry.value = ManualEntryDraft()
+        }
+    }
+
+    private fun clearReviewDrafts(id: String) {
+        reviewMerchantDrafts.value = reviewMerchantDrafts.value - id
+        reviewAmountDrafts.value = reviewAmountDrafts.value - id
+        reviewCategoryDrafts.value = reviewCategoryDrafts.value - id
+        if (selectedReviewRowId.value == id) selectedReviewRowId.value = null
+    }
+
     private fun toUiState(
         data: DashboardData,
         selection: ViewSelection,
         date: LocalDate,
     ): HomeUiState {
         val candidatesById = data.candidates.associateBy { it.id }
-        val inboxRows = data.inboxItems.map { inboxItem ->
-            val candidate = candidatesById[inboxItem.transactionCandidateId]
-            HomeInboxRow(
-                id = inboxItem.id,
-                headline = candidate?.toEntityName ?: "Review transaction",
-                subline = listOfNotNull(
-                    candidate?.mode?.name?.replace('_', ' '),
-                    candidate?.amountMinor?.let(::formatRowAmount),
-                    candidate?.occurredAt,
-                ).joinToString(" • ").ifBlank { inboxItem.createdAt },
-                reasonLabel = inboxItem.reasonCode.name.replace('_', ' '),
-                merchantDraft = selection.inboxMerchantDrafts[inboxItem.id]
-                    ?: candidate?.toEntityName.orEmpty(),
-            )
-        }
-        val transactionRows = data.transactions.take(20).map { transaction ->
-            HomeTransactionRow(
-                id = transaction.id,
-                headline = transaction.merchantName ?: "Unnamed transaction",
-                subline = listOfNotNull(
-                    transaction.mode?.name?.replace('_', ' '),
-                    transaction.sourceSummary,
-                    transaction.occurredAt,
-                ).joinToString(" • ").ifBlank { transaction.occurredAt },
-                amountLabel = formatRowAmount(transaction.amountMinor),
-                notes = transaction.notes.orEmpty(),
-                merchantDraft = selection.transactionMerchantDrafts[transaction.id]
-                    ?: transaction.merchantName.orEmpty(),
-                notesDraft = selection.transactionNotesDrafts[transaction.id]
-                    ?: transaction.notes.orEmpty(),
-            )
-        }
+        val categoryOptions = data.categories.map { CategoryOption(it.id, it.name) }
+        val reviewRows = buildReviewRows(data, candidatesById, selection)
+
+        val transactionRows = data.transactions
+            .filter { it.status != CanonicalTransactionStatus.IGNORED }
+            .take(20)
+            .map { transaction ->
+                HomeTransactionRow(
+                    id = transaction.id,
+                    headline = transaction.merchantName ?: "Unnamed transaction",
+                    subline = listOfNotNull(
+                        transaction.mode?.name?.replace('_', ' '),
+                        transaction.sourceSummary,
+                        transaction.occurredAt,
+                    ).joinToString(" • ").ifBlank { transaction.occurredAt },
+                    amountLabel = formatRowAmount(transaction.amountMinor),
+                    notes = transaction.notes.orEmpty(),
+                    merchantDraft = selection.transactionMerchantDrafts[transaction.id]
+                        ?: transaction.merchantName.orEmpty(),
+                    notesDraft = selection.transactionNotesDrafts[transaction.id]
+                        ?: transaction.notes.orEmpty(),
+                )
+            }
 
         return HomeUiState(
             userName = data.user?.displayName ?: "Rupee",
-            pendingInboxCount = data.inboxItems.size,
+            pendingReviewCount = reviewRows.size,
             selectedTab = selection.tab,
-            selectedInboxItemId = selection.selectedInboxItemId ?: inboxRows.firstOrNull()?.id,
+            selectedReviewRowId = selection.selectedReviewRowId ?: reviewRows.firstOrNull()?.id,
             selectedTransactionId = selection.selectedTransactionId ?: transactionRows.firstOrNull()?.id,
-            inboxItems = inboxRows,
+            reviewRows = reviewRows,
             recentTransactions = transactionRows,
-            dashboard = buildDashboard(data, date),
+            categories = categoryOptions,
+            manualEntry = selection.manualEntry,
+            dashboard = buildDashboard(data, reviewRows.size, date),
             isSeeding = selection.isSeeding,
         )
     }
 
-    private fun buildDashboard(data: DashboardData, date: LocalDate): HomeDashboard {
+    private fun buildReviewRows(
+        data: DashboardData,
+        candidatesById: Map<String, TransactionCandidateEntity>,
+        selection: ViewSelection,
+    ): List<HomeReviewRow> {
+        val inboxRows = data.inboxItems.map { inboxItem ->
+            val candidate = candidatesById[inboxItem.transactionCandidateId]
+            val rawAmount = candidate?.amountMinor
+            HomeReviewRow(
+                id = inboxItem.id,
+                source = ReviewSource.INBOX,
+                merchant = candidate?.toEntityName ?: "Review transaction",
+                merchantDraft = selection.merchantDrafts[inboxItem.id]
+                    ?: candidate?.toEntityName.orEmpty(),
+                amountLabel = rawAmount?.let(::formatRowAmount) ?: "—",
+                amountDraftRupees = selection.amountDrafts[inboxItem.id]
+                    ?: rawAmount?.let { (it / 100.0).toRupeeInput() } ?: "",
+                categoryId = null,
+                categoryIdDraft = selection.categoryDrafts[inboxItem.id],
+                subline = listOfNotNull(
+                    candidate?.mode?.name?.replace('_', ' '),
+                    candidate?.occurredAt?.take(10),
+                ).joinToString(" • ").ifBlank { inboxItem.createdAt.take(10) },
+                reasonLabel = inboxItem.reasonCode.name.replace('_', ' '),
+            )
+        }
+        val suggestedRows = data.suggestedTxns.map { txn ->
+            HomeReviewRow(
+                id = txn.id,
+                source = ReviewSource.SUGGESTED,
+                merchant = txn.merchantName ?: "Auto-captured transaction",
+                merchantDraft = selection.merchantDrafts[txn.id] ?: txn.merchantName.orEmpty(),
+                amountLabel = formatRowAmount(txn.amountMinor),
+                amountDraftRupees = selection.amountDrafts[txn.id]
+                    ?: (txn.amountMinor / 100.0).toRupeeInput(),
+                categoryId = txn.categoryId,
+                categoryIdDraft = selection.categoryDrafts.getOrElse(txn.id) { txn.categoryId },
+                subline = listOfNotNull(
+                    txn.mode?.name?.replace('_', ' '),
+                    txn.sourceSummary,
+                    txn.occurredAt.take(10),
+                ).joinToString(" • "),
+                reasonLabel = "AUTO CAPTURED",
+            )
+        }
+        return inboxRows + suggestedRows
+    }
+
+    private fun buildDashboard(
+        data: DashboardData,
+        pendingReviewCount: Int,
+        date: LocalDate,
+    ): HomeDashboard {
         val month = YearMonth.from(date)
         val weekStart = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         val weekEnd = weekStart.plusDays(6)
@@ -335,18 +502,21 @@ class HomeViewModel(
         val isOver = limit > 0L && data.monthlySpent > limit
         val isNear = !isOver && limit > 0L && progress >= threshold
 
-        val recents = data.transactions.take(5).map { txn ->
-            HomeRecentRow(
-                id = txn.id,
-                merchant = txn.merchantName ?: "Unnamed",
-                subline = listOfNotNull(
-                    txn.mode?.name?.replace('_', ' ')?.lowercase()?.replaceFirstChar { it.uppercase() },
-                    txn.sourceSummary,
-                ).joinToString(" • ").ifBlank { txn.occurredAt.take(10) },
-                amountLabel = formatRowAmount(txn.amountMinor),
-                isSuggested = txn.status == CanonicalTransactionStatus.SUGGESTED,
-            )
-        }
+        val recents = data.transactions
+            .filter { it.status != CanonicalTransactionStatus.IGNORED }
+            .take(5)
+            .map { txn ->
+                HomeRecentRow(
+                    id = txn.id,
+                    merchant = txn.merchantName ?: "Unnamed",
+                    subline = listOfNotNull(
+                        txn.mode?.name?.replace('_', ' ')?.lowercase()?.replaceFirstChar { it.uppercase() },
+                        txn.sourceSummary,
+                    ).joinToString(" • ").ifBlank { txn.occurredAt.take(10) },
+                    amountLabel = formatRowAmount(txn.amountMinor),
+                    isSuggested = txn.status == CanonicalTransactionStatus.SUGGESTED,
+                )
+            }
 
         return HomeDashboard(
             greeting = greetingFor(data.user?.displayName),
@@ -360,9 +530,9 @@ class HomeViewModel(
             isNearLimit = isNear,
             weeklySpentLabel = formatHeadlineAmount(data.weeklySpent),
             weekRangeLabel = formatWeekRange(weekStart, weekEnd),
-            pendingInboxCount = data.inboxItems.size,
+            pendingReviewCount = pendingReviewCount,
             recentTransactions = recents,
-            hasAnyTransactions = data.transactions.isNotEmpty(),
+            hasAnyTransactions = data.transactions.any { it.status != CanonicalTransactionStatus.IGNORED },
         )
     }
 
@@ -390,6 +560,16 @@ class HomeViewModel(
             "${start.dayOfMonth} $startMonth – ${end.dayOfMonth} $endMonth"
         }
     }
+
+    private fun parseRupeesToMinor(raw: String?): Long? {
+        if (raw.isNullOrBlank()) return null
+        val cleaned = raw.trim().replace(",", "")
+        val rupees = cleaned.toDoubleOrNull() ?: return null
+        return (rupees * 100.0).toLong()
+    }
+
+    private fun Double.toRupeeInput(): String =
+        if (this % 1.0 == 0.0) toLong().toString() else "%.2f".format(this)
 
     private fun currencyFormatter(decimals: Int): NumberFormat =
         NumberFormat.getCurrencyInstance(Locale("en", "IN")).apply {
