@@ -8,12 +8,15 @@ import com.zegrt.rupee.data.local.entity.TransactionCandidateType
 class CredNotificationParser : NotificationParser {
     override fun canParse(rawEvent: RawCaptureEventEntity): Boolean {
         val packageName = rawEvent.sourceAppPackage.orEmpty().lowercase()
-        val title = rawEvent.title.orEmpty().lowercase()
-        val body = rawEvent.body.lowercase()
-
-        return packageName.contains("cred") ||
-            title.contains("cred") ||
-            body.contains("cred")
+        val title = rawEvent.title.orEmpty()
+        val body = rawEvent.body
+        // Word-boundary match so "Credit Card" in an ICICI/HDFC body does not get
+        // mis-routed here. CRED's actual package is com.dreamplug.androidapp.
+        val brandRegex = Regex("""\bCRED\b""", RegexOption.IGNORE_CASE)
+        return packageName.contains("dreamplug") ||
+            packageName == "com.cred" ||
+            brandRegex.containsMatchIn(title) ||
+            brandRegex.containsMatchIn(body)
     }
 
     override fun parse(rawEvent: RawCaptureEventEntity): NotificationParseResult {

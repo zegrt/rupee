@@ -37,7 +37,7 @@ object DebugSamples {
         label = "CRED ₹1,499 Zomato",
         packageName = "com.dreamplug.androidapp",
         title = "Spent on HDFC card",
-        body = "₹1,499 spent on HDFC Credit Card xx1234 at Zomato on 06 May",
+        body = "₹1,499 spent on HDFC Credit Card xx1234 at Zomato via CRED on 06 May",
     )
     val icici = SampleNotification(
         label = "ICICI ₹3,800 BigBasket",
