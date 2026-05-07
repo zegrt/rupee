@@ -50,6 +50,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.zegrt.rupee.BuildConfig
 import com.zegrt.rupee.data.local.entity.Mode
 import com.zegrt.rupee.debug.DebugScreen
 import com.zegrt.rupee.debug.DebugViewModel
@@ -85,14 +86,22 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background,
                 ) {
                     val app = application as RupeeApplication
+                    val versionLabel = buildString {
+                        append(BuildConfig.VERSION_NAME)
+                        if (BuildConfig.DEBUG) append("-debug")
+                    }
                     RupeeApp(
                         homeViewModelFactory = HomeViewModelFactory(app.localFinanceRepository),
                         onboardingViewModelFactory = OnboardingViewModelFactory(
                             repository = app.localFinanceRepository,
                             preferences = app.onboardingPreferences,
                         ),
-                        settingsViewModelFactory = SettingsViewModelFactory(app.localFinanceRepository),
+                        settingsViewModelFactory = SettingsViewModelFactory(
+                            repository = app.localFinanceRepository,
+                            appVersion = versionLabel,
+                        ),
                         debugViewModelFactory = DebugViewModelFactory(app.localFinanceRepository),
+                        versionLabel = versionLabel,
                     )
                 }
             }
@@ -106,6 +115,7 @@ private fun RupeeApp(
     onboardingViewModelFactory: OnboardingViewModelFactory,
     settingsViewModelFactory: SettingsViewModelFactory,
     debugViewModelFactory: DebugViewModelFactory,
+    versionLabel: String,
 ) {
     val homeViewModel: HomeViewModel = viewModel(factory = homeViewModelFactory)
     val onboardingViewModel: OnboardingViewModel = viewModel(factory = onboardingViewModelFactory)
@@ -172,6 +182,7 @@ private fun RupeeApp(
             uiState = homeUiState,
             settingsState = settingsUiState,
             debugState = debugUiState,
+            versionLabel = versionLabel,
             onSelectTab = homeViewModel::selectTab,
             onSelectReviewRow = homeViewModel::selectReviewRow,
             onReviewMerchantDraftChange = homeViewModel::updateReviewMerchantDraft,
@@ -475,6 +486,7 @@ private fun RupeeHome(
     uiState: HomeUiState,
     settingsState: com.zegrt.rupee.settings.SettingsUiState,
     debugState: com.zegrt.rupee.debug.DebugUiState,
+    versionLabel: String,
     onSelectTab: (HomeTab) -> Unit,
     onSelectReviewRow: (String) -> Unit,
     onReviewMerchantDraftChange: (String, String) -> Unit,
@@ -521,6 +533,7 @@ private fun RupeeHome(
         when (uiState.selectedTab) {
             HomeTab.HOME -> HomeSummaryTab(
                 uiState = uiState,
+                versionLabel = versionLabel,
                 onReviewInbox = { onSelectTab(HomeTab.INBOX) },
                 onAddTransaction = onOpenManualEntry,
             )
@@ -574,6 +587,7 @@ private fun RupeeHome(
 @Composable
 private fun HomeSummaryTab(
     uiState: HomeUiState,
+    versionLabel: String = "",
     onReviewInbox: () -> Unit,
     onAddTransaction: () -> Unit,
 ) {
@@ -583,6 +597,7 @@ private fun HomeSummaryTab(
             greeting = dashboard.greeting,
             monthLabel = dashboard.monthLabel,
             isSeeding = uiState.isSeeding,
+            versionLabel = versionLabel,
         )
         HeroBudgetCard(dashboard = dashboard)
         WeeklySpendCard(dashboard = dashboard)
@@ -603,9 +618,28 @@ private fun DashboardGreeting(
     greeting: String,
     monthLabel: String,
     isSeeding: Boolean,
+    versionLabel: String = "",
 ) {
     Column {
-        Text(greeting, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(greeting, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            if (versionLabel.isNotBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                ) {
+                    Text(
+                        text = "v$versionLabel",
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+            }
+        }
         Text(
             text = if (isSeeding) "Setting up your local store..." else monthLabel,
             style = MaterialTheme.typography.bodyMedium,
