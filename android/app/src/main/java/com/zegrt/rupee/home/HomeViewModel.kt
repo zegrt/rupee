@@ -40,6 +40,7 @@ enum class HomeTab {
     HOME,
     INBOX,
     TRANSACTIONS,
+    CALENDAR,
     SETTINGS,
 }
 

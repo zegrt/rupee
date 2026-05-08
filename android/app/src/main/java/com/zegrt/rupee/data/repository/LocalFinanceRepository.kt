@@ -125,6 +125,13 @@ class LocalFinanceRepository(
             untilIso = untilIso,
         )
 
+    fun observeTransactionsInPeriod(fromIso: String, untilIso: String): Flow<List<CanonicalTransactionEntity>> =
+        database.canonicalTransactionDao().observeTransactionsInPeriod(
+            userId = USER_ID,
+            fromIso = fromIso,
+            untilIso = untilIso,
+        )
+
     suspend fun ensureBaseData() {
         if (database.userDao().countUsers() > 0) return
 

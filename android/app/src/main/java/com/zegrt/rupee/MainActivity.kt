@@ -108,6 +108,9 @@ class MainActivity : ComponentActivity() {
                         cardsEmisViewModelFactory = com.zegrt.rupee.cards.CardsEmisViewModelFactory(
                             app.localFinanceRepository,
                         ),
+                        calendarViewModelFactory = com.zegrt.rupee.calendar.CalendarViewModelFactory(
+                            app.localFinanceRepository,
+                        ),
                         debugViewModelFactory = DebugViewModelFactory(app.localFinanceRepository),
                         versionLabel = versionLabel,
                     )
@@ -123,6 +126,7 @@ private fun RupeeApp(
     onboardingViewModelFactory: OnboardingViewModelFactory,
     settingsViewModelFactory: SettingsViewModelFactory,
     cardsEmisViewModelFactory: com.zegrt.rupee.cards.CardsEmisViewModelFactory,
+    calendarViewModelFactory: com.zegrt.rupee.calendar.CalendarViewModelFactory,
     debugViewModelFactory: DebugViewModelFactory,
     versionLabel: String,
 ) {
@@ -130,11 +134,13 @@ private fun RupeeApp(
     val onboardingViewModel: OnboardingViewModel = viewModel(factory = onboardingViewModelFactory)
     val settingsViewModel: SettingsViewModel = viewModel(factory = settingsViewModelFactory)
     val cardsEmisViewModel: com.zegrt.rupee.cards.CardsEmisViewModel = viewModel(factory = cardsEmisViewModelFactory)
+    val calendarViewModel: com.zegrt.rupee.calendar.CalendarViewModel = viewModel(factory = calendarViewModelFactory)
     val debugViewModel: DebugViewModel = viewModel(factory = debugViewModelFactory)
     val homeUiState by homeViewModel.uiState.collectAsState()
     val onboardingUiState by onboardingViewModel.uiState.collectAsState()
     val settingsUiState by settingsViewModel.uiState.collectAsState()
     val cardsEmisUiState by cardsEmisViewModel.uiState.collectAsState()
+    val calendarUiState by calendarViewModel.uiState.collectAsState()
     val debugUiState by debugViewModel.uiState.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -193,6 +199,7 @@ private fun RupeeApp(
             uiState = homeUiState,
             settingsState = settingsUiState,
             cardsEmisState = cardsEmisUiState,
+            calendarState = calendarUiState,
             debugState = debugUiState,
             versionLabel = versionLabel,
             onSelectTab = homeViewModel::selectTab,
@@ -222,6 +229,10 @@ private fun RupeeApp(
             onUpdateEmiDraft = cardsEmisViewModel::updateEmiDraft,
             onSubmitEmiDraft = cardsEmisViewModel::submitEmiDraft,
             onRemoveEmi = cardsEmisViewModel::removeEmi,
+            onCalendarPrev = calendarViewModel::goToPreviousMonth,
+            onCalendarNext = calendarViewModel::goToNextMonth,
+            onCalendarSelectDate = calendarViewModel::selectDate,
+            onCalendarCloseDay = calendarViewModel::closeDayDetail,
             onOpenNotificationSettings = openNotificationSettings,
             onDebugReset = debugViewModel::resetAllData,
             onDebugSendSample = debugViewModel::sendSample,
@@ -512,6 +523,7 @@ private fun RupeeHome(
     uiState: HomeUiState,
     settingsState: com.zegrt.rupee.settings.SettingsUiState,
     cardsEmisState: com.zegrt.rupee.cards.CardsEmisUiState,
+    calendarState: com.zegrt.rupee.calendar.CalendarUiState,
     debugState: com.zegrt.rupee.debug.DebugUiState,
     versionLabel: String,
     onSelectTab: (HomeTab) -> Unit,
@@ -541,6 +553,10 @@ private fun RupeeHome(
     onUpdateEmiDraft: (com.zegrt.rupee.cards.EmiDraft.() -> com.zegrt.rupee.cards.EmiDraft) -> Unit,
     onSubmitEmiDraft: () -> Unit,
     onRemoveEmi: (String) -> Unit,
+    onCalendarPrev: () -> Unit,
+    onCalendarNext: () -> Unit,
+    onCalendarSelectDate: (java.time.LocalDate) -> Unit,
+    onCalendarCloseDay: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
     onDebugReset: () -> Unit,
     onDebugSendSample: (com.zegrt.rupee.debug.SampleNotification) -> Unit,
@@ -570,7 +586,8 @@ private fun RupeeHome(
             ) {
                 HomeTabChip("Home", uiState.selectedTab == HomeTab.HOME) { onSelectTab(HomeTab.HOME) }
                 HomeTabChip("Inbox", uiState.selectedTab == HomeTab.INBOX) { onSelectTab(HomeTab.INBOX) }
-                HomeTabChip("Transactions", uiState.selectedTab == HomeTab.TRANSACTIONS) { onSelectTab(HomeTab.TRANSACTIONS) }
+                HomeTabChip("Txns", uiState.selectedTab == HomeTab.TRANSACTIONS) { onSelectTab(HomeTab.TRANSACTIONS) }
+                HomeTabChip("Calendar", uiState.selectedTab == HomeTab.CALENDAR) { onSelectTab(HomeTab.CALENDAR) }
                 HomeTabChip("Settings", uiState.selectedTab == HomeTab.SETTINGS) { onSelectTab(HomeTab.SETTINGS) }
             }
             Spacer(modifier = Modifier.height(20.dp))
@@ -594,6 +611,13 @@ private fun RupeeHome(
                 HomeTab.TRANSACTIONS -> TransactionsTab(
                     uiState = uiState,
                     onSelectTransaction = onSelectTransaction,
+                )
+                HomeTab.CALENDAR -> com.zegrt.rupee.calendar.CalendarScreen(
+                    state = calendarState,
+                    onPrev = onCalendarPrev,
+                    onNext = onCalendarNext,
+                    onSelectDate = onCalendarSelectDate,
+                    onCloseDay = onCalendarCloseDay,
                 )
                 HomeTab.SETTINGS -> SettingsScreen(
                     state = settingsState,
