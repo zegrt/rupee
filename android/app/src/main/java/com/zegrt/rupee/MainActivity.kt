@@ -71,6 +71,7 @@ import com.zegrt.rupee.home.ManualEntryDraft
 import com.zegrt.rupee.home.ReviewSource
 import com.zegrt.rupee.onboarding.OnboardingStep
 import com.zegrt.rupee.settings.SettingsScreen
+import com.zegrt.rupee.settings.TrustRulesScreen
 import com.zegrt.rupee.settings.SettingsViewModel
 import com.zegrt.rupee.settings.SettingsViewModelFactory
 import com.zegrt.rupee.onboarding.OnboardingUiState
@@ -536,6 +537,7 @@ private fun RupeeHome(
     onDebugLoadMockSample: (com.zegrt.rupee.debug.SampleNotification) -> Unit,
 ) {
     var showDebug by remember { mutableStateOf(false) }
+    var showTrustRules by remember { mutableStateOf(false) }
     androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -581,7 +583,7 @@ private fun RupeeHome(
                     onBudgetDraftChange = onSettingsBudgetDraftChange,
                     onSaveBudget = onSettingsSaveBudget,
                     onOpenNotificationSettings = onOpenNotificationSettings,
-                    onRemoveTrustRule = onSettingsRemoveTrustRule,
+                    onOpenTrustRules = { showTrustRules = true },
                     onOpenDebug = { showDebug = true },
                 )
             }
@@ -629,6 +631,39 @@ private fun RupeeHome(
             onSave = { onSaveTransaction(selectedTxn.id) },
             onDelete = { onDeleteTransaction(selectedTxn.id) },
         )
+    }
+
+    if (showTrustRules) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showTrustRules = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp, vertical = 24.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Trusted merchants", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                        androidx.compose.material3.TextButton(onClick = { showTrustRules = false }) { Text("Close") }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    TrustRulesScreen(
+                        rules = settingsState.trustRules,
+                        onRemove = onSettingsRemoveTrustRule,
+                    )
+                }
+            }
+        }
     }
 
     if (showDebug) {
