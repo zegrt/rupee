@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.zegrt.rupee.data.local.entity.BucketEntity
 import com.zegrt.rupee.data.local.entity.BudgetEntity
 import com.zegrt.rupee.data.local.entity.CategoryEntity
+import com.zegrt.rupee.data.local.entity.MerchantTrustRuleEntity
 import com.zegrt.rupee.data.local.entity.UserEntity
 import com.zegrt.rupee.data.repository.LocalFinanceRepository
 import java.text.NumberFormat
@@ -26,11 +27,18 @@ data class SettingsUiState(
     val currencyCode: String = "INR",
     val categories: List<String> = emptyList(),
     val buckets: List<String> = emptyList(),
+    val trustRules: List<TrustRuleRow> = emptyList(),
     val notificationGranted: Boolean = false,
     val appVersion: String = "",
     val savingName: Boolean = false,
     val savingBudget: Boolean = false,
     val message: String? = null,
+)
+
+data class TrustRuleRow(
+    val id: String,
+    val merchantPattern: String,
+    val categoryLabel: String?,
 )
 
 class SettingsViewModel(
@@ -55,8 +63,9 @@ class SettingsViewModel(
             repository.observeMonthlyTotalBudget(),
             repository.observeCategories(),
             repository.observeBuckets(),
-        ) { user, budget, cats, buckets ->
-            arrayOf<Any?>(user, budget, cats, buckets)
+            repository.observeMerchantTrustRules(),
+        ) { user, budget, cats, buckets, rules ->
+            arrayOf<Any?>(user, budget, cats, buckets, rules)
         },
         combine(
             nameDraft,
@@ -76,10 +85,20 @@ class SettingsViewModel(
         val cats = entities[2] as List<CategoryEntity>
         @Suppress("UNCHECKED_CAST")
         val buckets = entities[3] as List<BucketEntity>
+        @Suppress("UNCHECKED_CAST")
+        val rules = entities[4] as List<MerchantTrustRuleEntity>
 
         val name = user?.displayName ?: ""
         val limitMinor = budget?.limitMinor ?: 0L
         val limitRupees = if (limitMinor > 0L) (limitMinor / 100).toString() else ""
+        val categoryLabelById = cats.associate { it.id to it.name }
+        val trustRules = rules.map { r ->
+            TrustRuleRow(
+                id = r.id,
+                merchantPattern = r.merchantPattern,
+                categoryLabel = r.autoCategoryId?.let { categoryLabelById[it] },
+            )
+        }
 
         SettingsUiState(
             displayName = name,
@@ -90,6 +109,7 @@ class SettingsViewModel(
             currencyCode = user?.defaultCurrencyCode ?: "INR",
             categories = cats.map { it.name },
             buckets = buckets.map { it.name },
+            trustRules = trustRules,
             notificationGranted = notificationGranted.value,
             appVersion = appVersion,
             savingName = drafts[2] as Boolean,
@@ -132,6 +152,13 @@ class SettingsViewModel(
             budgetDraft.value = null
             savingBudget.value = false
             message.value = "Budget saved"
+        }
+    }
+
+    fun removeTrustRule(id: String) {
+        viewModelScope.launch {
+            repository.removeMerchantTrustRule(id)
+            message.value = "Trust rule removed"
         }
     }
 
