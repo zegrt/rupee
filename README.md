@@ -65,7 +65,7 @@ Right now the project has:
 - notification ingestion foundation
 - provider-specific parsing for GPay, CRED, and ICICI notifications, plus a generic UPI fallback for PhonePe/Paytm-style bodies
 - a decision layer for auto-create vs Inbox vs ignore, and a dedupe layer that suppresses repeated alerts
-- a daily dashboard (hero monthly budget, this-week spend, recent activity, Inbox CTA) on Home
+- a daily dashboard (hero monthly budget, this-week spend, upcoming dues, recent activity, Inbox CTA) on Home
 - a unified review queue on Inbox: pending items plus auto-created `SUGGESTED` transactions, with edit-before-confirm (merchant, amount, category dropdown)
 - "Always trust this merchant" toggle on Inbox confirm — saves a `MerchantTrustRule` so future notifications from that merchant auto-create as `CONFIRMED`, skipping the inbox
 - Settings → Trusted merchants page (fullscreen) to view and remove existing trust rules
@@ -88,7 +88,7 @@ The current preview build:
 
 APK output:
 
-- [rupee-0.7.0-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.7.0-debug.apk)
+- [rupee-0.7.1-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.7.1-debug.apk)
 
 ## Main Docs
 

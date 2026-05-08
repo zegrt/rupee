@@ -787,6 +787,7 @@ private fun HomeSummaryTab(
         )
         HeroBudgetCard(dashboard = dashboard)
         WeeklySpendCard(dashboard = dashboard)
+        UpcomingDuesCard(dues = dashboard.upcomingDues)
         QuickActionsRow(
             pendingReviewCount = dashboard.pendingReviewCount,
             onReviewInbox = onReviewInbox,
@@ -796,6 +797,46 @@ private fun HomeSummaryTab(
             recents = dashboard.recentTransactions,
             hasAny = dashboard.hasAnyTransactions,
         )
+    }
+}
+
+@Composable
+private fun UpcomingDuesCard(dues: List<com.zegrt.rupee.home.HomeDueRow>) {
+    if (dues.isEmpty()) return
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
+            Text("Upcoming dues", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Next 14 days",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            dues.forEach { due ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "${if (due.kind == com.zegrt.rupee.home.HomeDueKind.CARD) "Card • " else "EMI • "}${due.title}",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = due.dueLabel,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (due.isOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(due.amountLabel, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
     }
 }
 
