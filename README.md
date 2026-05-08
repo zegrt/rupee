@@ -71,6 +71,7 @@ Right now the project has:
 - Settings → Trusted merchants page (fullscreen) to view and remove existing trust rules
 - Settings → Cards & EMIs page listing credit cards (outstanding, limit, dues) and manual EMI plans (add + remove)
 - transactions surface with tap-to-view modal (Edit + Delete + recategorize)
+- calendar tab with month-grid view, daily spend labels, and tap-day → transactions sheet
 - manual transaction entry through a bottom sheet
 - a Settings page (display name, monthly budget, notification permission re-check, version, category/bucket lists)
 - a Debug page (preset + editable mock notifications, parser playground, DB reset) accessible via a floating pill and from Settings
@@ -88,7 +89,7 @@ The current preview build:
 
 APK output:
 
-- [rupee-0.7.1-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.7.1-debug.apk)
+- [rupee-0.8.0-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.8.0-debug.apk)
 
 ## Main Docs
 

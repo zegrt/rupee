@@ -71,6 +71,22 @@ interface CanonicalTransactionDao {
         limit: Int = 50,
     ): Flow<List<CanonicalTransactionEntity>>
 
+    @Query(
+        """
+        SELECT * FROM canonical_transactions
+        WHERE userId = :userId
+          AND status != 'IGNORED'
+          AND occurredAt >= :fromIso
+          AND occurredAt < :untilIso
+        ORDER BY occurredAt DESC
+        """
+    )
+    fun observeTransactionsInPeriod(
+        userId: String,
+        fromIso: String,
+        untilIso: String,
+    ): Flow<List<CanonicalTransactionEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertTransactions(transactions: List<CanonicalTransactionEntity>)
 }
