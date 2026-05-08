@@ -40,23 +40,26 @@ Interaction qualities:
 
 ## 3. Product Navigation
 
-Primary bottom navigation for v1:
+Primary navigation for v1 — five top-level surfaces:
 
 - Home
 - Inbox
-- Transactions
+- Transactions ("Txns")
 - Calendar
 - Settings
 
-Secondary entry points from Home:
+Currently rendered as a chip-row tab switcher inside `MainActivity` (v0.8.0+). Migration to a Material3 `BottomNavigationBar` is a tracked follow-up; the structural shape (5 tabs, same labels) will not change.
 
-- Budgets
+Secondary entry points (currently reached from Settings; in v1 several should also surface from Home):
+
+- Budgets (monthly total + per-category, on one page; bucket budgets pending)
 - Cards & EMIs
-- Reports
+- Trusted merchants
+- Reports / Monthly recap (not yet implemented)
 
 Reason:
 
-- bottom nav should prioritize daily-use surfaces
+- top nav prioritizes daily-use surfaces
 - budgets and cards are important, but not as frequently switched as Home/Inbox/Transactions
 
 ## 4. Global UX Rules
@@ -495,32 +498,28 @@ Design rule:
 
 ## 13.1 Purpose
 
-Show budget health across:
-
-- monthly total
-- categories
-- custom buckets
+Show budget health across monthly total, categories, and (eventually) custom buckets, all from a single surface — opened from Settings → Budgets in the current build. Implemented as `BudgetsScreen` + `BudgetsViewModel` (v0.9.0).
 
 ## 13.2 Structure
 
-Sections:
+Sections in order:
 
-1. monthly overall budget card
-2. bucket budget list
-3. category budget list
+1. Monthly overall budget hero — current label, spent / remaining, progress bar (red when over, tertiary when near limit), inline edit field with Save
+2. Per-category list — one card per category with spent label, optional limit label, progress bar, and inline edit field. Entering 0 deactivates the row.
+3. Bucket budget list — **not yet implemented**; needs `transaction_bucket_assignments` DAO and bucket-spend queries before this section can render.
 
-For each budget row:
+For each row:
 
 - spent
-- limit
-- remaining
+- limit (when set)
+- remaining (monthly hero only)
 - progress bar
-- warning state if near limit
+- over-limit / near-limit accent
 
 Primary actions:
 
-- `Edit budget`
-- `Add budget`
+- inline `Save` per row
+- enter 0 to clear a category limit (deactivates the active row)
 
 ## 14. Budget Detail
 
