@@ -87,6 +87,26 @@ interface CanonicalTransactionDao {
         untilIso: String,
     ): Flow<List<CanonicalTransactionEntity>>
 
+    @Query(
+        """
+        SELECT categoryId AS categoryId, COALESCE(SUM(amountMinor), 0) AS amountMinor
+        FROM canonical_transactions
+        WHERE userId = :userId
+          AND type = 'EXPENSE'
+          AND status != 'IGNORED'
+          AND isHiddenFromBudget = 0
+          AND occurredAt >= :fromIso
+          AND occurredAt < :untilIso
+          AND categoryId IS NOT NULL
+        GROUP BY categoryId
+        """
+    )
+    fun observeSpentByCategoryInPeriod(
+        userId: String,
+        fromIso: String,
+        untilIso: String,
+    ): Flow<List<CategorySpend>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertTransactions(transactions: List<CanonicalTransactionEntity>)
 }
