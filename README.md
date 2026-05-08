@@ -67,6 +67,7 @@ Right now the project has:
 - a decision layer for auto-create vs Inbox vs ignore, and a dedupe layer that suppresses repeated alerts
 - a daily dashboard (hero monthly budget, this-week spend, recent activity, Inbox CTA) on Home
 - a unified review queue on Inbox: pending items plus auto-created `SUGGESTED` transactions, with edit-before-confirm (merchant, amount, category dropdown)
+- "Always trust this merchant" toggle on Inbox confirm — saves a `MerchantTrustRule` so future notifications from that merchant auto-create as `CONFIRMED`, skipping the inbox
 - transactions surface with tap-to-view modal (Edit + Delete)
 - manual transaction entry through a bottom sheet
 - a Settings page (display name, monthly budget, notification permission re-check, version, category/bucket lists)
@@ -85,7 +86,7 @@ The current preview build:
 
 APK output:
 
-- [rupee-0.5.3-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.5.3-debug.apk)
+- [rupee-0.6.1-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.6.1-debug.apk)
 
 ## Main Docs
 

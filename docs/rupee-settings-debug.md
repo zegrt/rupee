@@ -1,7 +1,7 @@
 # Rupee Settings & Debug
 
 Date: May 8, 2026
-Status: Reflects v0.5.3
+Status: Reflects v0.6.1
 
 ## 1. Purpose
 
@@ -84,11 +84,31 @@ Debug is **not** a tab. It opens as a fullscreen Compose `Dialog` from two entry
 
 The architecture spec calls for a 5-tab bottom nav (Home / Inbox / Transactions / Calendar / Settings); a future task will migrate from chips to bottom nav. The Debug entry points migrate alongside.
 
-## 5. Deferred — design captured for later
+## 5. Trust-rule loop (shipped v0.6.0, fixed v0.6.1)
 
-These were considered for this round but not built:
+When the user confirms an Inbox row, a `Switch` labelled "Always trust ${merchant}" sits next to the Confirm button. Toggling it on causes `LocalFinanceRepository.confirmInboxItem(..., addTrustRule = true)` to also persist a `MerchantTrustRuleEntity { userId, merchantPattern, autoCategoryId, createdAt, updatedAt, syncStatus }`.
 
-- **"Always trust this merchant" rule** — needs a new `MerchantTrustRule` entity (`{ userId, merchantPattern, autoCategoryId, createdAt }`) and a check in `NotificationDecisionEngine` that elevates matched signals to `AUTO_CREATED` + `CONFIRMED`. Confirm flow on Inbox should add a checkbox "Always trust [merchant]" that creates the rule.
+On every subsequent ingestion, `NotificationSignalNormalizer` reads the user's rule list before applying the base decision. If `MerchantNameUtils.matchesPattern(parseResult.toEntityName, rule.merchantPattern)` (or the same against `merchantRaw`) returns true *and* the candidate is not a dedupe duplicate, the candidate is elevated to:
+
+- `confidenceTier = HIGH`
+- `decisionState = AUTO_CREATED`
+- `decisionReason = MERCHANT_TRUSTED`
+
+…and the canonical transaction is created with `status = CONFIRMED`, `createdBy = "trust_rule"`, and the rule's `autoCategoryId` (if set). The user never sees an inbox row for that merchant again unless the rule is removed.
+
+Matching is centralized in `MerchantNameUtils`:
+
+- `clean(raw)` — trims " on / using / via / through" tails and prefers the segment after the last " at " for CRED-style bodies. Returns `"Unnamed"` for null/blank.
+- `matchesPattern(rawMerchant, pattern)` — case-insensitive *exact* compare of `clean(rawMerchant)` against the trimmed pattern. Substring matches are deliberately rejected so a "Big" rule does not match "Big Bazaar".
+
+**v0.6.1 fix:** `addMerchantTrustRule` now stores the *cleaned* form of the pattern. Earlier the raw `candidate.toEntityName` (e.g. "Swiggy using UPI") was persisted as-is, but the matcher cleans the *incoming* raw merchant before comparing — so a stored rule of "Swiggy using UPI" never matched a future "Swiggy" and never fired. Round-trip regression covered in `MerchantNameUtilsTest`.
+
+Currently a trust rule can only be removed by wiping the DB (Debug → Reset). A Settings surface to list/remove rules is the next follow-up — `observeMerchantTrustRules()` and `removeMerchantTrustRule(id)` already exist on the repository.
+
+## 6. Deferred — design captured for later
+
+These were considered but not built:
+
 - **Merge with existing transaction** — when an Inbox item duplicates a transaction the dedupe layer missed, the user should be able to pick the target canonical row (a search-then-select UI) and merge. Repository contract: `mergeInboxIntoTransaction(inboxItemId, targetTransactionId)` — sets the target's `dedupeFingerprint` to include the source candidate, links the candidate via `linkedCanonicalTransactionId`, and resolves the inbox item with `decisionState = MERGED`.
 - **Recategorize on Transactions tab** — the `TransactionDetailSheet` Edit form has Merchant + Notes today; add a `CategoryDropdown` row mirroring the Inbox review row.
 - **PhonePe / Paytm parsers** — their notifications currently fall into `GenericUpiNotificationParser` with `providerHint = "upi"`. Dedicated parsers would give better merchant extraction and a branded provider hint.
