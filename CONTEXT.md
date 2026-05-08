@@ -121,7 +121,7 @@ References:
 2. Dedicated PhonePe and Paytm parsers — currently their bodies hit `GenericUpiNotificationParser` with `providerHint = "upi"`. Real parsers would give a branded hint and a more reliable merchant extraction
 3. Hide the Debug pill behind `BuildConfig.DEBUG` before any external test build (intentionally still visible per current dev preference)
 4. Bottom-nav migration to replace the chip-row tab switcher (now 5 tabs incl. Calendar)
-5. Recurring obligations detection — recurring patterns and a confirmation flow (Milestone 8 follow-on)
+5. Wire confirmed recurring patterns into Home "Upcoming dues" so the user sees their next-due date alongside cards/EMIs
 6. Custom bucket progress cards on Home — blocked on per-bucket budgets being seeded + a `transaction_bucket_assignments` DAO
 7. Parser refinement using real notification samples — both the Debug parser playground and the editable real-mock-notification surface make this easier
 8. Richer dedupe rules for fuzzy multi-source collisions (depends on observing real collisions)
@@ -164,7 +164,7 @@ References:
 - Manual transaction entry is wired to the dashboard "Add transaction" button via a `ModalBottomSheet` form (merchant, amount, mode chip selector, category chips, notes)
 - Settings tab exists with profile (display name), monthly budget edit, notification permission re-check, and read-only category/bucket lists; documented in `docs/rupee-settings-debug.md`
 - Debug tab exists with three preset sample notifications (GPay/CRED/ICICI) that exercise the real ingestion pipeline, a parser playground that runs the parser registry against arbitrary input without persisting, and a confirm-gated reset that wipes the DB and re-seeds defaults
-- Build now exposes versionName (currently `0.9.0`) via `BuildConfig`; the Home greeting renders a small `v0.9.0-debug` pill top-right and Settings → About reflects the same value. The debug APK output is renamed to `rupee-{versionName}-{buildType}.apk` so the file itself carries the version
+- Build now exposes versionName (currently `0.9.1`) via `BuildConfig`; the Home greeting renders a small `v0.9.1-debug` pill top-right and Settings → About reflects the same value. The debug APK output is renamed to `rupee-{versionName}-{buildType}.apk` so the file itself carries the version
 - Recent activity, Inbox review, and Transactions tab all show cleaner merchant text via `cleanMerchant()` (trims " on / using / via" tails, prefers segment after " at " for CRED-style bodies). DB-level `merchantName` is left untouched
 - Sublines now use `formatOccurredAt()` to render ISO instants as friendly local-time labels ("7 May, 11:29 PM") instead of raw timestamps
 - Inbox review row uses a Material3 `DropdownMenu` for category selection; manual entry still uses chips since that form has more vertical room
@@ -186,13 +186,14 @@ References:
 - v0.8.0 (Milestone 9 first cut): new `CalendarViewModel` + `CalendarScreen` rendered as a fifth chip ("Calendar") in the home tab row. Month grid (Mon–Sun, 6 weeks) shows compact daily-spend labels (₹k/L formatted) per day; today gets an outlined cell, selected day a primary container. Tapping a day opens a `ModalBottomSheet` listing that day's transactions. Prev/next chevrons walk months. Backed by a new `observeTransactionsInPeriod(fromIso, untilIso)` flow on the repository / `CanonicalTransactionDao`. Excludes IGNORED status
 - v0.8.1: per-category budgets — `BudgetDao.observeCategoryBudgetsForDate` + `getCategoryBudgetForDate`; `CanonicalTransactionDao.observeSpentByCategoryInPeriod` returning `CategorySpend(categoryId, amountMinor)`. Repository: `observeCategoryBudgets(today)`, `observeSpentByCategory(from, until)`, `setCategoryBudgetLimit(categoryId, limitMinor, today)` (limit ≤ 0 deactivates the row instead of deleting). Initial `CategoryBudgetsViewModel` + screen lived behind a Settings entry
 - v0.9.0: **Budgets Overview** unification (per audit fix). `BudgetsViewModel` + `BudgetsScreen` replace the prior split between a "Monthly budget" Settings card and a separate "Category budgets" page. Settings now exposes a single "Budgets" row → fullscreen Dialog containing the monthly hero (with progress bar and inline edit) followed by the per-category list. Removed old `CategoryBudgetsViewModel`/`CategoryBudgetsScreen` files. Monthly-budget edit fields on `SettingsViewModel` are now unused but left in place for now
+- v0.9.1: **Recurring detection** (PRD §12.10 fix). Schema bumped to v7 (destructive migration); new `RecurringPatternEntity` + `RecurringPatternDao`. `RecurringDetectionEngine` runs over the last 120 days of non-IGNORED expenses, groups by cleaned merchant, and reports patterns with ≥3 occurrences, median spacing in [20,35] days, and amounts within ±20% of the median. Repository: `observeRecurringPatterns`, `confirmRecurringPattern`, `dismissRecurringPattern`, `removeRecurringPattern`, `refreshRecurringPatterns(today)` (called on app init and on resume). Auto-suggestions are rewritten on each refresh; user-confirmed and user-dismissed rows are preserved. New `RecurringViewModel` + `RecurringScreen` reachable from Settings → "Recurring" with Suggested / Confirmed sections (Confirm / Not recurring / Remove actions, plus a manual Refresh). Engine is unit-tested (`RecurringDetectionEngineTest`)
 
 ## Known Gaps vs Schema and Architecture
 
 These are intentional or unintentional omissions surfaced by a deep review. They are not bugs in current behavior; they are work that has not happened yet.
 
 - `EmiPlanEntity` now has a DAO and repository methods (v0.7.0). Auto-detection from notifications is still pending.
-- Schema entities not yet implemented in code: `canonical_transaction_source_links`, `dedupe_groups`, `dedupe_group_members`, `recurring_patterns`, `alert_rules`, `alert_events`, `monthly_recaps`, `emi_transaction_links`, `budget_category_assignments`.
+- Schema entities not yet implemented in code: `canonical_transaction_source_links`, `dedupe_groups`, `dedupe_group_members`, `alert_rules`, `alert_events`, `monthly_recaps`, `emi_transaction_links`, `budget_category_assignments`. (`recurring_patterns` shipped in v0.9.1.)
 - `CanonicalTransactionEntity` carries a flat `dedupeFingerprint` field; the schema models duplicate clusters via dedupe_groups join tables. The current flat field is a pragmatic shortcut, not the long-term shape.
 - All five chip tabs (Home, Inbox, Transactions, Calendar, Settings) now exist (v0.8.0 added Calendar). Migration to a Material3 bottom-nav is still pending.
 - No NavHost / navigation-compose in use yet. Onboarding → Home transitions are driven by an `OnboardingStep` enum in `MainActivity`.

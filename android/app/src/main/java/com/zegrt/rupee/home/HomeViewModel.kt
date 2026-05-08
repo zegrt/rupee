@@ -316,6 +316,7 @@ class HomeViewModel(
             repository.ensureBaseData()
             repository.ensureMonthlyBudgetForToday(clock())
             isSeeding.value = false
+            runCatching { repository.refreshRecurringPatterns(clock()) }
         }
     }
 
@@ -324,6 +325,7 @@ class HomeViewModel(
         if (today.value != now) today.value = now
         viewModelScope.launch {
             repository.ensureMonthlyBudgetForToday(now)
+            runCatching { repository.refreshRecurringPatterns(now) }
         }
     }
 

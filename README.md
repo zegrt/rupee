@@ -73,6 +73,7 @@ Right now the project has:
 - transactions surface with tap-to-view modal (Edit + Delete + recategorize)
 - calendar tab with month-grid view, daily spend labels, and tap-day → transactions sheet
 - a unified Budgets page (Settings → Budgets) covering monthly total + per-category limits with progress bars and over-limit highlighting
+- recurring-spend detection that auto-finds monthly subscriptions in the last 120 days and asks the user to confirm or dismiss
 - manual transaction entry through a bottom sheet
 - a Settings page (display name, monthly budget, notification permission re-check, version, category/bucket lists)
 - a Debug page (preset + editable mock notifications, parser playground, DB reset) accessible via a floating pill and from Settings
@@ -90,7 +91,7 @@ The current preview build:
 
 APK output:
 
-- [rupee-0.9.0-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.9.0-debug.apk)
+- [rupee-0.9.1-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.9.1-debug.apk)
 
 ## Main Docs
 
