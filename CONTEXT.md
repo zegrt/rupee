@@ -117,18 +117,16 @@ References:
 
 ## Immediate Next Work
 
-1. Recategorize on the Transactions tab — the `TransactionDetailSheet` Edit form has Merchant + Notes today; add a `CategoryDropdown` row mirroring the one in Inbox review
-2. "Merge with existing transaction" in Inbox — needs a transaction picker UX
-3. Settings surface to view/remove existing trust rules — they're persisted but currently invisible to the user; only way to inspect is via DB reset
-4. Dedicated PhonePe and Paytm parsers — currently their bodies hit `GenericUpiNotificationParser` with `providerHint = "upi"`. Real parsers would give a branded hint and a more reliable merchant extraction
-5. Hide the Debug pill behind `BuildConfig.DEBUG` before any external test build (the floating pill is highly visible right now)
-6. Bottom-nav migration to replace the chip-row tab switcher
-7. Upcoming dues strip on Home — blocked on Milestone 8 (cards/EMIs)
-8. Custom bucket progress cards on Home — blocked on per-bucket budgets being seeded + a `transaction_bucket_assignments` DAO
-9. Parser refinement using real notification samples — both the Debug parser playground and the editable real-mock-notification surface make this easier
-10. Richer dedupe rules for fuzzy multi-source collisions (depends on observing real collisions)
-11. Wire `EmiPlanEntity` (currently registered in `RupeeDatabase` with no DAO)
-12. Add the missing schema entities once their UI surfaces are scoped: `canonical_transaction_source_links`, `dedupe_groups` / `dedupe_group_members`, `recurring_patterns`, `alert_rules` / `alert_events`, `monthly_recaps`
+1. "Merge with existing transaction" in Inbox — needs a transaction picker UX
+2. Dedicated PhonePe and Paytm parsers — currently their bodies hit `GenericUpiNotificationParser` with `providerHint = "upi"`. Real parsers would give a branded hint and a more reliable merchant extraction
+3. Hide the Debug pill behind `BuildConfig.DEBUG` before any external test build (intentionally still visible per current dev preference)
+4. Bottom-nav migration to replace the chip-row tab switcher
+5. Upcoming dues strip on Home — blocked on Milestone 8 (cards/EMIs)
+6. Custom bucket progress cards on Home — blocked on per-bucket budgets being seeded + a `transaction_bucket_assignments` DAO
+7. Parser refinement using real notification samples — both the Debug parser playground and the editable real-mock-notification surface make this easier
+8. Richer dedupe rules for fuzzy multi-source collisions (depends on observing real collisions)
+9. Wire `EmiPlanEntity` (currently registered in `RupeeDatabase` with no DAO)
+10. Add the missing schema entities once their UI surfaces are scoped: `canonical_transaction_source_links`, `dedupe_groups` / `dedupe_group_members`, `recurring_patterns`, `alert_rules` / `alert_events`, `monthly_recaps`
 
 ## Current Implementation State
 
@@ -166,7 +164,7 @@ References:
 - Manual transaction entry is wired to the dashboard "Add transaction" button via a `ModalBottomSheet` form (merchant, amount, mode chip selector, category chips, notes)
 - Settings tab exists with profile (display name), monthly budget edit, notification permission re-check, and read-only category/bucket lists; documented in `docs/rupee-settings-debug.md`
 - Debug tab exists with three preset sample notifications (GPay/CRED/ICICI) that exercise the real ingestion pipeline, a parser playground that runs the parser registry against arbitrary input without persisting, and a confirm-gated reset that wipes the DB and re-seeds defaults
-- Build now exposes versionName (currently `0.6.1`) via `BuildConfig`; the Home greeting renders a small `v0.6.1-debug` pill top-right and Settings → About reflects the same value. The debug APK output is renamed to `rupee-{versionName}-{buildType}.apk` so the file itself carries the version
+- Build now exposes versionName (currently `0.6.2`) via `BuildConfig`; the Home greeting renders a small `v0.6.2-debug` pill top-right and Settings → About reflects the same value. The debug APK output is renamed to `rupee-{versionName}-{buildType}.apk` so the file itself carries the version
 - Recent activity, Inbox review, and Transactions tab all show cleaner merchant text via `cleanMerchant()` (trims " on / using / via" tails, prefers segment after " at " for CRED-style bodies). DB-level `merchantName` is left untouched
 - Sublines now use `formatOccurredAt()` to render ISO instants as friendly local-time labels ("7 May, 11:29 PM") instead of raw timestamps
 - Inbox review row uses a Material3 `DropdownMenu` for category selection; manual entry still uses chips since that form has more vertical room
@@ -180,6 +178,8 @@ References:
 - "Always trust this merchant" rule (v0.6.0): `MerchantTrustRuleEntity` + DAO with `(userId, merchantPattern)` unique index, schema bumped to v6 with destructive migration. Inbox confirm row exposes a `Switch` ("Always trust ${merchant}"); toggling it stores a rule via `LocalFinanceRepository.addMerchantTrustRule`. `NotificationSignalNormalizer` checks the rule list before applying the base decision — matched candidates skip the inbox and land directly as `CONFIRMED` canonical transactions with `createdBy = "trust_rule"` and the rule's `autoCategoryId` if set
 - Merchant matching is centralized in `MerchantNameUtils` (`clean()` for display/matching, `matchesPattern()` for exact case-insensitive comparison on the cleaned form). Used by both UI surfaces and trust-rule matching so a "Swiggy" rule fires on a parsed "Swiggy using UPI"
 - v0.6.1 fix: `addMerchantTrustRule` now stores the cleaned form of the pattern. Earlier the raw `candidate.toEntityName` (e.g. "Swiggy using UPI") was persisted as-is, but the matcher cleans the incoming raw merchant before comparing — so stored rules never fired. Round-trip regression covered in `MerchantNameUtilsTest`
+- v0.6.2: Settings → "Trusted merchants" card now lists existing rules (merchant pattern + auto-category label if set) and exposes per-row Remove. Backed by `SettingsViewModel.removeTrustRule` which calls `LocalFinanceRepository.removeMerchantTrustRule`. The ViewModel's entity-side `combine` arity grew from 4 to 5 to fold in `observeMerchantTrustRules()`
+- v0.6.2: Transactions tab `TransactionDetailSheet` Edit form now includes a `CategoryDropdown` row, and the read-only view shows a "Category" line when the transaction has one. New `transactionCategoryDrafts` flow in `HomeViewModel`; `saveTransactionEdits` only re-applies category when the draft was touched (uses `applyCategory = true` on `repository.updateTransactionDetails`)
 
 ## Known Gaps vs Schema and Architecture
 

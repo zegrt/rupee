@@ -31,6 +31,7 @@ fun SettingsScreen(
     onBudgetDraftChange: (String) -> Unit,
     onSaveBudget: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
+    onRemoveTrustRule: (String) -> Unit,
     onOpenDebug: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -81,6 +82,39 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedButton(onClick = onOpenNotificationSettings) {
                 Text(if (state.notificationGranted) "Manage permission" else "Grant access")
+            }
+        }
+        SettingsCard(title = "Trusted merchants") {
+            if (state.trustRules.isEmpty()) {
+                Text(
+                    "No rules yet. Toggle \"Always trust\" while confirming an Inbox row to add one.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                Text(
+                    "Notifications matching these merchants skip the Inbox and land as Confirmed.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                state.trustRules.forEach { rule ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(rule.merchantPattern, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                            rule.categoryLabel?.let {
+                                Text("Auto-category: $it", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        androidx.compose.material3.TextButton(onClick = { onRemoveTrustRule(rule.id) }) {
+                            Text("Remove")
+                        }
+                    }
+                }
             }
         }
         SettingsCard(title = "Categories") {

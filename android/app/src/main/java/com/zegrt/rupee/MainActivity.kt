@@ -198,6 +198,7 @@ private fun RupeeApp(
             onSelectTransaction = homeViewModel::selectTransaction,
             onTransactionMerchantDraftChange = homeViewModel::updateTransactionMerchantDraft,
             onTransactionNotesDraftChange = homeViewModel::updateTransactionNotesDraft,
+            onTransactionCategoryDraftChange = homeViewModel::updateTransactionCategoryDraft,
             onSaveTransaction = homeViewModel::saveTransactionEdits,
             onOpenManualEntry = homeViewModel::openManualEntry,
             onCloseManualEntry = homeViewModel::closeManualEntry,
@@ -207,6 +208,7 @@ private fun RupeeApp(
             onSettingsSaveName = settingsViewModel::saveDisplayName,
             onSettingsBudgetDraftChange = settingsViewModel::updateBudgetDraft,
             onSettingsSaveBudget = settingsViewModel::saveMonthlyBudget,
+            onSettingsRemoveTrustRule = settingsViewModel::removeTrustRule,
             onOpenNotificationSettings = openNotificationSettings,
             onDebugReset = debugViewModel::resetAllData,
             onDebugSendSample = debugViewModel::sendSample,
@@ -509,6 +511,7 @@ private fun RupeeHome(
     onSelectTransaction: (String) -> Unit,
     onTransactionMerchantDraftChange: (String, String) -> Unit,
     onTransactionNotesDraftChange: (String, String) -> Unit,
+    onTransactionCategoryDraftChange: (String, String?) -> Unit,
     onSaveTransaction: (String) -> Unit,
     onOpenManualEntry: () -> Unit,
     onCloseManualEntry: () -> Unit,
@@ -518,6 +521,7 @@ private fun RupeeHome(
     onSettingsSaveName: () -> Unit,
     onSettingsBudgetDraftChange: (String) -> Unit,
     onSettingsSaveBudget: () -> Unit,
+    onSettingsRemoveTrustRule: (String) -> Unit,
     onOpenNotificationSettings: () -> Unit,
     onDebugReset: () -> Unit,
     onDebugSendSample: (com.zegrt.rupee.debug.SampleNotification) -> Unit,
@@ -577,6 +581,7 @@ private fun RupeeHome(
                     onBudgetDraftChange = onSettingsBudgetDraftChange,
                     onSaveBudget = onSettingsSaveBudget,
                     onOpenNotificationSettings = onOpenNotificationSettings,
+                    onRemoveTrustRule = onSettingsRemoveTrustRule,
                     onOpenDebug = { showDebug = true },
                 )
             }
@@ -616,9 +621,11 @@ private fun RupeeHome(
     if (selectedTxn != null && uiState.selectedTab == HomeTab.TRANSACTIONS) {
         TransactionDetailSheet(
             row = selectedTxn,
+            categories = uiState.categories,
             onClose = onCloseTransaction,
             onMerchantChange = { onTransactionMerchantDraftChange(selectedTxn.id, it) },
             onNotesChange = { onTransactionNotesDraftChange(selectedTxn.id, it) },
+            onCategoryChange = { onTransactionCategoryDraftChange(selectedTxn.id, it) },
             onSave = { onSaveTransaction(selectedTxn.id) },
             onDelete = { onDeleteTransaction(selectedTxn.id) },
         )
@@ -1315,9 +1322,11 @@ private fun TransactionRow(
 @Composable
 private fun TransactionDetailSheet(
     row: HomeTransactionRow,
+    categories: List<com.zegrt.rupee.home.CategoryOption>,
     onClose: () -> Unit,
     onMerchantChange: (String) -> Unit,
     onNotesChange: (String) -> Unit,
+    onCategoryChange: (String?) -> Unit,
     onSave: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -1334,6 +1343,10 @@ private fun TransactionDetailSheet(
             Text(row.headline, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             Text(row.subline, style = MaterialTheme.typography.bodyMedium)
             if (!editing) {
+                row.categoryLabel?.let {
+                    Text("Category", style = MaterialTheme.typography.labelMedium)
+                    Text(it, style = MaterialTheme.typography.bodyMedium)
+                }
                 if (row.notes.isNotBlank()) {
                     Text("Notes", style = MaterialTheme.typography.labelMedium)
                     Text(row.notes, style = MaterialTheme.typography.bodyMedium)
@@ -1365,6 +1378,11 @@ private fun TransactionDetailSheet(
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("Notes") },
                     minLines = 2,
+                )
+                CategoryDropdown(
+                    selectedId = row.categoryIdDraft,
+                    categories = categories,
+                    onSelect = onCategoryChange,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(onClick = {

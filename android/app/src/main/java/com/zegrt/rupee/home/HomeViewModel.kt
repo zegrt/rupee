@@ -65,6 +65,9 @@ data class HomeTransactionRow(
     val notes: String,
     val merchantDraft: String,
     val notesDraft: String,
+    val categoryId: String?,
+    val categoryIdDraft: String?,
+    val categoryLabel: String?,
 )
 
 data class HomeRecentRow(
@@ -152,6 +155,7 @@ private data class ViewSelection(
     val alwaysTrust: Set<String>,
     val transactionMerchantDrafts: Map<String, String>,
     val transactionNotesDrafts: Map<String, String>,
+    val transactionCategoryDrafts: Map<String, String?>,
     val manualEntry: ManualEntryDraft,
 )
 
@@ -174,6 +178,7 @@ class HomeViewModel(
     private val reviewAlwaysTrust = MutableStateFlow<Set<String>>(emptySet())
     private val transactionMerchantDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
     private val transactionNotesDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
+    private val transactionCategoryDrafts = MutableStateFlow<Map<String, String?>>(emptyMap())
     private val manualEntry = MutableStateFlow(ManualEntryDraft())
 
     private val monthlyBudgetFlow: Flow<BudgetEntity?> = today.flatMapLatest { date ->
@@ -248,8 +253,13 @@ class HomeViewModel(
             reviewDrafts,
             transactionMerchantDrafts,
             transactionNotesDrafts,
-        ) { review, tm, tn -> Triple(review, tm, tn) },
+            transactionCategoryDrafts,
+        ) { review, tm, tn, tc ->
+            arrayOf<Any?>(review, tm, tn, tc)
+        },
     ) { selection, drafts ->
+        @Suppress("UNCHECKED_CAST")
+        val review = drafts[0] as ReviewDraftBundle
         @Suppress("UNCHECKED_CAST")
         ViewSelection(
             isSeeding = selection[0] as Boolean,
@@ -257,12 +267,13 @@ class HomeViewModel(
             selectedReviewRowId = selection[2] as String?,
             selectedTransactionId = selection[3] as String?,
             manualEntry = selection[4] as ManualEntryDraft,
-            merchantDrafts = drafts.first.merchant,
-            amountDrafts = drafts.first.amount,
-            categoryDrafts = drafts.first.category,
-            alwaysTrust = drafts.first.alwaysTrust,
-            transactionMerchantDrafts = drafts.second,
-            transactionNotesDrafts = drafts.third,
+            merchantDrafts = review.merchant,
+            amountDrafts = review.amount,
+            categoryDrafts = review.category,
+            alwaysTrust = review.alwaysTrust,
+            transactionMerchantDrafts = drafts[1] as Map<String, String>,
+            transactionNotesDrafts = drafts[2] as Map<String, String>,
+            transactionCategoryDrafts = drafts[3] as Map<String, String?>,
         )
     }
 
@@ -363,12 +374,20 @@ class HomeViewModel(
         transactionNotesDrafts.value = transactionNotesDrafts.value + (id to value)
     }
 
+    fun updateTransactionCategoryDraft(id: String, categoryId: String?) {
+        transactionCategoryDrafts.value = transactionCategoryDrafts.value + (id to categoryId)
+    }
+
     fun saveTransactionEdits(id: String) {
+        val categoryDirty = transactionCategoryDrafts.value.containsKey(id)
+        val categoryId = transactionCategoryDrafts.value[id]
         viewModelScope.launch {
             repository.updateTransactionDetails(
                 transactionId = id,
                 merchantName = transactionMerchantDrafts.value[id].orEmpty(),
                 notes = transactionNotesDrafts.value[id].orEmpty(),
+                categoryId = categoryId,
+                applyCategory = categoryDirty,
             )
         }
     }
@@ -438,11 +457,15 @@ class HomeViewModel(
         val categoryOptions = data.categories.map { CategoryOption(it.id, it.name) }
         val reviewRows = buildReviewRows(data, candidatesById, selection)
 
+        val categoryLabelById = data.categories.associate { it.id to it.name }
         val transactionRows = data.transactions
             .filter { it.status != CanonicalTransactionStatus.IGNORED }
             .take(20)
             .map { transaction ->
                 val cleanedMerchant = cleanMerchant(transaction.merchantName)
+                val draftCategory = if (selection.transactionCategoryDrafts.containsKey(transaction.id))
+                    selection.transactionCategoryDrafts[transaction.id]
+                else transaction.categoryId
                 HomeTransactionRow(
                     id = transaction.id,
                     headline = cleanedMerchant,
@@ -456,6 +479,9 @@ class HomeViewModel(
                         ?: cleanedMerchant,
                     notesDraft = selection.transactionNotesDrafts[transaction.id]
                         ?: transaction.notes.orEmpty(),
+                    categoryId = transaction.categoryId,
+                    categoryIdDraft = draftCategory,
+                    categoryLabel = transaction.categoryId?.let { categoryLabelById[it] },
                 )
             }
 
