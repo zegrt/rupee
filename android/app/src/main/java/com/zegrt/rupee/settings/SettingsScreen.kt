@@ -1,6 +1,7 @@
 package com.zegrt.rupee.settings
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +18,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -31,7 +33,7 @@ fun SettingsScreen(
     onBudgetDraftChange: (String) -> Unit,
     onSaveBudget: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
-    onRemoveTrustRule: (String) -> Unit,
+    onOpenTrustRules: () -> Unit,
     onOpenDebug: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -84,37 +86,29 @@ fun SettingsScreen(
                 Text(if (state.notificationGranted) "Manage permission" else "Grant access")
             }
         }
-        SettingsCard(title = "Trusted merchants") {
-            if (state.trustRules.isEmpty()) {
-                Text(
-                    "No rules yet. Toggle \"Always trust\" while confirming an Inbox row to add one.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            } else {
-                Text(
-                    "Notifications matching these merchants skip the Inbox and land as Confirmed.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                state.trustRules.forEach { rule ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(rule.merchantPattern, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                            rule.categoryLabel?.let {
-                                Text("Auto-category: $it", style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                        androidx.compose.material3.TextButton(onClick = { onRemoveTrustRule(rule.id) }) {
-                            Text("Remove")
-                        }
-                    }
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onOpenTrustRules),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Trusted merchants", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = if (state.trustRules.isEmpty()) "No rules yet" else "${state.trustRules.size} rule${if (state.trustRules.size == 1) "" else "s"}",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                 }
+                Text("›", style = MaterialTheme.typography.headlineSmall)
             }
         }
         SettingsCard(title = "Categories") {

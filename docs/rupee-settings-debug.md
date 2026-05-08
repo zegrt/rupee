@@ -1,7 +1,7 @@
 # Rupee Settings & Debug
 
 Date: May 8, 2026
-Status: Reflects v0.6.2
+Status: Reflects v0.6.3
 
 ## 1. Purpose
 
@@ -24,7 +24,7 @@ Two surfaces that sit alongside Home / Inbox / Transactions:
 - **Notifications**
   - Status line ("granted" / "required for auto-tracking")
   - Open system notification-listener settings
-- **Trusted merchants** — list of saved `MerchantTrustRule` rows (merchant pattern + auto-category label if set). Each row has a Remove action that calls `LocalFinanceRepository.removeMerchantTrustRule(id)`. Empty state nudges the user to use the Inbox-confirm "Always trust" toggle to add one
+- **Trusted merchants** — a tappable row showing the current rule count. Tapping opens a fullscreen `TrustRulesScreen` (Compose `Dialog`) listing each saved `MerchantTrustRule` as its own card with merchant pattern, auto-category label (when set), and a Remove action that calls `LocalFinanceRepository.removeMerchantTrustRule(id)`. Empty state nudges the user to use the Inbox-confirm "Always trust" toggle to add one
 - **Categories** — read-only list of seeded categories
 - **Buckets** — read-only list of seeded buckets
 - **About**
@@ -104,7 +104,7 @@ Matching is centralized in `MerchantNameUtils`:
 
 **v0.6.1 fix:** `addMerchantTrustRule` now stores the *cleaned* form of the pattern. Earlier the raw `candidate.toEntityName` (e.g. "Swiggy using UPI") was persisted as-is, but the matcher cleans the *incoming* raw merchant before comparing — so a stored rule of "Swiggy using UPI" never matched a future "Swiggy" and never fired. Round-trip regression covered in `MerchantNameUtilsTest`.
 
-Trust rules are now manageable from Settings → Trusted merchants (v0.6.2). Each rule renders as a row with the merchant pattern, the auto-category label (when set), and a Remove button. There is no edit affordance — to change a pattern, remove the rule and re-add it via Inbox confirm.
+Trust rules are now manageable from Settings → Trusted merchants (v0.6.2; promoted to its own page in v0.6.3). Each rule renders as a card with the merchant pattern, the auto-category label (when set), and a Remove button. There is no edit affordance — to change a pattern, remove the rule and re-add it via Inbox confirm.
 
 ## 6. Deferred — design captured for later
 
