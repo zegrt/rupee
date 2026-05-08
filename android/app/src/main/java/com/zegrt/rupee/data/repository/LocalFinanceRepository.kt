@@ -20,6 +20,7 @@ import com.zegrt.rupee.data.local.entity.Mode
 import com.zegrt.rupee.data.local.entity.SyncStatus
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
 import com.zegrt.rupee.data.local.entity.UserEntity
+import com.zegrt.rupee.ingestion.MerchantNameUtils
 import com.zegrt.rupee.ingestion.NotificationSignalNormalizer
 import com.zegrt.rupee.ingestion.RawCaptureWriter
 import java.time.Instant
@@ -261,7 +262,11 @@ class LocalFinanceRepository(
         database.merchantTrustRuleDao().observeRules(USER_ID)
 
     suspend fun addMerchantTrustRule(merchantPattern: String, autoCategoryId: String? = null) {
-        val pattern = merchantPattern.trim()
+        // Store the cleaned merchant form so future ingestion — which matches against the
+        // cleaned form too — actually fires. Storing raw "Swiggy using UPI" would never
+        // match clean("Swiggy using UPI") = "Swiggy".
+        val pattern = MerchantNameUtils.clean(merchantPattern).takeIf { it != "Unnamed" }
+            ?: merchantPattern.trim()
         if (pattern.isBlank()) return
         val now = Instant.now().toString()
         database.merchantTrustRuleDao().upsertRule(

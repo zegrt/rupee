@@ -52,4 +52,16 @@ class MerchantNameUtilsTest {
         // "Big Bazaar" should NOT trigger a rule for "Big" — keeps the rule narrow.
         assertEquals(false, MerchantNameUtils.matchesPattern("Big Bazaar using UPI", "Big"))
     }
+
+    @Test
+    fun `trust rule round-trip - pattern derived from clean of raw matches future raw`() {
+        // Regression: when the user toggles "Always trust" without editing the merchant,
+        // the rule must be stored in cleaned form so the next ingestion of the same raw
+        // body actually matches. Storing raw "Swiggy using UPI" would never fire.
+        val raw = "Swiggy using UPI"
+        val storedPattern = MerchantNameUtils.clean(raw)
+        assertEquals("Swiggy", storedPattern)
+        assertEquals(true, MerchantNameUtils.matchesPattern(raw, storedPattern))
+        assertEquals(true, MerchantNameUtils.matchesPattern("SWIGGY using UPI", storedPattern))
+    }
 }

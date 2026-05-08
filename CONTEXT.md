@@ -118,8 +118,8 @@ References:
 ## Immediate Next Work
 
 1. Recategorize on the Transactions tab — the `TransactionDetailSheet` Edit form has Merchant + Notes today; add a `CategoryDropdown` row mirroring the one in Inbox review
-2. "Always trust this merchant" rule — new `MerchantTrustRule` entity + decision-engine integration; Inbox confirm gets a checkbox to create the rule (design in `docs/rupee-settings-debug.md` § 5)
-3. "Merge with existing transaction" in Inbox — needs a transaction picker UX
+2. "Merge with existing transaction" in Inbox — needs a transaction picker UX
+3. Settings surface to view/remove existing trust rules — they're persisted but currently invisible to the user; only way to inspect is via DB reset
 4. Dedicated PhonePe and Paytm parsers — currently their bodies hit `GenericUpiNotificationParser` with `providerHint = "upi"`. Real parsers would give a branded hint and a more reliable merchant extraction
 5. Hide the Debug pill behind `BuildConfig.DEBUG` before any external test build (the floating pill is highly visible right now)
 6. Bottom-nav migration to replace the chip-row tab switcher
@@ -166,7 +166,7 @@ References:
 - Manual transaction entry is wired to the dashboard "Add transaction" button via a `ModalBottomSheet` form (merchant, amount, mode chip selector, category chips, notes)
 - Settings tab exists with profile (display name), monthly budget edit, notification permission re-check, and read-only category/bucket lists; documented in `docs/rupee-settings-debug.md`
 - Debug tab exists with three preset sample notifications (GPay/CRED/ICICI) that exercise the real ingestion pipeline, a parser playground that runs the parser registry against arbitrary input without persisting, and a confirm-gated reset that wipes the DB and re-seeds defaults
-- Build now exposes versionName (currently `0.5.3`) via `BuildConfig`; the Home greeting renders a small `v0.5.3-debug` pill top-right and Settings → About reflects the same value. The debug APK output is renamed to `rupee-{versionName}-{buildType}.apk` so the file itself carries the version
+- Build now exposes versionName (currently `0.6.1`) via `BuildConfig`; the Home greeting renders a small `v0.6.1-debug` pill top-right and Settings → About reflects the same value. The debug APK output is renamed to `rupee-{versionName}-{buildType}.apk` so the file itself carries the version
 - Recent activity, Inbox review, and Transactions tab all show cleaner merchant text via `cleanMerchant()` (trims " on / using / via" tails, prefers segment after " at " for CRED-style bodies). DB-level `merchantName` is left untouched
 - Sublines now use `formatOccurredAt()` to render ISO instants as friendly local-time labels ("7 May, 11:29 PM") instead of raw timestamps
 - Inbox review row uses a Material3 `DropdownMenu` for category selection; manual entry still uses chips since that form has more vertical room
@@ -177,6 +177,9 @@ References:
 - New `GenericUpiNotificationParser` handles UPI-style "paid to … using UPI" bodies that are not from Google Pay (PhonePe, Paytm, BHIM, debug mocks attributed to our own package). `parserKey = "notification_upi_generic"`, `providerHint = "upi"`. Slotted in the registry between `GPayNotificationParser` (now strict) and `GenericNotificationParser`
 - `CredNotificationParser.canParse` now matches a `\bCRED\b` word boundary (case-insensitive) plus a `com.dreamplug.androidapp` package check — previously `body.contains("cred")` was firing on the substring of "Credit Card", silently mis-routing every ICICI/HDFC card notification to the CRED parser
 - First unit tests in the repo at `android/app/src/test/java/com/zegrt/rupee/ingestion/NotificationParserCanParseTest.kt`. Pure JVM, no Android dependencies. Run with `./gradlew :android:app:testDebugUnitTest`
+- "Always trust this merchant" rule (v0.6.0): `MerchantTrustRuleEntity` + DAO with `(userId, merchantPattern)` unique index, schema bumped to v6 with destructive migration. Inbox confirm row exposes a `Switch` ("Always trust ${merchant}"); toggling it stores a rule via `LocalFinanceRepository.addMerchantTrustRule`. `NotificationSignalNormalizer` checks the rule list before applying the base decision — matched candidates skip the inbox and land directly as `CONFIRMED` canonical transactions with `createdBy = "trust_rule"` and the rule's `autoCategoryId` if set
+- Merchant matching is centralized in `MerchantNameUtils` (`clean()` for display/matching, `matchesPattern()` for exact case-insensitive comparison on the cleaned form). Used by both UI surfaces and trust-rule matching so a "Swiggy" rule fires on a parsed "Swiggy using UPI"
+- v0.6.1 fix: `addMerchantTrustRule` now stores the cleaned form of the pattern. Earlier the raw `candidate.toEntityName` (e.g. "Swiggy using UPI") was persisted as-is, but the matcher cleans the incoming raw merchant before comparing — so stored rules never fired. Round-trip regression covered in `MerchantNameUtilsTest`
 
 ## Known Gaps vs Schema and Architecture
 
