@@ -18,18 +18,21 @@ import com.zegrt.rupee.data.local.entity.InboxDecisionState
 import com.zegrt.rupee.data.local.entity.InboxItemEntity
 import com.zegrt.rupee.data.local.entity.MerchantTrustRuleEntity
 import com.zegrt.rupee.data.local.entity.Mode
+import com.zegrt.rupee.data.local.entity.RecurringPatternEntity
 import com.zegrt.rupee.data.local.entity.SyncStatus
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
 import com.zegrt.rupee.data.local.entity.UserEntity
 import com.zegrt.rupee.ingestion.MerchantNameUtils
 import com.zegrt.rupee.ingestion.NotificationSignalNormalizer
 import com.zegrt.rupee.ingestion.RawCaptureWriter
+import com.zegrt.rupee.recurring.RecurringDetectionEngine
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 data class OnboardingSetupInput(
@@ -43,6 +46,7 @@ data class OnboardingSetupInput(
 
 class LocalFinanceRepository(
     private val database: RupeeDatabase,
+    private val recurringDetector: RecurringDetectionEngine = RecurringDetectionEngine(),
 ) {
     companion object {
         private const val USER_ID = "local-user"
@@ -56,6 +60,85 @@ class LocalFinanceRepository(
     fun observeCards(): Flow<List<CreditCardEntity>> = database.creditCardDao().observeActiveCards()
 
     fun observeEmiPlans(): Flow<List<EmiPlanEntity>> = database.emiPlanDao().observePlans(USER_ID)
+
+    fun observeRecurringPatterns(): Flow<List<RecurringPatternEntity>> =
+        database.recurringPatternDao().observePatterns(USER_ID)
+
+    suspend fun confirmRecurringPattern(id: String) {
+        val now = Instant.now().toString()
+        val pattern = database.recurringPatternDao().getAllForUser(USER_ID).firstOrNull { it.id == id } ?: return
+        database.recurringPatternDao().upsertPattern(
+            pattern.copy(isConfirmed = true, isDismissed = false, updatedAt = now),
+        )
+    }
+
+    suspend fun dismissRecurringPattern(id: String) {
+        val now = Instant.now().toString()
+        val pattern = database.recurringPatternDao().getAllForUser(USER_ID).firstOrNull { it.id == id } ?: return
+        database.recurringPatternDao().upsertPattern(
+            pattern.copy(isDismissed = true, updatedAt = now),
+        )
+    }
+
+    suspend fun removeRecurringPattern(id: String) {
+        database.recurringPatternDao().deleteById(id)
+    }
+
+    /**
+     * Re-run auto-detection over the last 90 days. Wipes prior unconfirmed auto-suggestions
+     * and rewrites them; preserves user-confirmed and user-dismissed rows so the user's
+     * decisions stick across runs.
+     */
+    suspend fun refreshRecurringPatterns(today: java.time.LocalDate = java.time.LocalDate.now()) {
+        val lookbackStart = today.minusDays(120).toString()
+        val nowIso = today.plusDays(1).toString()
+        val txns = database.canonicalTransactionDao()
+            .observeTransactionsInPeriod(USER_ID, lookbackStart, nowIso)
+            .first()
+        val detected = recurringDetector.detect(txns, today)
+        val existing = database.recurringPatternDao().getAllForUser(USER_ID)
+        val byMerchant = existing.associateBy { it.merchantPattern.lowercase() }
+        val now = Instant.now().toString()
+
+        database.recurringPatternDao().deleteUnconfirmedAuto(USER_ID)
+
+        val rows = detected.mapNotNull { pattern ->
+            val key = pattern.merchantPattern.lowercase()
+            val prior = byMerchant[key]
+            // If user already dismissed this merchant's auto suggestion, leave it dismissed.
+            if (prior != null && prior.isDismissed && prior.sourceType == "auto") return@mapNotNull null
+            // If user confirmed it earlier, just refresh next-expected and amount but keep state.
+            if (prior != null && prior.isConfirmed) {
+                return@mapNotNull prior.copy(
+                    expectedAmountMinor = pattern.expectedAmountMinor,
+                    intervalDays = pattern.intervalDays,
+                    occurrenceCount = pattern.occurrenceCount,
+                    lastSeenAt = pattern.lastSeenAt,
+                    nextExpectedAt = pattern.nextExpectedAt,
+                    updatedAt = now,
+                )
+            }
+            RecurringPatternEntity(
+                id = "rec-${java.util.UUID.randomUUID()}",
+                userId = USER_ID,
+                merchantPattern = pattern.merchantPattern,
+                expectedAmountMinor = pattern.expectedAmountMinor,
+                intervalDays = pattern.intervalDays,
+                occurrenceCount = pattern.occurrenceCount,
+                lastSeenAt = pattern.lastSeenAt,
+                nextExpectedAt = pattern.nextExpectedAt,
+                isConfirmed = false,
+                isDismissed = false,
+                sourceType = "auto",
+                createdAt = now,
+                updatedAt = now,
+                syncStatus = SyncStatus.LOCAL_ONLY,
+            )
+        }
+        if (rows.isNotEmpty()) {
+            database.recurringPatternDao().upsertPatterns(rows)
+        }
+    }
 
     suspend fun addEmiPlan(
         name: String,

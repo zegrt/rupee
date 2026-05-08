@@ -14,6 +14,7 @@ import com.zegrt.rupee.data.local.dao.InboxItemDao
 import com.zegrt.rupee.data.local.dao.MerchantTrustRuleDao
 import com.zegrt.rupee.data.local.dao.ParsedSignalDao
 import com.zegrt.rupee.data.local.dao.RawCaptureEventDao
+import com.zegrt.rupee.data.local.dao.RecurringPatternDao
 import com.zegrt.rupee.data.local.dao.TransactionCandidateDao
 import com.zegrt.rupee.data.local.dao.UserDao
 import com.zegrt.rupee.data.local.entity.AccountEntity
@@ -27,6 +28,7 @@ import com.zegrt.rupee.data.local.entity.InboxItemEntity
 import com.zegrt.rupee.data.local.entity.MerchantTrustRuleEntity
 import com.zegrt.rupee.data.local.entity.ParsedSignalEntity
 import com.zegrt.rupee.data.local.entity.RawCaptureEventEntity
+import com.zegrt.rupee.data.local.entity.RecurringPatternEntity
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
 import com.zegrt.rupee.data.local.entity.TransactionBucketAssignmentEntity
 import com.zegrt.rupee.data.local.entity.UserEntity
@@ -47,8 +49,9 @@ import com.zegrt.rupee.data.local.entity.UserEntity
         ParsedSignalEntity::class,
         TransactionCandidateEntity::class,
         MerchantTrustRuleEntity::class,
+        RecurringPatternEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(RupeeTypeConverters::class)
@@ -66,4 +69,5 @@ abstract class RupeeDatabase : RoomDatabase() {
     abstract fun transactionCandidateDao(): TransactionCandidateDao
     abstract fun merchantTrustRuleDao(): MerchantTrustRuleDao
     abstract fun emiPlanDao(): EmiPlanDao
+    abstract fun recurringPatternDao(): RecurringPatternDao
 }
