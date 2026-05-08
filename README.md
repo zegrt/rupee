@@ -72,7 +72,7 @@ Right now the project has:
 - Settings → Cards & EMIs page listing credit cards (outstanding, limit, dues) and manual EMI plans (add + remove)
 - transactions surface with tap-to-view modal (Edit + Delete + recategorize)
 - calendar tab with month-grid view, daily spend labels, and tap-day → transactions sheet
-- per-category monthly budgets editable from Settings, with progress bars and over-limit highlighting
+- a unified Budgets page (Settings → Budgets) covering monthly total + per-category limits with progress bars and over-limit highlighting
 - manual transaction entry through a bottom sheet
 - a Settings page (display name, monthly budget, notification permission re-check, version, category/bucket lists)
 - a Debug page (preset + editable mock notifications, parser playground, DB reset) accessible via a floating pill and from Settings
@@ -90,7 +90,7 @@ The current preview build:
 
 APK output:
 
-- [rupee-0.8.1-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.8.1-debug.apk)
+- [rupee-0.9.0-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.9.0-debug.apk)
 
 ## Main Docs
 

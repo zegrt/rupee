@@ -30,12 +30,10 @@ fun SettingsScreen(
     state: SettingsUiState,
     onNameDraftChange: (String) -> Unit,
     onSaveName: () -> Unit,
-    onBudgetDraftChange: (String) -> Unit,
-    onSaveBudget: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
     onOpenTrustRules: () -> Unit,
     onOpenCardsEmis: () -> Unit,
-    onOpenCategoryBudgets: () -> Unit,
+    onOpenBudgets: () -> Unit,
     onOpenDebug: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -56,42 +54,10 @@ fun SettingsScreen(
                 Text(if (state.savingName) "Saving..." else "Save name")
             }
         }
-        SettingsCard(title = "Monthly budget") {
-            Text(
-                text = "Current: ${state.monthlyBudgetLabel}",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            OutlinedTextField(
-                value = state.monthlyBudgetDraft,
-                onValueChange = onBudgetDraftChange,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Limit (₹)") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Button(
-                onClick = onSaveBudget,
-                enabled = !state.savingBudget && state.monthlyBudgetDraft.isNotBlank() && state.monthlyBudgetDraft != state.monthlyBudgetRupees,
-            ) {
-                Text(if (state.savingBudget) "Saving..." else "Save budget")
-            }
-        }
-        SettingsCard(title = "Notifications") {
-            Text(
-                text = if (state.notificationGranted) "Notification access is granted." else "Notification access is required for auto-tracking.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            OutlinedButton(onClick = onOpenNotificationSettings) {
-                Text(if (state.notificationGranted) "Manage permission" else "Grant access")
-            }
-        }
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onOpenCategoryBudgets),
+                .clickable(onClick = onOpenBudgets),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -104,10 +70,23 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Category budgets", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    Text("Set monthly limits per category.", style = MaterialTheme.typography.bodyMedium)
+                    Text("Budgets", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = "Monthly: ${state.monthlyBudgetLabel}",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                 }
                 Text("›", style = MaterialTheme.typography.headlineSmall)
+            }
+        }
+        SettingsCard(title = "Notifications") {
+            Text(
+                text = if (state.notificationGranted) "Notification access is granted." else "Notification access is required for auto-tracking.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedButton(onClick = onOpenNotificationSettings) {
+                Text(if (state.notificationGranted) "Manage permission" else "Grant access")
             }
         }
         Card(
