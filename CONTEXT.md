@@ -125,7 +125,7 @@ References:
 6. Custom bucket progress cards on Home — blocked on per-bucket budgets being seeded + a `transaction_bucket_assignments` DAO
 7. Parser refinement using real notification samples — both the Debug parser playground and the editable real-mock-notification surface make this easier
 8. Richer dedupe rules for fuzzy multi-source collisions (depends on observing real collisions)
-9. Wire `EmiPlanEntity` (currently registered in `RupeeDatabase` with no DAO)
+9. Auto-detection of EMIs and credit-card statement events from notifications (M8 follow-on now that the DAO is wired)
 10. Add the missing schema entities once their UI surfaces are scoped: `canonical_transaction_source_links`, `dedupe_groups` / `dedupe_group_members`, `recurring_patterns`, `alert_rules` / `alert_events`, `monthly_recaps`
 
 ## Current Implementation State
@@ -164,7 +164,7 @@ References:
 - Manual transaction entry is wired to the dashboard "Add transaction" button via a `ModalBottomSheet` form (merchant, amount, mode chip selector, category chips, notes)
 - Settings tab exists with profile (display name), monthly budget edit, notification permission re-check, and read-only category/bucket lists; documented in `docs/rupee-settings-debug.md`
 - Debug tab exists with three preset sample notifications (GPay/CRED/ICICI) that exercise the real ingestion pipeline, a parser playground that runs the parser registry against arbitrary input without persisting, and a confirm-gated reset that wipes the DB and re-seeds defaults
-- Build now exposes versionName (currently `0.6.3`) via `BuildConfig`; the Home greeting renders a small `v0.6.3-debug` pill top-right and Settings → About reflects the same value. The debug APK output is renamed to `rupee-{versionName}-{buildType}.apk` so the file itself carries the version
+- Build now exposes versionName (currently `0.7.0`) via `BuildConfig`; the Home greeting renders a small `v0.7.0-debug` pill top-right and Settings → About reflects the same value. The debug APK output is renamed to `rupee-{versionName}-{buildType}.apk` so the file itself carries the version
 - Recent activity, Inbox review, and Transactions tab all show cleaner merchant text via `cleanMerchant()` (trims " on / using / via" tails, prefers segment after " at " for CRED-style bodies). DB-level `merchantName` is left untouched
 - Sublines now use `formatOccurredAt()` to render ISO instants as friendly local-time labels ("7 May, 11:29 PM") instead of raw timestamps
 - Inbox review row uses a Material3 `DropdownMenu` for category selection; manual entry still uses chips since that form has more vertical room
@@ -181,12 +181,13 @@ References:
 - v0.6.2: Settings exposed a "Trusted merchants" surface to list and remove saved rules, backed by `SettingsViewModel.removeTrustRule` → `LocalFinanceRepository.removeMerchantTrustRule`. The ViewModel's entity-side `combine` arity grew from 4 to 5 to fold in `observeMerchantTrustRules()`
 - v0.6.2: Transactions tab `TransactionDetailSheet` Edit form now includes a `CategoryDropdown` row, and the read-only view shows a "Category" line when the transaction has one. New `transactionCategoryDrafts` flow in `HomeViewModel`; `saveTransactionEdits` only re-applies category when the draft was touched (uses `applyCategory = true` on `repository.updateTransactionDetails`)
 - v0.6.3: Promoted Trusted merchants from an inline Settings card to a tappable Settings row that opens a fullscreen `TrustRulesScreen` (Compose `Dialog`, mirroring the Debug pattern). The row shows rule count; each rule renders as its own card with a Remove action
+- v0.7.0 (Milestone 8 first slice): `EmiPlanDao` is now wired (was registered in `RupeeDatabase` with no DAO). Repository exposes `observeEmiPlans`, `addEmiPlan`, `removeEmiPlan`. New `CardsEmisViewModel` + `CardsEmisScreen` rendered behind a Settings row → fullscreen Dialog. Lists existing credit cards with outstanding/limit/due labels, plus a manual EMI add flow (name, monthly amount, optional months remaining, optional next-due date, notes). EMIs surface a Remove action. Auto-detection of cards/EMIs from notifications still TODO
 
 ## Known Gaps vs Schema and Architecture
 
 These are intentional or unintentional omissions surfaced by a deep review. They are not bugs in current behavior; they are work that has not happened yet.
 
-- `EmiPlanEntity` is registered in `RupeeDatabase` but has no DAO and no repository methods.
+- `EmiPlanEntity` now has a DAO and repository methods (v0.7.0). Auto-detection from notifications is still pending.
 - Schema entities not yet implemented in code: `canonical_transaction_source_links`, `dedupe_groups`, `dedupe_group_members`, `recurring_patterns`, `alert_rules`, `alert_events`, `monthly_recaps`, `emi_transaction_links`, `budget_category_assignments`.
 - `CanonicalTransactionEntity` carries a flat `dedupeFingerprint` field; the schema models duplicate clusters via dedupe_groups join tables. The current flat field is a pragmatic shortcut, not the long-term shape.
 - Architecture spec calls for a five-tab bottom nav (Home, Inbox, Transactions, Calendar, Settings); the app currently has Home/Inbox/Transactions only, rendered as chip tabs inside `MainActivity` rather than as separate routes.

@@ -105,6 +105,9 @@ class MainActivity : ComponentActivity() {
                             repository = app.localFinanceRepository,
                             appVersion = versionLabel,
                         ),
+                        cardsEmisViewModelFactory = com.zegrt.rupee.cards.CardsEmisViewModelFactory(
+                            app.localFinanceRepository,
+                        ),
                         debugViewModelFactory = DebugViewModelFactory(app.localFinanceRepository),
                         versionLabel = versionLabel,
                     )
@@ -119,16 +122,19 @@ private fun RupeeApp(
     homeViewModelFactory: HomeViewModelFactory,
     onboardingViewModelFactory: OnboardingViewModelFactory,
     settingsViewModelFactory: SettingsViewModelFactory,
+    cardsEmisViewModelFactory: com.zegrt.rupee.cards.CardsEmisViewModelFactory,
     debugViewModelFactory: DebugViewModelFactory,
     versionLabel: String,
 ) {
     val homeViewModel: HomeViewModel = viewModel(factory = homeViewModelFactory)
     val onboardingViewModel: OnboardingViewModel = viewModel(factory = onboardingViewModelFactory)
     val settingsViewModel: SettingsViewModel = viewModel(factory = settingsViewModelFactory)
+    val cardsEmisViewModel: com.zegrt.rupee.cards.CardsEmisViewModel = viewModel(factory = cardsEmisViewModelFactory)
     val debugViewModel: DebugViewModel = viewModel(factory = debugViewModelFactory)
     val homeUiState by homeViewModel.uiState.collectAsState()
     val onboardingUiState by onboardingViewModel.uiState.collectAsState()
     val settingsUiState by settingsViewModel.uiState.collectAsState()
+    val cardsEmisUiState by cardsEmisViewModel.uiState.collectAsState()
     val debugUiState by debugViewModel.uiState.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -186,6 +192,7 @@ private fun RupeeApp(
         OnboardingStep.HOME -> RupeeHome(
             uiState = homeUiState,
             settingsState = settingsUiState,
+            cardsEmisState = cardsEmisUiState,
             debugState = debugUiState,
             versionLabel = versionLabel,
             onSelectTab = homeViewModel::selectTab,
@@ -210,6 +217,11 @@ private fun RupeeApp(
             onSettingsBudgetDraftChange = settingsViewModel::updateBudgetDraft,
             onSettingsSaveBudget = settingsViewModel::saveMonthlyBudget,
             onSettingsRemoveTrustRule = settingsViewModel::removeTrustRule,
+            onOpenEmiDraft = cardsEmisViewModel::openEmiDraft,
+            onCloseEmiDraft = cardsEmisViewModel::closeEmiDraft,
+            onUpdateEmiDraft = cardsEmisViewModel::updateEmiDraft,
+            onSubmitEmiDraft = cardsEmisViewModel::submitEmiDraft,
+            onRemoveEmi = cardsEmisViewModel::removeEmi,
             onOpenNotificationSettings = openNotificationSettings,
             onDebugReset = debugViewModel::resetAllData,
             onDebugSendSample = debugViewModel::sendSample,
@@ -499,6 +511,7 @@ private fun SetupToggleCard(
 private fun RupeeHome(
     uiState: HomeUiState,
     settingsState: com.zegrt.rupee.settings.SettingsUiState,
+    cardsEmisState: com.zegrt.rupee.cards.CardsEmisUiState,
     debugState: com.zegrt.rupee.debug.DebugUiState,
     versionLabel: String,
     onSelectTab: (HomeTab) -> Unit,
@@ -523,6 +536,11 @@ private fun RupeeHome(
     onSettingsBudgetDraftChange: (String) -> Unit,
     onSettingsSaveBudget: () -> Unit,
     onSettingsRemoveTrustRule: (String) -> Unit,
+    onOpenEmiDraft: () -> Unit,
+    onCloseEmiDraft: () -> Unit,
+    onUpdateEmiDraft: (com.zegrt.rupee.cards.EmiDraft.() -> com.zegrt.rupee.cards.EmiDraft) -> Unit,
+    onSubmitEmiDraft: () -> Unit,
+    onRemoveEmi: (String) -> Unit,
     onOpenNotificationSettings: () -> Unit,
     onDebugReset: () -> Unit,
     onDebugSendSample: (com.zegrt.rupee.debug.SampleNotification) -> Unit,
@@ -538,6 +556,7 @@ private fun RupeeHome(
 ) {
     var showDebug by remember { mutableStateOf(false) }
     var showTrustRules by remember { mutableStateOf(false) }
+    var showCardsEmis by remember { mutableStateOf(false) }
     androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -584,6 +603,7 @@ private fun RupeeHome(
                     onSaveBudget = onSettingsSaveBudget,
                     onOpenNotificationSettings = onOpenNotificationSettings,
                     onOpenTrustRules = { showTrustRules = true },
+                    onOpenCardsEmis = { showCardsEmis = true },
                     onOpenDebug = { showDebug = true },
                 )
             }
@@ -663,6 +683,48 @@ private fun RupeeHome(
                     )
                 }
             }
+        }
+    }
+
+    if (showCardsEmis) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showCardsEmis = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp, vertical = 24.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Cards & EMIs", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                        androidx.compose.material3.TextButton(onClick = { showCardsEmis = false }) { Text("Close") }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    com.zegrt.rupee.cards.CardsEmisScreen(
+                        state = cardsEmisState,
+                        onAddEmi = onOpenEmiDraft,
+                        onRemoveEmi = onRemoveEmi,
+                    )
+                }
+            }
+        }
+        if (cardsEmisState.emiDraft.isOpen) {
+            com.zegrt.rupee.cards.EmiDraftSheet(
+                draft = cardsEmisState.emiDraft,
+                onClose = onCloseEmiDraft,
+                onUpdate = onUpdateEmiDraft,
+                onSubmit = onSubmitEmiDraft,
+            )
         }
     }
 

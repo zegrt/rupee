@@ -1,7 +1,7 @@
 # Rupee Settings & Debug
 
 Date: May 8, 2026
-Status: Reflects v0.6.3
+Status: Reflects v0.7.0
 
 ## 1. Purpose
 
@@ -24,6 +24,7 @@ Two surfaces that sit alongside Home / Inbox / Transactions:
 - **Notifications**
   - Status line ("granted" / "required for auto-tracking")
   - Open system notification-listener settings
+- **Cards & EMIs** — a tappable row that opens a fullscreen `CardsEmisScreen` (Compose `Dialog`). Lists active credit cards (display name, provider/network/masked id, outstanding, limit, statement due) and the user's EMI plans. EMI plans support a manual add (name, monthly amount, optional months remaining, optional next due date, notes) and per-row Remove. Backed by `CardsEmisViewModel` + `LocalFinanceRepository.observeEmiPlans` / `addEmiPlan` / `removeEmiPlan`. Auto-detection of cards/EMIs from notifications is M8 follow-on
 - **Trusted merchants** — a tappable row showing the current rule count. Tapping opens a fullscreen `TrustRulesScreen` (Compose `Dialog`) listing each saved `MerchantTrustRule` as its own card with merchant pattern, auto-category label (when set), and a Remove action that calls `LocalFinanceRepository.removeMerchantTrustRule(id)`. Empty state nudges the user to use the Inbox-confirm "Always trust" toggle to add one
 - **Categories** — read-only list of seeded categories
 - **Buckets** — read-only list of seeded buckets
