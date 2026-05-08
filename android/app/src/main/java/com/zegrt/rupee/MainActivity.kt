@@ -117,6 +117,9 @@ class MainActivity : ComponentActivity() {
                         recurringViewModelFactory = com.zegrt.rupee.recurring.RecurringViewModelFactory(
                             app.localFinanceRepository,
                         ),
+                        recapViewModelFactory = com.zegrt.rupee.recap.RecapViewModelFactory(
+                            app.localFinanceRepository,
+                        ),
                         debugViewModelFactory = DebugViewModelFactory(app.localFinanceRepository),
                         versionLabel = versionLabel,
                     )
@@ -135,6 +138,7 @@ private fun RupeeApp(
     calendarViewModelFactory: com.zegrt.rupee.calendar.CalendarViewModelFactory,
     budgetsViewModelFactory: com.zegrt.rupee.budgets.BudgetsViewModelFactory,
     recurringViewModelFactory: com.zegrt.rupee.recurring.RecurringViewModelFactory,
+    recapViewModelFactory: com.zegrt.rupee.recap.RecapViewModelFactory,
     debugViewModelFactory: DebugViewModelFactory,
     versionLabel: String,
 ) {
@@ -145,6 +149,7 @@ private fun RupeeApp(
     val calendarViewModel: com.zegrt.rupee.calendar.CalendarViewModel = viewModel(factory = calendarViewModelFactory)
     val budgetsViewModel: com.zegrt.rupee.budgets.BudgetsViewModel = viewModel(factory = budgetsViewModelFactory)
     val recurringViewModel: com.zegrt.rupee.recurring.RecurringViewModel = viewModel(factory = recurringViewModelFactory)
+    val recapViewModel: com.zegrt.rupee.recap.RecapViewModel = viewModel(factory = recapViewModelFactory)
     val debugViewModel: DebugViewModel = viewModel(factory = debugViewModelFactory)
     val homeUiState by homeViewModel.uiState.collectAsState()
     val onboardingUiState by onboardingViewModel.uiState.collectAsState()
@@ -153,6 +158,7 @@ private fun RupeeApp(
     val calendarUiState by calendarViewModel.uiState.collectAsState()
     val budgetsUiState by budgetsViewModel.uiState.collectAsState()
     val recurringUiState by recurringViewModel.uiState.collectAsState()
+    val recapUiState by recapViewModel.uiState.collectAsState()
     val debugUiState by debugViewModel.uiState.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -214,6 +220,7 @@ private fun RupeeApp(
             calendarState = calendarUiState,
             budgetsState = budgetsUiState,
             recurringState = recurringUiState,
+            recapState = recapUiState,
             debugState = debugUiState,
             versionLabel = versionLabel,
             onSelectTab = homeViewModel::selectTab,
@@ -253,6 +260,9 @@ private fun RupeeApp(
             onRecurringDismiss = recurringViewModel::dismiss,
             onRecurringRemove = recurringViewModel::remove,
             onRecurringRefresh = recurringViewModel::refreshNow,
+            onRecapPrev = recapViewModel::goToPreviousMonth,
+            onRecapNext = recapViewModel::goToNextMonth,
+            onRecapResetToCurrent = recapViewModel::resetToCurrent,
             onOpenNotificationSettings = openNotificationSettings,
             onDebugReset = debugViewModel::resetAllData,
             onDebugSendSample = debugViewModel::sendSample,
@@ -546,6 +556,7 @@ private fun RupeeHome(
     calendarState: com.zegrt.rupee.calendar.CalendarUiState,
     budgetsState: com.zegrt.rupee.budgets.BudgetsUiState,
     recurringState: com.zegrt.rupee.recurring.RecurringUiState,
+    recapState: com.zegrt.rupee.recap.RecapUiState,
     debugState: com.zegrt.rupee.debug.DebugUiState,
     versionLabel: String,
     onSelectTab: (HomeTab) -> Unit,
@@ -585,6 +596,9 @@ private fun RupeeHome(
     onRecurringDismiss: (String) -> Unit,
     onRecurringRemove: (String) -> Unit,
     onRecurringRefresh: () -> Unit,
+    onRecapPrev: () -> Unit,
+    onRecapNext: () -> Unit,
+    onRecapResetToCurrent: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
     onDebugReset: () -> Unit,
     onDebugSendSample: (com.zegrt.rupee.debug.SampleNotification) -> Unit,
@@ -603,6 +617,7 @@ private fun RupeeHome(
     var showCardsEmis by remember { mutableStateOf(false) }
     var showBudgets by remember { mutableStateOf(false) }
     var showRecurring by remember { mutableStateOf(false) }
+    var showRecap by remember { mutableStateOf(false) }
     androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -660,6 +675,10 @@ private fun RupeeHome(
                     onOpenRecurring = {
                         onRecurringRefresh()
                         showRecurring = true
+                    },
+                    onOpenRecap = {
+                        onRecapResetToCurrent()
+                        showRecap = true
                     },
                     onOpenDebug = { showDebug = true },
                 )
@@ -782,6 +801,40 @@ private fun RupeeHome(
                 onUpdate = onUpdateEmiDraft,
                 onSubmit = onSubmitEmiDraft,
             )
+        }
+    }
+
+    if (showRecap) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showRecap = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp, vertical = 24.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Monthly recap", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                        androidx.compose.material3.TextButton(onClick = { showRecap = false }) { Text("Close") }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    com.zegrt.rupee.recap.RecapScreen(
+                        state = recapState,
+                        onPrev = onRecapPrev,
+                        onNext = onRecapNext,
+                    )
+                }
+            }
         }
     }
 
@@ -952,7 +1005,11 @@ private fun UpcomingDuesCard(dues: List<com.zegrt.rupee.home.HomeDueRow>) {
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "${if (due.kind == com.zegrt.rupee.home.HomeDueKind.CARD) "Card • " else "EMI • "}${due.title}",
+                            text = "${when (due.kind) {
+                                com.zegrt.rupee.home.HomeDueKind.CARD -> "Card • "
+                                com.zegrt.rupee.home.HomeDueKind.EMI -> "EMI • "
+                                com.zegrt.rupee.home.HomeDueKind.RECURRING -> "Recurring • "
+                            }}${due.title}",
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.SemiBold,
                         )

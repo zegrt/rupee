@@ -9,6 +9,7 @@ import com.zegrt.rupee.data.local.entity.CanonicalTransactionStatus
 import com.zegrt.rupee.data.local.entity.CategoryEntity
 import com.zegrt.rupee.data.local.entity.CreditCardEntity
 import com.zegrt.rupee.data.local.entity.EmiPlanEntity
+import com.zegrt.rupee.data.local.entity.RecurringPatternEntity
 import com.zegrt.rupee.data.local.entity.InboxItemEntity
 import com.zegrt.rupee.data.local.entity.Mode
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
@@ -125,7 +126,7 @@ data class HomeDueRow(
     val kind: HomeDueKind,
 )
 
-enum class HomeDueKind { CARD, EMI }
+enum class HomeDueKind { CARD, EMI, RECURRING }
 
 data class HomeUiState(
     val userName: String = "Rupee",
@@ -153,6 +154,7 @@ private data class DashboardData(
     val weeklySpent: Long,
     val cards: List<CreditCardEntity>,
     val emis: List<EmiPlanEntity>,
+    val recurringPatterns: List<RecurringPatternEntity>,
 )
 
 private data class ReviewDraftBundle(
@@ -217,10 +219,11 @@ class HomeViewModel(
         )
     }
 
-    private val cardsAndEmis: Flow<Pair<List<CreditCardEntity>, List<EmiPlanEntity>>> = combine(
+    private val obligationsBundle: Flow<Triple<List<CreditCardEntity>, List<EmiPlanEntity>, List<RecurringPatternEntity>>> = combine(
         repository.observeCards(),
         repository.observeEmiPlans(),
-    ) { cards, emis -> cards to emis }
+        repository.observeRecurringPatterns(),
+    ) { cards, emis, patterns -> Triple(cards, emis, patterns) }
 
     private val dashboardData: Flow<DashboardData> = combine(
         combine(
@@ -240,7 +243,7 @@ class HomeViewModel(
         ) { suggested, b, m, w ->
             arrayOf<Any?>(suggested, b, m, w)
         },
-        cardsAndEmis,
+        obligationsBundle,
     ) { entities, periods, dues ->
         @Suppress("UNCHECKED_CAST")
         DashboardData(
@@ -255,6 +258,7 @@ class HomeViewModel(
             weeklySpent = periods[3] as Long,
             cards = dues.first,
             emis = dues.second,
+            recurringPatterns = dues.third,
         )
     }
 
@@ -659,7 +663,22 @@ class HomeViewModel(
                 kind = HomeDueKind.EMI,
             )
         }
-        return (cardDues + emiDues).sortedBy { it.daysAway }
+        val recurringDues = data.recurringPatterns
+            .filter { it.isConfirmed && !it.isDismissed }
+            .mapNotNull { pattern ->
+                val dueDate = parseDueDate(pattern.nextExpectedAt) ?: return@mapNotNull null
+                if (dueDate.isAfter(horizon)) return@mapNotNull null
+                HomeDueRow(
+                    id = "rec-${pattern.id}",
+                    title = pattern.merchantPattern,
+                    amountLabel = formatRowAmount(pattern.expectedAmountMinor),
+                    dueLabel = dueLabelFor(today, dueDate),
+                    daysAway = (dueDate.toEpochDay() - today.toEpochDay()).toInt(),
+                    isOverdue = dueDate.isBefore(today),
+                    kind = HomeDueKind.RECURRING,
+                )
+            }
+        return (cardDues + emiDues + recurringDues).sortedBy { it.daysAway }
     }
 
     private fun parseDueDate(iso: String?): LocalDate? {
