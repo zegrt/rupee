@@ -7,6 +7,8 @@ import com.zegrt.rupee.data.local.entity.BudgetEntity
 import com.zegrt.rupee.data.local.entity.CanonicalTransactionEntity
 import com.zegrt.rupee.data.local.entity.CanonicalTransactionStatus
 import com.zegrt.rupee.data.local.entity.CategoryEntity
+import com.zegrt.rupee.data.local.entity.CreditCardEntity
+import com.zegrt.rupee.data.local.entity.EmiPlanEntity
 import com.zegrt.rupee.data.local.entity.InboxItemEntity
 import com.zegrt.rupee.data.local.entity.Mode
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
@@ -109,7 +111,20 @@ data class HomeDashboard(
     val pendingReviewCount: Int = 0,
     val recentTransactions: List<HomeRecentRow> = emptyList(),
     val hasAnyTransactions: Boolean = false,
+    val upcomingDues: List<HomeDueRow> = emptyList(),
 )
+
+data class HomeDueRow(
+    val id: String,
+    val title: String,
+    val amountLabel: String,
+    val dueLabel: String,
+    val daysAway: Int,
+    val isOverdue: Boolean,
+    val kind: HomeDueKind,
+)
+
+enum class HomeDueKind { CARD, EMI }
 
 data class HomeUiState(
     val userName: String = "Rupee",
@@ -135,6 +150,8 @@ private data class DashboardData(
     val budget: BudgetEntity?,
     val monthlySpent: Long,
     val weeklySpent: Long,
+    val cards: List<CreditCardEntity>,
+    val emis: List<EmiPlanEntity>,
 )
 
 private data class ReviewDraftBundle(
@@ -199,6 +216,11 @@ class HomeViewModel(
         )
     }
 
+    private val cardsAndEmis: Flow<Pair<List<CreditCardEntity>, List<EmiPlanEntity>>> = combine(
+        repository.observeCards(),
+        repository.observeEmiPlans(),
+    ) { cards, emis -> cards to emis }
+
     private val dashboardData: Flow<DashboardData> = combine(
         combine(
             repository.observeUser(),
@@ -217,7 +239,8 @@ class HomeViewModel(
         ) { suggested, b, m, w ->
             arrayOf<Any?>(suggested, b, m, w)
         },
-    ) { entities, periods ->
+        cardsAndEmis,
+    ) { entities, periods, dues ->
         @Suppress("UNCHECKED_CAST")
         DashboardData(
             user = entities[0] as UserEntity?,
@@ -229,6 +252,8 @@ class HomeViewModel(
             budget = periods[1] as BudgetEntity?,
             monthlySpent = periods[2] as Long,
             weeklySpent = periods[3] as Long,
+            cards = dues.first,
+            emis = dues.second,
         )
     }
 
@@ -598,7 +623,56 @@ class HomeViewModel(
             pendingReviewCount = pendingReviewCount,
             recentTransactions = recents,
             hasAnyTransactions = data.transactions.any { it.status != CanonicalTransactionStatus.IGNORED },
+            upcomingDues = buildUpcomingDues(data, date),
         )
+    }
+
+    private fun buildUpcomingDues(data: DashboardData, today: LocalDate): List<HomeDueRow> {
+        val horizon = today.plusDays(14)
+        val cardDues = data.cards.mapNotNull { card ->
+            val dueDate = parseDueDate(card.statementDueDate) ?: return@mapNotNull null
+            val amount = card.statementDueAmountMinor ?: return@mapNotNull null
+            if (dueDate.isAfter(horizon)) return@mapNotNull null
+            HomeDueRow(
+                id = "card-${card.id}",
+                title = card.displayName,
+                amountLabel = formatRowAmount(amount),
+                dueLabel = dueLabelFor(today, dueDate),
+                daysAway = (dueDate.toEpochDay() - today.toEpochDay()).toInt(),
+                isOverdue = dueDate.isBefore(today),
+                kind = HomeDueKind.CARD,
+            )
+        }
+        val emiDues = data.emis.mapNotNull { plan ->
+            val dueDate = parseDueDate(plan.nextDueAt) ?: return@mapNotNull null
+            if (dueDate.isAfter(horizon)) return@mapNotNull null
+            HomeDueRow(
+                id = "emi-${plan.id}",
+                title = plan.name,
+                amountLabel = formatRowAmount(plan.monthlyAmountMinor),
+                dueLabel = dueLabelFor(today, dueDate),
+                daysAway = (dueDate.toEpochDay() - today.toEpochDay()).toInt(),
+                isOverdue = dueDate.isBefore(today),
+                kind = HomeDueKind.EMI,
+            )
+        }
+        return (cardDues + emiDues).sortedBy { it.daysAway }
+    }
+
+    private fun parseDueDate(iso: String?): LocalDate? {
+        if (iso.isNullOrBlank()) return null
+        return runCatching { LocalDate.parse(iso.take(10)) }.getOrNull()
+    }
+
+    private fun dueLabelFor(today: LocalDate, due: LocalDate): String {
+        val days = (due.toEpochDay() - today.toEpochDay()).toInt()
+        return when {
+            days < 0 -> "Overdue ${-days}d"
+            days == 0 -> "Due today"
+            days == 1 -> "Due tomorrow"
+            days <= 7 -> "Due in $days days"
+            else -> "Due ${due.format(DateTimeFormatter.ofPattern("d MMM"))}"
+        }
     }
 
     private fun greetingFor(name: String?): String {
