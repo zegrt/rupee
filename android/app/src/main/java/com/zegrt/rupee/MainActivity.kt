@@ -111,6 +111,9 @@ class MainActivity : ComponentActivity() {
                         calendarViewModelFactory = com.zegrt.rupee.calendar.CalendarViewModelFactory(
                             app.localFinanceRepository,
                         ),
+                        categoryBudgetsViewModelFactory = com.zegrt.rupee.budgets.CategoryBudgetsViewModelFactory(
+                            app.localFinanceRepository,
+                        ),
                         debugViewModelFactory = DebugViewModelFactory(app.localFinanceRepository),
                         versionLabel = versionLabel,
                     )
@@ -127,6 +130,7 @@ private fun RupeeApp(
     settingsViewModelFactory: SettingsViewModelFactory,
     cardsEmisViewModelFactory: com.zegrt.rupee.cards.CardsEmisViewModelFactory,
     calendarViewModelFactory: com.zegrt.rupee.calendar.CalendarViewModelFactory,
+    categoryBudgetsViewModelFactory: com.zegrt.rupee.budgets.CategoryBudgetsViewModelFactory,
     debugViewModelFactory: DebugViewModelFactory,
     versionLabel: String,
 ) {
@@ -135,12 +139,14 @@ private fun RupeeApp(
     val settingsViewModel: SettingsViewModel = viewModel(factory = settingsViewModelFactory)
     val cardsEmisViewModel: com.zegrt.rupee.cards.CardsEmisViewModel = viewModel(factory = cardsEmisViewModelFactory)
     val calendarViewModel: com.zegrt.rupee.calendar.CalendarViewModel = viewModel(factory = calendarViewModelFactory)
+    val categoryBudgetsViewModel: com.zegrt.rupee.budgets.CategoryBudgetsViewModel = viewModel(factory = categoryBudgetsViewModelFactory)
     val debugViewModel: DebugViewModel = viewModel(factory = debugViewModelFactory)
     val homeUiState by homeViewModel.uiState.collectAsState()
     val onboardingUiState by onboardingViewModel.uiState.collectAsState()
     val settingsUiState by settingsViewModel.uiState.collectAsState()
     val cardsEmisUiState by cardsEmisViewModel.uiState.collectAsState()
     val calendarUiState by calendarViewModel.uiState.collectAsState()
+    val categoryBudgetsUiState by categoryBudgetsViewModel.uiState.collectAsState()
     val debugUiState by debugViewModel.uiState.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -200,6 +206,7 @@ private fun RupeeApp(
             settingsState = settingsUiState,
             cardsEmisState = cardsEmisUiState,
             calendarState = calendarUiState,
+            categoryBudgetsState = categoryBudgetsUiState,
             debugState = debugUiState,
             versionLabel = versionLabel,
             onSelectTab = homeViewModel::selectTab,
@@ -233,6 +240,8 @@ private fun RupeeApp(
             onCalendarNext = calendarViewModel::goToNextMonth,
             onCalendarSelectDate = calendarViewModel::selectDate,
             onCalendarCloseDay = calendarViewModel::closeDayDetail,
+            onCategoryBudgetDraftChange = categoryBudgetsViewModel::updateDraft,
+            onCategoryBudgetSave = categoryBudgetsViewModel::saveLimit,
             onOpenNotificationSettings = openNotificationSettings,
             onDebugReset = debugViewModel::resetAllData,
             onDebugSendSample = debugViewModel::sendSample,
@@ -524,6 +533,7 @@ private fun RupeeHome(
     settingsState: com.zegrt.rupee.settings.SettingsUiState,
     cardsEmisState: com.zegrt.rupee.cards.CardsEmisUiState,
     calendarState: com.zegrt.rupee.calendar.CalendarUiState,
+    categoryBudgetsState: com.zegrt.rupee.budgets.CategoryBudgetsUiState,
     debugState: com.zegrt.rupee.debug.DebugUiState,
     versionLabel: String,
     onSelectTab: (HomeTab) -> Unit,
@@ -557,6 +567,8 @@ private fun RupeeHome(
     onCalendarNext: () -> Unit,
     onCalendarSelectDate: (java.time.LocalDate) -> Unit,
     onCalendarCloseDay: () -> Unit,
+    onCategoryBudgetDraftChange: (String, String) -> Unit,
+    onCategoryBudgetSave: (String) -> Unit,
     onOpenNotificationSettings: () -> Unit,
     onDebugReset: () -> Unit,
     onDebugSendSample: (com.zegrt.rupee.debug.SampleNotification) -> Unit,
@@ -573,6 +585,7 @@ private fun RupeeHome(
     var showDebug by remember { mutableStateOf(false) }
     var showTrustRules by remember { mutableStateOf(false) }
     var showCardsEmis by remember { mutableStateOf(false) }
+    var showCategoryBudgets by remember { mutableStateOf(false) }
     androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -628,6 +641,7 @@ private fun RupeeHome(
                     onOpenNotificationSettings = onOpenNotificationSettings,
                     onOpenTrustRules = { showTrustRules = true },
                     onOpenCardsEmis = { showCardsEmis = true },
+                    onOpenCategoryBudgets = { showCategoryBudgets = true },
                     onOpenDebug = { showDebug = true },
                 )
             }
@@ -749,6 +763,40 @@ private fun RupeeHome(
                 onUpdate = onUpdateEmiDraft,
                 onSubmit = onSubmitEmiDraft,
             )
+        }
+    }
+
+    if (showCategoryBudgets) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showCategoryBudgets = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp, vertical = 24.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Category budgets", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                        androidx.compose.material3.TextButton(onClick = { showCategoryBudgets = false }) { Text("Close") }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    com.zegrt.rupee.budgets.CategoryBudgetsScreen(
+                        state = categoryBudgetsState,
+                        onDraftChange = onCategoryBudgetDraftChange,
+                        onSave = onCategoryBudgetSave,
+                    )
+                }
+            }
         }
     }
 

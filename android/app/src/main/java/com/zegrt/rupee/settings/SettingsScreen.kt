@@ -35,6 +35,7 @@ fun SettingsScreen(
     onOpenNotificationSettings: () -> Unit,
     onOpenTrustRules: () -> Unit,
     onOpenCardsEmis: () -> Unit,
+    onOpenCategoryBudgets: () -> Unit,
     onOpenDebug: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -85,6 +86,28 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedButton(onClick = onOpenNotificationSettings) {
                 Text(if (state.notificationGranted) "Manage permission" else "Grant access")
+            }
+        }
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onOpenCategoryBudgets),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Category budgets", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text("Set monthly limits per category.", style = MaterialTheme.typography.bodyMedium)
+                }
+                Text("›", style = MaterialTheme.typography.headlineSmall)
             }
         }
         Card(

@@ -545,6 +545,56 @@ class LocalFinanceRepository(
         )
     }
 
+    fun observeCategoryBudgets(today: LocalDate = LocalDate.now()): Flow<List<BudgetEntity>> =
+        database.budgetDao().observeCategoryBudgetsForDate(USER_ID, today.toString())
+
+    fun observeSpentByCategory(fromIso: String, untilIso: String): Flow<List<com.zegrt.rupee.data.local.dao.CategorySpend>> =
+        database.canonicalTransactionDao().observeSpentByCategoryInPeriod(
+            userId = USER_ID,
+            fromIso = fromIso,
+            untilIso = untilIso,
+        )
+
+    suspend fun setCategoryBudgetLimit(
+        categoryId: String,
+        limitMinor: Long,
+        today: LocalDate = LocalDate.now(),
+    ) {
+        if (categoryId.isBlank()) return
+        val month = YearMonth.from(today)
+        val isoDate = today.toString()
+        val existing = database.budgetDao().getCategoryBudgetForDate(USER_ID, categoryId, isoDate)
+        val now = Instant.now().toString()
+        if (limitMinor <= 0L) {
+            // Clear by deactivating any existing active row.
+            if (existing != null) {
+                database.budgetDao().upsertBudgets(
+                    listOf(existing.copy(isActive = false, updatedAt = now)),
+                )
+            }
+            return
+        }
+        val budget = existing?.copy(
+            limitMinor = limitMinor,
+            isActive = true,
+            updatedAt = now,
+        ) ?: BudgetEntity(
+            id = "budget-cat-$categoryId-$month",
+            userId = USER_ID,
+            budgetType = BudgetType.CATEGORY,
+            targetRefId = categoryId,
+            limitMinor = limitMinor,
+            currencyCode = "INR",
+            periodStart = month.atDay(1).toString(),
+            periodEnd = month.atEndOfMonth().toString(),
+            alertThresholdPercent = 0.8,
+            createdAt = now,
+            updatedAt = now,
+            syncStatus = SyncStatus.LOCAL_ONLY,
+        )
+        database.budgetDao().upsertBudgets(listOf(budget))
+    }
+
     suspend fun resetAllData() {
         withContext(Dispatchers.IO) { database.clearAllTables() }
         ensureBaseData()
