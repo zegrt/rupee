@@ -34,6 +34,7 @@ fun SettingsScreen(
     onSaveBudget: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
     onOpenTrustRules: () -> Unit,
+    onOpenCardsEmis: () -> Unit,
     onOpenDebug: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -84,6 +85,28 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedButton(onClick = onOpenNotificationSettings) {
                 Text(if (state.notificationGranted) "Manage permission" else "Grant access")
+            }
+        }
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onOpenCardsEmis),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Cards & EMIs", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text("Track credit cards, dues, and EMI plans.", style = MaterialTheme.typography.bodyMedium)
+                }
+                Text("›", style = MaterialTheme.typography.headlineSmall)
             }
         }
         Card(

@@ -13,6 +13,7 @@ import com.zegrt.rupee.data.local.entity.CanonicalTransactionType
 import com.zegrt.rupee.data.local.entity.CategoryEntity
 import com.zegrt.rupee.data.local.entity.ConfidenceTier
 import com.zegrt.rupee.data.local.entity.CreditCardEntity
+import com.zegrt.rupee.data.local.entity.EmiPlanEntity
 import com.zegrt.rupee.data.local.entity.InboxDecisionState
 import com.zegrt.rupee.data.local.entity.InboxItemEntity
 import com.zegrt.rupee.data.local.entity.MerchantTrustRuleEntity
@@ -53,6 +54,43 @@ class LocalFinanceRepository(
     fun observeAccounts(): Flow<List<AccountEntity>> = database.accountDao().observeActiveAccounts()
 
     fun observeCards(): Flow<List<CreditCardEntity>> = database.creditCardDao().observeActiveCards()
+
+    fun observeEmiPlans(): Flow<List<EmiPlanEntity>> = database.emiPlanDao().observePlans(USER_ID)
+
+    suspend fun addEmiPlan(
+        name: String,
+        monthlyAmountMinor: Long,
+        remainingTenureMonths: Int? = null,
+        nextDueAt: String? = null,
+        linkedCreditCardId: String? = null,
+        notes: String? = null,
+    ) {
+        val cleanName = name.trim()
+        if (cleanName.isBlank() || monthlyAmountMinor <= 0L) return
+        val now = Instant.now().toString()
+        database.emiPlanDao().upsertPlan(
+            EmiPlanEntity(
+                id = "emi-${UUID.randomUUID()}",
+                userId = USER_ID,
+                name = cleanName,
+                linkedCreditCardId = linkedCreditCardId,
+                monthlyAmountMinor = monthlyAmountMinor,
+                remainingTenureMonths = remainingTenureMonths,
+                nextDueAt = nextDueAt,
+                totalOutstandingMinor = remainingTenureMonths?.let { it.toLong() * monthlyAmountMinor },
+                sourceType = "manual",
+                isConfirmed = true,
+                notes = notes?.trim()?.ifBlank { null },
+                createdAt = now,
+                updatedAt = now,
+                syncStatus = SyncStatus.LOCAL_ONLY,
+            ),
+        )
+    }
+
+    suspend fun removeEmiPlan(id: String) {
+        database.emiPlanDao().deletePlan(id)
+    }
 
     fun observeCategories(): Flow<List<CategoryEntity>> = database.categoryDao().observeActiveCategories()
 
