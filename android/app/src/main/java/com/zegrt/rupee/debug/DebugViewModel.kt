@@ -45,8 +45,20 @@ object DebugSamples {
         title = "Transaction alert",
         body = "Rs.3800.00 has been spent at BIGBASKET on ICICI Credit Card xx5678 on 07-MAY-26",
     )
+    val phonepe = SampleNotification(
+        label = "PhonePe ₹500 Swiggy",
+        packageName = "com.phonepe.app",
+        title = "Payment Successful",
+        body = "₹500.00 sent to Swiggy via PhonePe",
+    )
+    val paytm = SampleNotification(
+        label = "Paytm ₹1,499 Zomato",
+        packageName = "net.one97.paytm",
+        title = "Payment Successful",
+        body = "₹1,499 paid to Zomato via Paytm UPI. UPI Ref: 412356789012",
+    )
 
-    val all: List<SampleNotification> = listOf(gpay, cred, icici)
+    val all: List<SampleNotification> = listOf(gpay, cred, icici, phonepe, paytm)
 }
 
 data class DebugUiState(

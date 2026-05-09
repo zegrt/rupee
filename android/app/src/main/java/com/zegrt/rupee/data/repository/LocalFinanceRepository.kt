@@ -26,13 +26,14 @@ import com.zegrt.rupee.ingestion.MerchantNameUtils
 import com.zegrt.rupee.ingestion.NotificationSignalNormalizer
 import com.zegrt.rupee.ingestion.RawCaptureWriter
 import com.zegrt.rupee.recurring.RecurringDetectionEngine
+import androidx.room.withTransaction
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 data class OnboardingSetupInput(
@@ -48,9 +49,12 @@ class LocalFinanceRepository(
     private val database: RupeeDatabase,
     private val recurringDetector: RecurringDetectionEngine = RecurringDetectionEngine(),
 ) {
+    private val lastRecurringRefreshMs = AtomicLong(0L)
+
     companion object {
         private const val USER_ID = "local-user"
         private const val DEFAULT_MONTHLY_BUDGET_MINOR = 4_000_000L
+        private const val RECURRING_REFRESH_DEBOUNCE_MS = 30 * 60 * 1000L
     }
 
     fun observeUser(): Flow<UserEntity?> = database.userDao().observeUser()
@@ -66,7 +70,7 @@ class LocalFinanceRepository(
 
     suspend fun confirmRecurringPattern(id: String) {
         val now = Instant.now().toString()
-        val pattern = database.recurringPatternDao().getAllForUser(USER_ID).firstOrNull { it.id == id } ?: return
+        val pattern = database.recurringPatternDao().getById(id) ?: return
         database.recurringPatternDao().upsertPattern(
             pattern.copy(isConfirmed = true, isDismissed = false, updatedAt = now),
         )
@@ -74,7 +78,7 @@ class LocalFinanceRepository(
 
     suspend fun dismissRecurringPattern(id: String) {
         val now = Instant.now().toString()
-        val pattern = database.recurringPatternDao().getAllForUser(USER_ID).firstOrNull { it.id == id } ?: return
+        val pattern = database.recurringPatternDao().getById(id) ?: return
         database.recurringPatternDao().upsertPattern(
             pattern.copy(isDismissed = true, updatedAt = now),
         )
@@ -85,16 +89,19 @@ class LocalFinanceRepository(
     }
 
     /**
-     * Re-run auto-detection over the last 90 days. Wipes prior unconfirmed auto-suggestions
+     * Re-run auto-detection over the last 120 days. Wipes prior unconfirmed auto-suggestions
      * and rewrites them; preserves user-confirmed and user-dismissed rows so the user's
      * decisions stick across runs.
      */
     suspend fun refreshRecurringPatterns(today: java.time.LocalDate = java.time.LocalDate.now()) {
+        val currentMs = System.currentTimeMillis()
+        if (currentMs - lastRecurringRefreshMs.get() < RECURRING_REFRESH_DEBOUNCE_MS) return
+        lastRecurringRefreshMs.set(currentMs)
+
         val lookbackStart = today.minusDays(120).toString()
         val nowIso = today.plusDays(1).toString()
         val txns = database.canonicalTransactionDao()
-            .observeTransactionsInPeriod(USER_ID, lookbackStart, nowIso)
-            .first()
+            .getTransactionsInPeriod(USER_ID, lookbackStart, nowIso)
         val detected = recurringDetector.detect(txns, today)
         val existing = database.recurringPatternDao().getAllForUser(USER_ID)
         val byMerchant = existing.associateBy { it.merchantPattern.lowercase() }
@@ -425,70 +432,79 @@ class LocalFinanceRepository(
         addTrustRule: Boolean = false,
     ) {
         val now = Instant.now().toString()
-        val inboxItem = database.inboxItemDao().getInboxItemById(inboxItemId) ?: return
-        val candidate = database.transactionCandidateDao()
-            .getTransactionCandidateById(inboxItem.transactionCandidateId) ?: return
+        var resolvedMerchantForTrust: String? = null
+        var resolvedCategoryForTrust: String? = null
 
-        val existingCanonical = candidate.linkedCanonicalTransactionId?.let { linkedCanonicalId ->
-            database.canonicalTransactionDao().getTransactionById(linkedCanonicalId)
+        database.withTransaction {
+            val inboxItem = database.inboxItemDao().getInboxItemById(inboxItemId) ?: return@withTransaction
+            val candidate = database.transactionCandidateDao()
+                .getTransactionCandidateById(inboxItem.transactionCandidateId) ?: return@withTransaction
+
+            val existingCanonical = candidate.linkedCanonicalTransactionId?.let { linkedCanonicalId ->
+                database.canonicalTransactionDao().getTransactionById(linkedCanonicalId)
+            }
+
+            val canonicalId = existingCanonical?.id ?: "txn-${candidate.id}"
+            val resolvedMerchant = merchantNameOverride?.trim()?.ifBlank { null }
+                ?: existingCanonical?.merchantName ?: candidate.toEntityName
+            val resolvedAmount = amountMinorOverride
+                ?: candidate.amountMinor
+                ?: existingCanonical?.amountMinor
+                ?: 0L
+            val resolvedCategory = categoryIdOverride ?: existingCanonical?.categoryId
+
+            val canonical = (existingCanonical ?: CanonicalTransactionEntity(
+                id = canonicalId,
+                userId = USER_ID,
+                type = candidate.toCanonicalType(),
+                status = CanonicalTransactionStatus.CONFIRMED,
+                amountMinor = resolvedAmount,
+                currencyCode = candidate.currencyCode ?: "INR",
+                merchantName = resolvedMerchant,
+                categoryId = resolvedCategory,
+                mode = candidate.mode ?: Mode.OTHER,
+                occurredAt = candidate.occurredAt ?: inboxItem.createdAt,
+                sourceSummary = "Confirmed from Inbox review",
+                createdBy = "user_review",
+                confidenceTier = candidate.confidenceTier ?: ConfidenceTier.MEDIUM,
+                dedupeFingerprint = candidate.candidateFingerprint,
+                createdAt = now,
+                updatedAt = now,
+                syncStatus = SyncStatus.LOCAL_ONLY,
+            )).copy(
+                merchantName = resolvedMerchant,
+                amountMinor = resolvedAmount,
+                categoryId = resolvedCategory,
+                currencyCode = candidate.currencyCode ?: existingCanonical?.currencyCode ?: "INR",
+                mode = candidate.mode ?: existingCanonical?.mode ?: Mode.OTHER,
+                occurredAt = candidate.occurredAt ?: existingCanonical?.occurredAt ?: inboxItem.createdAt,
+                status = CanonicalTransactionStatus.CONFIRMED,
+                updatedAt = now,
+            )
+
+            database.canonicalTransactionDao().upsertTransactions(listOf(canonical))
+            database.transactionCandidateDao().upsertTransactionCandidate(
+                candidate.copy(
+                    decisionState = CandidateDecisionState.USER_CONFIRMED,
+                    linkedCanonicalTransactionId = canonical.id,
+                    updatedAt = now,
+                ),
+            )
+            database.inboxItemDao().upsertInboxItem(
+                inboxItem.copy(
+                    decisionState = InboxDecisionState.CONFIRMED,
+                    linkedCanonicalTransactionId = canonical.id,
+                    resolvedAt = now,
+                    updatedAt = now,
+                ),
+            )
+
+            resolvedMerchantForTrust = resolvedMerchant
+            resolvedCategoryForTrust = resolvedCategory
         }
 
-        val canonicalId = existingCanonical?.id ?: "txn-${candidate.id}"
-        val resolvedMerchant = merchantNameOverride?.trim()?.ifBlank { null }
-            ?: existingCanonical?.merchantName ?: candidate.toEntityName
-        val resolvedAmount = amountMinorOverride
-            ?: candidate.amountMinor
-            ?: existingCanonical?.amountMinor
-            ?: 0L
-        val resolvedCategory = categoryIdOverride ?: existingCanonical?.categoryId
-
-        val canonical = (existingCanonical ?: CanonicalTransactionEntity(
-            id = canonicalId,
-            userId = USER_ID,
-            type = candidate.toCanonicalType(),
-            status = CanonicalTransactionStatus.CONFIRMED,
-            amountMinor = resolvedAmount,
-            currencyCode = candidate.currencyCode ?: "INR",
-            merchantName = resolvedMerchant,
-            categoryId = resolvedCategory,
-            mode = candidate.mode ?: Mode.OTHER,
-            occurredAt = candidate.occurredAt ?: inboxItem.createdAt,
-            sourceSummary = "Confirmed from Inbox review",
-            createdBy = "user_review",
-            confidenceTier = candidate.confidenceTier ?: ConfidenceTier.MEDIUM,
-            dedupeFingerprint = candidate.candidateFingerprint,
-            createdAt = now,
-            updatedAt = now,
-            syncStatus = SyncStatus.LOCAL_ONLY,
-        )).copy(
-            merchantName = resolvedMerchant,
-            amountMinor = resolvedAmount,
-            categoryId = resolvedCategory,
-            currencyCode = candidate.currencyCode ?: existingCanonical?.currencyCode ?: "INR",
-            mode = candidate.mode ?: existingCanonical?.mode ?: Mode.OTHER,
-            occurredAt = candidate.occurredAt ?: existingCanonical?.occurredAt ?: inboxItem.createdAt,
-            status = CanonicalTransactionStatus.CONFIRMED,
-            updatedAt = now,
-        )
-
-        database.canonicalTransactionDao().upsertTransactions(listOf(canonical))
-        database.transactionCandidateDao().upsertTransactionCandidate(
-            candidate.copy(
-                decisionState = CandidateDecisionState.USER_CONFIRMED,
-                linkedCanonicalTransactionId = canonical.id,
-                updatedAt = now,
-            ),
-        )
-        database.inboxItemDao().upsertInboxItem(
-            inboxItem.copy(
-                decisionState = InboxDecisionState.CONFIRMED,
-                linkedCanonicalTransactionId = canonical.id,
-                resolvedAt = now,
-                updatedAt = now,
-            ),
-        )
-        if (addTrustRule && resolvedMerchant != null) {
-            addMerchantTrustRule(resolvedMerchant, resolvedCategory)
+        if (addTrustRule) {
+            resolvedMerchantForTrust?.let { addMerchantTrustRule(it, resolvedCategoryForTrust) }
         }
     }
 
@@ -676,6 +692,18 @@ class LocalFinanceRepository(
             syncStatus = SyncStatus.LOCAL_ONLY,
         )
         database.budgetDao().upsertBudgets(listOf(budget))
+    }
+
+    suspend fun getBudgetSnapshot(today: LocalDate = LocalDate.now()) =
+        database.budgetDao().getMonthlyTotalBudgetForDate(USER_ID, today.toString())
+
+    suspend fun getSpentSnapshot(today: LocalDate = LocalDate.now()): Long {
+        val month = YearMonth.from(today)
+        return database.canonicalTransactionDao().getSpentInPeriod(
+            userId = USER_ID,
+            fromIso = month.atDay(1).toString(),
+            untilIso = month.plusMonths(1).atDay(1).toString(),
+        )
     }
 
     suspend fun resetAllData() {

@@ -24,7 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AssistChip
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -96,7 +96,10 @@ class MainActivity : ComponentActivity() {
                         if (BuildConfig.DEBUG) append("-debug")
                     }
                     RupeeApp(
-                        homeViewModelFactory = HomeViewModelFactory(app.localFinanceRepository),
+                        homeViewModelFactory = HomeViewModelFactory(
+                            repository = app.localFinanceRepository,
+                            budgetAlertManager = app.budgetAlertManager,
+                        ),
                         onboardingViewModelFactory = OnboardingViewModelFactory(
                             repository = app.localFinanceRepository,
                             preferences = app.onboardingPreferences,
@@ -1415,7 +1418,8 @@ private fun HomeTabChip(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    AssistChip(
+    FilterChip(
+        selected = selected,
         onClick = onClick,
         label = { Text(label) },
     )
@@ -1757,43 +1761,6 @@ private fun InspectionSection(
                 Text(emptyLabel, style = MaterialTheme.typography.bodyMedium)
             }
         }
-    }
-}
-
-@Composable
-private fun InspectionRow(
-    headline: String,
-    subline: String,
-    trailing: String,
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(
-                    text = subline,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-            Text(
-                text = trailing,
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier
-                    .background(
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        shape = RoundedCornerShape(12.dp),
-                    )
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-            )
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        Spacer(modifier = Modifier.height(12.dp))
     }
 }
 

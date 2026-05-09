@@ -45,6 +45,24 @@ interface CanonicalTransactionDao {
 
     @Query(
         """
+        SELECT COALESCE(SUM(amountMinor), 0)
+        FROM canonical_transactions
+        WHERE userId = :userId
+          AND type = 'EXPENSE'
+          AND status != 'IGNORED'
+          AND isHiddenFromBudget = 0
+          AND occurredAt >= :fromIso
+          AND occurredAt < :untilIso
+        """
+    )
+    suspend fun getSpentInPeriod(
+        userId: String,
+        fromIso: String,
+        untilIso: String,
+    ): Long
+
+    @Query(
+        """
         SELECT * FROM canonical_transactions
         WHERE userId = :userId
           AND dedupeFingerprint = :fingerprint
@@ -86,6 +104,22 @@ interface CanonicalTransactionDao {
         fromIso: String,
         untilIso: String,
     ): Flow<List<CanonicalTransactionEntity>>
+
+    @Query(
+        """
+        SELECT * FROM canonical_transactions
+        WHERE userId = :userId
+          AND status != 'IGNORED'
+          AND occurredAt >= :fromIso
+          AND occurredAt < :untilIso
+        ORDER BY occurredAt DESC
+        """
+    )
+    suspend fun getTransactionsInPeriod(
+        userId: String,
+        fromIso: String,
+        untilIso: String,
+    ): List<CanonicalTransactionEntity>
 
     @Query(
         """

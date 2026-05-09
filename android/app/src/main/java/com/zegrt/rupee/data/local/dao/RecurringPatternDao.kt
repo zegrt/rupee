@@ -19,6 +19,9 @@ interface RecurringPatternDao {
     )
     fun observePatterns(userId: String): Flow<List<RecurringPatternEntity>>
 
+    @Query("SELECT * FROM recurring_patterns WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): RecurringPatternEntity?
+
     @Query("SELECT * FROM recurring_patterns WHERE userId = :userId")
     suspend fun getAllForUser(userId: String): List<RecurringPatternEntity>
 

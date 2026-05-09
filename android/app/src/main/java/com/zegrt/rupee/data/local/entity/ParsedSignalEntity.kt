@@ -6,6 +6,7 @@ import androidx.room.PrimaryKey
 
 enum class ParsedTransactionKind {
     SPEND,
+    REFUND,
     BILL_DUE,
     STATEMENT,
     PAYMENT,

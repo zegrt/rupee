@@ -40,7 +40,9 @@ class RupeeNotificationListenerService : NotificationListenerService() {
         val body = extras?.getCharSequence(NotificationCompat.EXTRA_TEXT)?.toString()?.trim().orEmpty()
         val isDebugMock = extras?.getBoolean(RupeeApplication.DEBUG_MOCK_EXTRA, false) == true
 
-        Log.d(TAG, "onPosted pkg=${sbn.packageName} mock=$isDebugMock body=${body.take(60)}")
+        if (com.zegrt.rupee.BuildConfig.DEBUG) {
+            Log.d(TAG, "onPosted pkg=${sbn.packageName} mock=$isDebugMock body_len=${body.length}")
+        }
 
         if (body.isBlank()) {
             Log.d(TAG, "Skipped: empty body")

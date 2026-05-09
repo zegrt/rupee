@@ -64,4 +64,56 @@ class MerchantNameUtilsTest {
         assertEquals(true, MerchantNameUtils.matchesPattern(raw, storedPattern))
         assertEquals(true, MerchantNameUtils.matchesPattern("SWIGGY using UPI", storedPattern))
     }
+
+    // ── Edge cases ────────────────────────────────────────────────────────────
+
+    @Test
+    fun `clean handles degenerate ' at ' with nothing after it`() {
+        // " at " at end → segment after is empty → falls back to Unnamed
+        assertEquals("Unnamed", MerchantNameUtils.clean("HDFC Credit Card xx1234 at "))
+    }
+
+    @Test
+    fun `clean handles bare ' at ' string`() {
+        assertEquals("Unnamed", MerchantNameUtils.clean(" at "))
+    }
+
+    @Test
+    fun `clean handles merchant that is only whitespace after tail strip`() {
+        assertEquals("Unnamed", MerchantNameUtils.clean("  using UPI  "))
+    }
+
+    @Test
+    fun `clean does not strip when ' at ' appears inside merchant name`() {
+        // "Pay at Café" — the merchant IS "Café", segment after " at " is correct
+        assertEquals("Café", MerchantNameUtils.clean("Pay at Café"))
+    }
+
+    @Test
+    fun `clean strips all recognised tail variants`() {
+        assertEquals("Netflix", MerchantNameUtils.clean("Netflix via HDFC"))
+        assertEquals("Netflix", MerchantNameUtils.clean("Netflix through Axis"))
+        assertEquals("Netflix", MerchantNameUtils.clean("Netflix on ICICI Credit Card xx1234"))
+    }
+
+    @Test
+    fun `clean picks the earliest tail when multiple are present`() {
+        // "Swiggy using UPI on 09-May" — " using " comes first at index 6
+        assertEquals("Swiggy", MerchantNameUtils.clean("Swiggy using UPI on 09-May"))
+    }
+
+    @Test
+    fun `clean full ICICI HDFC-style body via CRED`() {
+        assertEquals(
+            "Zomato",
+            MerchantNameUtils.clean("HDFC Credit Card xx1234 at Zomato on 06 May"),
+        )
+    }
+
+    @Test
+    fun `matchesPattern handles both inputs null or blank`() {
+        assertEquals(false, MerchantNameUtils.matchesPattern(null, "Swiggy"))
+        assertEquals(false, MerchantNameUtils.matchesPattern("Swiggy", ""))
+        assertEquals(false, MerchantNameUtils.matchesPattern("   ", "Swiggy"))
+    }
 }

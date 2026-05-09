@@ -9,8 +9,8 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface BudgetDao {
-    @Query("SELECT * FROM budgets WHERE isActive = 1 ORDER BY periodStart DESC")
-    fun observeActiveBudgets(): Flow<List<BudgetEntity>>
+    @Query("SELECT * FROM budgets WHERE userId = :userId AND isActive = 1 ORDER BY periodStart DESC")
+    fun observeActiveBudgets(userId: String): Flow<List<BudgetEntity>>
 
     @Query(
         """
@@ -50,6 +50,7 @@ interface BudgetDao {
         """
         SELECT * FROM budgets
         WHERE userId = :userId
+          AND isActive = 1
           AND budgetType = 'MONTHLY_TOTAL'
         ORDER BY periodStart DESC
         LIMIT 1

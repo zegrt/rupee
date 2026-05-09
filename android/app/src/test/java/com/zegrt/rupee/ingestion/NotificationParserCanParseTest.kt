@@ -11,6 +11,8 @@ class NotificationParserCanParseTest {
     private val cred = CredNotificationParser()
     private val icici = IciciNotificationParser()
     private val gpay = GPayNotificationParser()
+    private val phonepe = PhonePeNotificationParser()
+    private val paytm = PaytmNotificationParser()
     private val genericUpi = GenericUpiNotificationParser()
     private val registry = NotificationParserRegistry.default()
 
@@ -107,6 +109,76 @@ class NotificationParserCanParseTest {
         val event = event(body = "Rs.3800.00 has been spent at MERCHANT on ICICI Credit Card xx5678 (UPI)")
         val result = registry.parse(event)
         assertEquals("notification_icici", result.parserKey)
+    }
+
+    // ── PhonePe ───────────────────────────────────────────────────────────────
+
+    @Test
+    fun `phonepe parser matches its own package`() {
+        val event = event(pkg = "com.phonepe.app", body = "anything")
+        assertEquals(true, phonepe.canParse(event))
+    }
+
+    @Test
+    fun `phonepe parser matches body containing PhonePe brand`() {
+        val event = event(body = "₹500.00 sent to Swiggy via PhonePe")
+        assertEquals(true, phonepe.canParse(event))
+    }
+
+    @Test
+    fun `phonepe parser does NOT match a plain UPI body without PhonePe mention`() {
+        val event = event(body = "You paid ₹245.00 to Swiggy using UPI")
+        assertEquals(false, phonepe.canParse(event))
+    }
+
+    @Test
+    fun `registry routes PhonePe body to phonepe parser`() {
+        val event = event(pkg = "com.phonepe.app", body = "₹500 sent to Zomato via PhonePe")
+        val result = registry.parse(event)
+        assertEquals("notification_phonepe", result.parserKey)
+        assertEquals("phonepe", result.providerHint)
+    }
+
+    @Test
+    fun `registry routes PhonePe body-only (no package) to phonepe parser`() {
+        val event = event(body = "₹500 sent to Zomato via PhonePe")
+        val result = registry.parse(event)
+        assertEquals("notification_phonepe", result.parserKey)
+    }
+
+    // ── Paytm ─────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `paytm parser matches its own package`() {
+        val event = event(pkg = "net.one97.paytm", body = "anything")
+        assertEquals(true, paytm.canParse(event))
+    }
+
+    @Test
+    fun `paytm parser matches body containing Paytm brand`() {
+        val event = event(body = "₹500 paid to Swiggy via Paytm UPI")
+        assertEquals(true, paytm.canParse(event))
+    }
+
+    @Test
+    fun `paytm parser does NOT match a plain UPI body without Paytm mention`() {
+        val event = event(body = "You paid ₹245.00 to Swiggy using UPI")
+        assertEquals(false, paytm.canParse(event))
+    }
+
+    @Test
+    fun `registry routes Paytm body to paytm parser`() {
+        val event = event(pkg = "net.one97.paytm", body = "₹500 paid to Zomato via Paytm")
+        val result = registry.parse(event)
+        assertEquals("notification_paytm", result.parserKey)
+        assertEquals("paytm", result.providerHint)
+    }
+
+    @Test
+    fun `registry does not send Paytm body to GenericUpi`() {
+        val event = event(body = "₹500 paid to Swiggy via Paytm UPI. UPI Ref: 123456")
+        val result = registry.parse(event)
+        assertEquals("notification_paytm", result.parserKey)
     }
 
     private fun event(

@@ -14,6 +14,7 @@ import com.zegrt.rupee.data.local.entity.InboxItemEntity
 import com.zegrt.rupee.data.local.entity.Mode
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
 import com.zegrt.rupee.data.local.entity.UserEntity
+import com.zegrt.rupee.budget.BudgetAlertManager
 import com.zegrt.rupee.data.repository.LocalFinanceRepository
 import com.zegrt.rupee.ingestion.MerchantNameUtils
 import java.text.NumberFormat
@@ -183,6 +184,8 @@ private data class ViewSelection(
 class HomeViewModel(
     private val repository: LocalFinanceRepository,
     private val clock: () -> LocalDate = { LocalDate.now() },
+    private val timeClock: () -> LocalTime = { LocalTime.now() },
+    private val budgetAlertManager: BudgetAlertManager? = null,
 ) : ViewModel() {
     private val headlineCurrencyFormatter = currencyFormatter(decimals = 0)
     private val rowCurrencyFormatter = currencyFormatter(decimals = 2)
@@ -381,6 +384,7 @@ class HomeViewModel(
                 )
             }
             clearReviewDrafts(id)
+            checkBudgetAlert()
         }
     }
 
@@ -469,7 +473,12 @@ class HomeViewModel(
                 notes = draft.notes.ifBlank { null },
             )
             manualEntry.value = ManualEntryDraft()
+            checkBudgetAlert()
         }
+    }
+
+    private suspend fun checkBudgetAlert() {
+        budgetAlertManager?.checkAndNotify(repository, clock())
     }
 
     private fun clearReviewDrafts(id: String) {
@@ -698,7 +707,7 @@ class HomeViewModel(
     }
 
     private fun greetingFor(name: String?): String {
-        val timeOfDay = when (LocalTime.now().hour) {
+        val timeOfDay = when (timeClock().hour) {
             in 0..11 -> "Good morning"
             in 12..16 -> "Good afternoon"
             else -> "Good evening"
@@ -752,12 +761,13 @@ class HomeViewModel(
 class HomeViewModelFactory(
     private val repository: LocalFinanceRepository,
     private val clock: () -> LocalDate = { LocalDate.now() },
+    private val budgetAlertManager: BudgetAlertManager? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         require(modelClass.isAssignableFrom(HomeViewModel::class.java)) {
             "Unknown ViewModel class: ${modelClass.name}"
         }
-        return HomeViewModel(repository, clock) as T
+        return HomeViewModel(repository, clock, budgetAlertManager = budgetAlertManager) as T
     }
 }

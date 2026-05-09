@@ -30,6 +30,7 @@ enum class Mode {
     BANK_TRANSFER,
     CASH,
     ATM,
+    WALLET,
     OTHER,
 }
 

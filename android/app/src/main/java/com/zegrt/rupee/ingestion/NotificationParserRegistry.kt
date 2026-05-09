@@ -17,6 +17,8 @@ class NotificationParserRegistry(
                     CredNotificationParser(),
                     IciciNotificationParser(),
                     GPayNotificationParser(),
+                    PhonePeNotificationParser(),
+                    PaytmNotificationParser(),
                     GenericUpiNotificationParser(),
                     GenericNotificationParser(),
                 ),

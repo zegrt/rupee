@@ -4,6 +4,9 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import androidx.room.Room
+import com.zegrt.rupee.budget.BudgetAlertManager
+import com.zegrt.rupee.data.local.MIGRATION_5_6
+import com.zegrt.rupee.data.local.MIGRATION_6_7
 import com.zegrt.rupee.data.local.RupeeDatabase
 import com.zegrt.rupee.data.repository.LocalFinanceRepository
 import com.zegrt.rupee.onboarding.OnboardingPreferences
@@ -15,8 +18,8 @@ class RupeeApplication : Application() {
             RupeeDatabase::class.java,
             "rupee.db",
         )
-            // Pre-release builds can reset local state while the schema is still moving quickly.
-            .fallbackToDestructiveMigration(true)
+            .addMigrations(MIGRATION_5_6, MIGRATION_6_7)
+            .fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4)
             .build()
     }
 
@@ -26,6 +29,10 @@ class RupeeApplication : Application() {
 
     val onboardingPreferences: OnboardingPreferences by lazy {
         OnboardingPreferences(applicationContext)
+    }
+
+    val budgetAlertManager: BudgetAlertManager by lazy {
+        BudgetAlertManager(applicationContext)
     }
 
     override fun onCreate() {
@@ -38,6 +45,7 @@ class RupeeApplication : Application() {
                 NotificationManager.IMPORTANCE_DEFAULT,
             ).apply { description = "Mock notifications used by Rupee's debug tools" },
         )
+        budgetAlertManager.registerChannel()
     }
 
     companion object {

@@ -19,7 +19,7 @@ data class DetectedPattern(
 )
 
 /**
- * Cheap, deterministic recurring-spend detector. Looks at the last 90 days of confirmed
+ * Cheap, deterministic recurring-spend detector. Looks at the last 120 days of confirmed
  * (non-IGNORED, non-SUGGESTED) expenses, groups by cleaned merchant name, and reports
  * groups that look monthly-ish: ≥ 3 occurrences, median spacing in [20, 35] days,
  * amounts within ±20% of the median.
