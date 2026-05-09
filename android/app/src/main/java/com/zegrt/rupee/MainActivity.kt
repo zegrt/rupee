@@ -29,12 +29,23 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.filled.Receipt
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
@@ -79,7 +90,18 @@ import com.zegrt.rupee.onboarding.OnboardingViewModel
 import com.zegrt.rupee.onboarding.OnboardingViewModelFactory
 import com.zegrt.rupee.onboarding.PermissionCardState
 import com.zegrt.rupee.onboarding.PermissionStateChecker
+import com.zegrt.rupee.budgets.BudgetsUiState
+import com.zegrt.rupee.budgets.CategoryBudgetRow
 import com.zegrt.rupee.ui.theme.RupeeTheme
+
+private data class NavTab(val tab: HomeTab, val label: String, val icon: ImageVector)
+private val navTabs = listOf(
+    NavTab(HomeTab.HOME, "Home", Icons.Default.Home),
+    NavTab(HomeTab.INBOX, "Inbox", Icons.Default.Inbox),
+    NavTab(HomeTab.TRANSACTIONS, "Txns", Icons.Default.Receipt),
+    NavTab(HomeTab.CALENDAR, "Calendar", Icons.Default.CalendarMonth),
+    NavTab(HomeTab.SETTINGS, "Settings", Icons.Default.Settings),
+)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -228,6 +250,7 @@ private fun RupeeApp(
             versionLabel = versionLabel,
             onSelectTab = homeViewModel::selectTab,
             onSelectReviewRow = homeViewModel::selectReviewRow,
+            onSelectMergeTarget = homeViewModel::selectMergeTarget,
             onReviewMerchantDraftChange = homeViewModel::updateReviewMerchantDraft,
             onReviewAmountDraftChange = homeViewModel::updateReviewAmountDraft,
             onReviewCategoryDraftChange = homeViewModel::updateReviewCategoryDraft,
@@ -564,6 +587,7 @@ private fun RupeeHome(
     versionLabel: String,
     onSelectTab: (HomeTab) -> Unit,
     onSelectReviewRow: (String) -> Unit,
+    onSelectMergeTarget: (String, String?) -> Unit,
     onReviewMerchantDraftChange: (String, String) -> Unit,
     onReviewAmountDraftChange: (String, String) -> Unit,
     onReviewCategoryDraftChange: (String, String?) -> Unit,
@@ -621,89 +645,94 @@ private fun RupeeHome(
     var showBudgets by remember { mutableStateOf(false) }
     var showRecurring by remember { mutableStateOf(false) }
     var showRecap by remember { mutableStateOf(false) }
-    androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 24.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                navTabs.forEach { item ->
+                    NavigationBarItem(
+                        selected = uiState.selectedTab == item.tab,
+                        onClick = { onSelectTab(item.tab) },
+                        icon = { Icon(item.icon, contentDescription = item.label) },
+                        label = { Text(item.label) },
+                    )
+                }
+            }
+        },
+    ) { paddingValues ->
+        androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 24.dp),
             ) {
-                HomeTabChip("Home", uiState.selectedTab == HomeTab.HOME) { onSelectTab(HomeTab.HOME) }
-                HomeTabChip("Inbox", uiState.selectedTab == HomeTab.INBOX) { onSelectTab(HomeTab.INBOX) }
-                HomeTabChip("Txns", uiState.selectedTab == HomeTab.TRANSACTIONS) { onSelectTab(HomeTab.TRANSACTIONS) }
-                HomeTabChip("Calendar", uiState.selectedTab == HomeTab.CALENDAR) { onSelectTab(HomeTab.CALENDAR) }
-                HomeTabChip("Settings", uiState.selectedTab == HomeTab.SETTINGS) { onSelectTab(HomeTab.SETTINGS) }
+                when (uiState.selectedTab) {
+                    HomeTab.HOME -> HomeSummaryTab(
+                        uiState = uiState,
+                        budgetsState = budgetsState,
+                        versionLabel = versionLabel,
+                        onReviewInbox = { onSelectTab(HomeTab.INBOX) },
+                        onAddTransaction = onOpenManualEntry,
+                    )
+                    HomeTab.INBOX -> ReviewTab(
+                        uiState = uiState,
+                        onSelectReviewRow = onSelectReviewRow,
+                        onMerchantChange = onReviewMerchantDraftChange,
+                        onAmountChange = onReviewAmountDraftChange,
+                        onCategoryChange = onReviewCategoryDraftChange,
+                        onToggleAlwaysTrust = onToggleAlwaysTrust,
+                        onConfirm = onConfirmReviewRow,
+                        onDismiss = onDismissReviewRow,
+                        onSelectMergeTarget = onSelectMergeTarget,
+                    )
+                    HomeTab.TRANSACTIONS -> TransactionsTab(
+                        uiState = uiState,
+                        onSelectTransaction = onSelectTransaction,
+                    )
+                    HomeTab.CALENDAR -> com.zegrt.rupee.calendar.CalendarScreen(
+                        state = calendarState,
+                        onPrev = onCalendarPrev,
+                        onNext = onCalendarNext,
+                        onSelectDate = onCalendarSelectDate,
+                        onCloseDay = onCalendarCloseDay,
+                    )
+                    HomeTab.SETTINGS -> SettingsScreen(
+                        state = settingsState,
+                        onNameDraftChange = onSettingsNameDraftChange,
+                        onSaveName = onSettingsSaveName,
+                        onOpenNotificationSettings = onOpenNotificationSettings,
+                        onOpenTrustRules = { showTrustRules = true },
+                        onOpenCardsEmis = { showCardsEmis = true },
+                        onOpenBudgets = { showBudgets = true },
+                        onOpenRecurring = {
+                            onRecurringRefresh()
+                            showRecurring = true
+                        },
+                        onOpenRecap = {
+                            onRecapResetToCurrent()
+                            showRecap = true
+                        },
+                        onOpenDebug = { showDebug = true },
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
             }
-            Spacer(modifier = Modifier.height(20.dp))
-            when (uiState.selectedTab) {
-                HomeTab.HOME -> HomeSummaryTab(
-                    uiState = uiState,
-                    versionLabel = versionLabel,
-                    onReviewInbox = { onSelectTab(HomeTab.INBOX) },
-                    onAddTransaction = onOpenManualEntry,
-                )
-                HomeTab.INBOX -> ReviewTab(
-                    uiState = uiState,
-                    onSelectReviewRow = onSelectReviewRow,
-                    onMerchantChange = onReviewMerchantDraftChange,
-                    onAmountChange = onReviewAmountDraftChange,
-                    onCategoryChange = onReviewCategoryDraftChange,
-                    onToggleAlwaysTrust = onToggleAlwaysTrust,
-                    onConfirm = onConfirmReviewRow,
-                    onDismiss = onDismissReviewRow,
-                )
-                HomeTab.TRANSACTIONS -> TransactionsTab(
-                    uiState = uiState,
-                    onSelectTransaction = onSelectTransaction,
-                )
-                HomeTab.CALENDAR -> com.zegrt.rupee.calendar.CalendarScreen(
-                    state = calendarState,
-                    onPrev = onCalendarPrev,
-                    onNext = onCalendarNext,
-                    onSelectDate = onCalendarSelectDate,
-                    onCloseDay = onCalendarCloseDay,
-                )
-                HomeTab.SETTINGS -> SettingsScreen(
-                    state = settingsState,
-                    onNameDraftChange = onSettingsNameDraftChange,
-                    onSaveName = onSettingsSaveName,
-                    onOpenNotificationSettings = onOpenNotificationSettings,
-                    onOpenTrustRules = { showTrustRules = true },
-                    onOpenCardsEmis = { showCardsEmis = true },
-                    onOpenBudgets = { showBudgets = true },
-                    onOpenRecurring = {
-                        onRecurringRefresh()
-                        showRecurring = true
-                    },
-                    onOpenRecap = {
-                        onRecapResetToCurrent()
-                        showRecap = true
-                    },
-                    onOpenDebug = { showDebug = true },
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.85f),
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.BottomEnd)
+                    .padding(20.dp)
+                    .clickable { showDebug = true },
+            ) {
+                Text(
+                    "Debug",
+                    color = MaterialTheme.colorScheme.onTertiary,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                 )
             }
-            Spacer(modifier = Modifier.height(80.dp))
-        }
-
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.85f),
-            modifier = Modifier
-                .align(androidx.compose.ui.Alignment.BottomEnd)
-                .padding(20.dp)
-                .clickable { showDebug = true },
-        ) {
-            Text(
-                "Debug",
-                color = MaterialTheme.colorScheme.onTertiary,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            )
         }
     }
 
@@ -958,6 +987,7 @@ private fun RupeeHome(
 @Composable
 private fun HomeSummaryTab(
     uiState: HomeUiState,
+    budgetsState: BudgetsUiState,
     versionLabel: String = "",
     onReviewInbox: () -> Unit,
     onAddTransaction: () -> Unit,
@@ -972,6 +1002,7 @@ private fun HomeSummaryTab(
         )
         HeroBudgetCard(dashboard = dashboard)
         WeeklySpendCard(dashboard = dashboard)
+        BucketProgressCard(rows = budgetsState.categoryRows)
         UpcomingDuesCard(dues = dashboard.upcomingDues)
         QuickActionsRow(
             pendingReviewCount = dashboard.pendingReviewCount,
@@ -1142,6 +1173,57 @@ private fun HeroBudgetCard(dashboard: HomeDashboard) {
                     "Add a monthly target to see remaining and progress.",
                     style = MaterialTheme.typography.bodySmall,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BucketProgressCard(rows: List<CategoryBudgetRow>) {
+    val limitedRows = rows.filter { it.hasLimit }
+    if (limitedRows.isEmpty()) return
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                "Category budgets",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            limitedRows.forEachIndexed { index, row ->
+                val accent = when {
+                    row.isOverLimit -> MaterialTheme.colorScheme.error
+                    row.progress >= 0.8f -> MaterialTheme.colorScheme.tertiary
+                    else -> MaterialTheme.colorScheme.primary
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(row.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = buildString {
+                            append(row.spentLabel)
+                            row.limitLabel?.let { append(" $it") }
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (row.isOverLimit) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                LinearProgressIndicator(
+                    progress = { row.progress },
+                    modifier = Modifier.fillMaxWidth().height(6.dp),
+                    color = accent,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                )
+                if (index < limitedRows.lastIndex) Spacer(modifier = Modifier.height(12.dp))
             }
         }
     }
@@ -1360,6 +1442,54 @@ private fun ManualEntrySheet(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun MergeTransactionPickerSheet(
+    transactions: List<HomeTransactionRow>,
+    onSelect: (HomeTransactionRow) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+        ) {
+            Text("Merge with transaction", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            Text("Attach this signal to an existing transaction instead of creating a new one.", style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(16.dp))
+            if (transactions.isEmpty()) {
+                Text("No transactions to merge with.", style = MaterialTheme.typography.bodyMedium)
+            } else {
+                transactions.forEach { txn ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        onClick = { onSelect(txn) },
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(txn.headline, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text(txn.subline, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 2.dp))
+                            }
+                            Text(txn.amountLabel, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
 @Composable
 private fun ReviewTab(
     uiState: HomeUiState,
@@ -1370,7 +1500,9 @@ private fun ReviewTab(
     onToggleAlwaysTrust: (String) -> Unit,
     onConfirm: (String, ReviewSource) -> Unit,
     onDismiss: (String, ReviewSource) -> Unit,
+    onSelectMergeTarget: (String, String?) -> Unit,
 ) {
+    var mergePickerForId by remember { mutableStateOf<String?>(null) }
     InspectionSection(
         title = "Review",
         hasItems = uiState.reviewRows.isNotEmpty(),
@@ -1388,8 +1520,22 @@ private fun ReviewTab(
                 onToggleAlwaysTrust = { onToggleAlwaysTrust(row.id) },
                 onConfirm = { onConfirm(row.id, row.source) },
                 onDismiss = { onDismiss(row.id, row.source) },
+                onClearMergeTarget = { onSelectMergeTarget(row.id, null) },
+                onOpenMergePicker = { mergePickerForId = row.id },
+                hasMergeTarget = row.mergeTargetId != null,
+                mergeTargetMerchant = row.mergeTargetId?.let { tid -> uiState.recentTransactions.firstOrNull { it.id == tid }?.headline },
             )
         }
+    }
+    if (mergePickerForId != null) {
+        MergeTransactionPickerSheet(
+            transactions = uiState.recentTransactions,
+            onSelect = { txn ->
+                onSelectMergeTarget(mergePickerForId!!, txn.id)
+                mergePickerForId = null
+            },
+            onDismiss = { mergePickerForId = null },
+        )
     }
 }
 
@@ -1437,6 +1583,10 @@ private fun ReviewRowCard(
     onToggleAlwaysTrust: () -> Unit,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
+    onClearMergeTarget: () -> Unit = {},
+    onOpenMergePicker: () -> Unit = {},
+    hasMergeTarget: Boolean = false,
+    mergeTargetMerchant: String? = null,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1524,9 +1674,32 @@ private fun ReviewRowCard(
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
+                if (hasMergeTarget && mergeTargetMerchant != null) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "→ $mergeTargetMerchant",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            androidx.compose.material3.TextButton(onClick = onClearMergeTarget) { Text("✕") }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = onConfirm) { Text("Confirm") }
+                    Button(onClick = onConfirm) { Text(if (hasMergeTarget) "Merge" else "Confirm") }
                     OutlinedButton(onClick = onDismiss) { Text("Dismiss") }
+                    if (!hasMergeTarget && row.source == ReviewSource.INBOX) {
+                        androidx.compose.material3.TextButton(onClick = onOpenMergePicker) { Text("Merge with existing") }
+                    }
                 }
             }
         }
@@ -1816,6 +1989,7 @@ private fun HomeScreenPreview() {
                 userName = "Cyril",
                 isSeeding = false,
             ),
+            budgetsState = BudgetsUiState(),
             onReviewInbox = {},
             onAddTransaction = {},
         )

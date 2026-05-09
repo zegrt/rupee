@@ -508,6 +508,30 @@ class LocalFinanceRepository(
         }
     }
 
+    suspend fun confirmInboxItemMergedWith(inboxItemId: String, existingTransactionId: String) {
+        val now = Instant.now().toString()
+        database.withTransaction {
+            val inboxItem = database.inboxItemDao().getInboxItemById(inboxItemId) ?: return@withTransaction
+            val candidate = database.transactionCandidateDao()
+                .getTransactionCandidateById(inboxItem.transactionCandidateId) ?: return@withTransaction
+            database.inboxItemDao().upsertInboxItem(
+                inboxItem.copy(
+                    decisionState = InboxDecisionState.CONFIRMED,
+                    linkedCanonicalTransactionId = existingTransactionId,
+                    resolvedAt = now,
+                    updatedAt = now,
+                ),
+            )
+            database.transactionCandidateDao().upsertTransactionCandidate(
+                candidate.copy(
+                    decisionState = CandidateDecisionState.USER_CONFIRMED,
+                    linkedCanonicalTransactionId = existingTransactionId,
+                    updatedAt = now,
+                ),
+            )
+        }
+    }
+
     suspend fun confirmSuggestedTransaction(
         transactionId: String,
         merchantNameOverride: String? = null,

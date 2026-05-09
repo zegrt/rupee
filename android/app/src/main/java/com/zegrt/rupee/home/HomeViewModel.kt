@@ -60,6 +60,7 @@ data class HomeReviewRow(
     val subline: String,
     val reasonLabel: String,
     val alwaysTrust: Boolean,
+    val mergeTargetId: String? = null,
 )
 
 data class HomeTransactionRow(
@@ -178,6 +179,7 @@ private data class ViewSelection(
     val transactionNotesDrafts: Map<String, String>,
     val transactionCategoryDrafts: Map<String, String?>,
     val manualEntry: ManualEntryDraft,
+    val reviewMergeTargets: Map<String, String>,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -203,6 +205,7 @@ class HomeViewModel(
     private val transactionNotesDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
     private val transactionCategoryDrafts = MutableStateFlow<Map<String, String?>>(emptyMap())
     private val manualEntry = MutableStateFlow(ManualEntryDraft())
+    private val reviewMergeTargets = MutableStateFlow<Map<String, String>>(emptyMap())
 
     private val monthlyBudgetFlow: Flow<BudgetEntity?> = today.flatMapLatest { date ->
         repository.observeMonthlyTotalBudget(date)
@@ -290,7 +293,8 @@ class HomeViewModel(
         ) { review, tm, tn, tc ->
             arrayOf<Any?>(review, tm, tn, tc)
         },
-    ) { selection, drafts ->
+        reviewMergeTargets,
+    ) { selection, drafts, merges ->
         @Suppress("UNCHECKED_CAST")
         val review = drafts[0] as ReviewDraftBundle
         @Suppress("UNCHECKED_CAST")
@@ -307,6 +311,7 @@ class HomeViewModel(
             transactionMerchantDrafts = drafts[1] as Map<String, String>,
             transactionNotesDrafts = drafts[2] as Map<String, String>,
             transactionCategoryDrafts = drafts[3] as Map<String, String?>,
+            reviewMergeTargets = merges,
         )
     }
 
@@ -361,6 +366,13 @@ class HomeViewModel(
         reviewAlwaysTrust.value = if (id in current) current - id else current + id
     }
 
+    fun selectMergeTarget(reviewId: String, txnId: String?) {
+        reviewMergeTargets.value = if (txnId != null)
+            reviewMergeTargets.value + (reviewId to txnId)
+        else
+            reviewMergeTargets.value - reviewId
+    }
+
     fun confirmReviewRow(id: String, source: ReviewSource) {
         viewModelScope.launch {
             val merchant = reviewMerchantDrafts.value[id]
@@ -368,13 +380,20 @@ class HomeViewModel(
             val categoryId = reviewCategoryDrafts.value[id]
             val trust = id in reviewAlwaysTrust.value
             when (source) {
-                ReviewSource.INBOX -> repository.confirmInboxItem(
-                    inboxItemId = id,
-                    merchantNameOverride = merchant,
-                    amountMinorOverride = amountMinor,
-                    categoryIdOverride = categoryId,
-                    addTrustRule = trust,
-                )
+                ReviewSource.INBOX -> {
+                    val mergeTarget = reviewMergeTargets.value[id]
+                    if (mergeTarget != null) {
+                        repository.confirmInboxItemMergedWith(id, mergeTarget)
+                    } else {
+                        repository.confirmInboxItem(
+                            inboxItemId = id,
+                            merchantNameOverride = merchant,
+                            amountMinorOverride = amountMinor,
+                            categoryIdOverride = categoryId,
+                            addTrustRule = trust,
+                        )
+                    }
+                }
                 ReviewSource.SUGGESTED -> repository.confirmSuggestedTransaction(
                     transactionId = id,
                     merchantNameOverride = merchant,
@@ -486,6 +505,7 @@ class HomeViewModel(
         reviewAmountDrafts.value = reviewAmountDrafts.value - id
         reviewCategoryDrafts.value = reviewCategoryDrafts.value - id
         reviewAlwaysTrust.value = reviewAlwaysTrust.value - id
+        reviewMergeTargets.value = reviewMergeTargets.value - id
         if (selectedReviewRowId.value == id) selectedReviewRowId.value = null
     }
 
@@ -566,6 +586,7 @@ class HomeViewModel(
                 ).joinToString(" • ").ifBlank { formatOccurredAt(inboxItem.createdAt) },
                 reasonLabel = inboxItem.reasonCode.name.replace('_', ' '),
                 alwaysTrust = inboxItem.id in selection.alwaysTrust,
+                mergeTargetId = selection.reviewMergeTargets[inboxItem.id],
             )
         }
         val suggestedRows = data.suggestedTxns.map { txn ->
