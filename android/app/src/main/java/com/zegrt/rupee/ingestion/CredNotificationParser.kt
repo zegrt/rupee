@@ -59,7 +59,7 @@ class CredNotificationParser : NotificationParser {
             mode = Mode.CREDIT_CARD,
             parseConfidence = confidenceFor(transactionKind, amountMinor, maskedDigits, merchant),
             fromEntityHint = "cred",
-            toEntityName = merchant,
+            toEntityName = MerchantNameUtils.cleanForEntity(merchant),
         )
     }
 

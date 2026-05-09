@@ -33,7 +33,7 @@ class EmiNotificationParser : NotificationParser {
             parseConfidence = if (amountMinor != null && merchant != null) 0.72 else 0.50,
             fromEntityType = AccountType.BANK,
             fromEntityHint = null,
-            toEntityName = merchant,
+            toEntityName = MerchantNameUtils.cleanForEntity(merchant),
         )
     }
 

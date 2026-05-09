@@ -41,7 +41,7 @@ class GenericUpiNotificationParser : NotificationParser {
             parseConfidence = if (amountMinor != null && merchant != null) 0.7 else 0.5,
             fromEntityType = AccountType.BANK,
             fromEntityHint = "upi",
-            toEntityName = merchant,
+            toEntityName = MerchantNameUtils.cleanForEntity(merchant),
         )
     }
 

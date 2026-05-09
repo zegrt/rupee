@@ -47,7 +47,7 @@ class PhonePeNotificationParser : NotificationParser {
             parseConfidence = if (amountMinor != null && merchant != null) 0.78 else 0.55,
             fromEntityType = AccountType.BANK,
             fromEntityHint = "phonepe",
-            toEntityName = merchant,
+            toEntityName = MerchantNameUtils.cleanForEntity(merchant),
         )
     }
 

@@ -52,7 +52,7 @@ class PaytmNotificationParser : NotificationParser {
             parseConfidence = if (amountMinor != null && merchant != null) 0.76 else 0.52,
             fromEntityType = AccountType.BANK,
             fromEntityHint = "paytm",
-            toEntityName = merchant,
+            toEntityName = MerchantNameUtils.cleanForEntity(merchant),
         )
     }
 
