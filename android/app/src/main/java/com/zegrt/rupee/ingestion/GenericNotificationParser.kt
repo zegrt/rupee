@@ -27,7 +27,7 @@ class GenericNotificationParser : NotificationParser {
             parseConfidence = if (amountMinor != null) 0.55 else 0.15,
             fromEntityType = AccountType.BANK,
             fromEntityHint = rawEvent.sourceAppPackage,
-            toEntityName = merchant,
+            toEntityName = MerchantNameUtils.cleanForEntity(merchant),
         )
     }
 

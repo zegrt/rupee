@@ -35,7 +35,7 @@ class GPayNotificationParser : NotificationParser {
             parseConfidence = if (amountMinor != null && merchant != null) 0.8 else 0.6,
             fromEntityType = AccountType.BANK,
             fromEntityHint = "gpay",
-            toEntityName = merchant,
+            toEntityName = MerchantNameUtils.cleanForEntity(merchant),
         )
     }
 

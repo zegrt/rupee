@@ -62,7 +62,7 @@ class IciciNotificationParser : NotificationParser {
             },
             parseConfidence = confidenceFor(transactionKind, amountMinor, maskedDigits, merchant),
             fromEntityHint = "icici",
-            toEntityName = merchant,
+            toEntityName = MerchantNameUtils.cleanForEntity(merchant),
         )
     }
 
