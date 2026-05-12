@@ -6,6 +6,8 @@
     <application
         android:name=".RupeeApplication"
         android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/full_backup_content"
         android:icon="@android:drawable/sym_def_app_icon"
         android:label="Rupee"
         android:roundIcon="@android:drawable/sym_def_app_icon"

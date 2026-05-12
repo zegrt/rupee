@@ -29,6 +29,8 @@ data class SettingsUiState(
     val buckets: List<String> = emptyList(),
     val trustRules: List<TrustRuleRow> = emptyList(),
     val notificationGranted: Boolean = false,
+    val postNotificationsGranted: Boolean = true,
+    val needsPostNotificationsPrompt: Boolean = false,
     val appVersion: String = "",
     val savingName: Boolean = false,
     val savingBudget: Boolean = false,
@@ -51,6 +53,7 @@ class SettingsViewModel(
     private val savingBudget = MutableStateFlow(false)
     private val message = MutableStateFlow<String?>(null)
     private val notificationGranted = MutableStateFlow(false)
+    private val postNotificationsGranted = MutableStateFlow(true)
 
     private val budgetFormatter = NumberFormat.getCurrencyInstance(Locale("en", "IN")).apply {
         maximumFractionDigits = 0
@@ -78,8 +81,10 @@ class SettingsViewModel(
         },
         // Notification permission flips after the user toggles system settings; this flow
         // belongs in the combine so the Settings card re-renders, not just sampled inside.
-        notificationGranted,
-    ) { entities, drafts, granted ->
+        combine(notificationGranted, postNotificationsGranted) { listener, post ->
+            listener to post
+        },
+    ) { entities, drafts, perms ->
         @Suppress("UNCHECKED_CAST")
         val user = entities[0] as UserEntity?
         @Suppress("UNCHECKED_CAST")
@@ -90,6 +95,7 @@ class SettingsViewModel(
         val buckets = entities[3] as List<BucketEntity>
         @Suppress("UNCHECKED_CAST")
         val rules = entities[4] as List<MerchantTrustRuleEntity>
+        val (granted, postGranted) = perms
 
         val name = user?.displayName ?: ""
         val limitMinor = budget?.limitMinor ?: 0L
@@ -114,6 +120,9 @@ class SettingsViewModel(
             buckets = buckets.map { it.name },
             trustRules = trustRules,
             notificationGranted = granted,
+            postNotificationsGranted = postGranted,
+            needsPostNotificationsPrompt = android.os.Build.VERSION.SDK_INT >=
+                android.os.Build.VERSION_CODES.TIRAMISU && !postGranted,
             appVersion = appVersion,
             savingName = drafts[2] as Boolean,
             savingBudget = drafts[3] as Boolean,
@@ -171,6 +180,10 @@ class SettingsViewModel(
 
     fun setNotificationGranted(granted: Boolean) {
         notificationGranted.value = granted
+    }
+
+    fun setPostNotificationsGranted(granted: Boolean) {
+        postNotificationsGranted.value = granted
     }
 }
 
