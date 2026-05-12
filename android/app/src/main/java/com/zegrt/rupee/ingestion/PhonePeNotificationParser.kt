@@ -23,7 +23,9 @@ class PhonePeNotificationParser : NotificationParser {
         val amountMinor = NotificationParsingUtils.extractAmountMinor(body)
         val merchant = NotificationParsingUtils.extractMerchant(body, merchantRegexes)
 
-        val isRefund = NotificationParsingUtils.containsAny(lower, listOf("refund", "credited", "received"))
+        // "received" appears in routine spend bodies ("Payment received by Swiggy …")
+        // and was firing as a refund. Keep the explicit refund vocabulary only.
+        val isRefund = NotificationParsingUtils.containsAny(lower, listOf("refund", "credited"))
         val transactionKind = when {
             isRefund && amountMinor != null -> ParsedTransactionKind.REFUND
             amountMinor != null -> ParsedTransactionKind.SPEND

@@ -17,7 +17,6 @@ class RupeeNotificationListenerService : NotificationListenerService() {
     private val rupeeApp: RupeeApplication?
         get() = application as? RupeeApplication
 
-    private val writer: RawCaptureWriter? by lazy { rupeeApp?.let { RawCaptureWriter(it.database) } }
     private val normalizer: NotificationSignalNormalizer? by lazy {
         rupeeApp?.let { NotificationSignalNormalizer(it.database) }
     }
@@ -53,10 +52,6 @@ class RupeeNotificationListenerService : NotificationListenerService() {
             return
         }
 
-        val writer = this.writer ?: run {
-            Log.w(TAG, "Skipped: writer not initialized")
-            return
-        }
         val normalizer = this.normalizer ?: run {
             Log.w(TAG, "Skipped: normalizer not initialized")
             return
@@ -64,17 +59,17 @@ class RupeeNotificationListenerService : NotificationListenerService() {
 
         serviceScope.launch {
             try {
-                val rawEvent = writer.storeNotificationEvent(
+                val rawEventId = normalizer.ingestNotification(
+                    userId = "local-user",
                     packageName = sbn.packageName,
                     title = title,
                     body = body,
                     postedAtMillis = sbn.postTime,
                 )
-                if (rawEvent == null) {
+                if (rawEventId == null) {
                     Log.d(TAG, "Skipped: duplicate fingerprint already stored")
                 } else {
-                    Log.i(TAG, "Ingested raw event ${rawEvent.id}")
-                    normalizer.normalize(rawEvent)
+                    Log.i(TAG, "Ingested raw event $rawEventId")
                 }
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to ingest notification from ${sbn.packageName}", t)

@@ -24,7 +24,6 @@ import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
 import com.zegrt.rupee.data.local.entity.UserEntity
 import com.zegrt.rupee.ingestion.MerchantNameUtils
 import com.zegrt.rupee.ingestion.NotificationSignalNormalizer
-import com.zegrt.rupee.ingestion.RawCaptureWriter
 import com.zegrt.rupee.recurring.RecurringDetectionEngine
 import androidx.room.withTransaction
 import java.time.Instant
@@ -93,10 +92,17 @@ class LocalFinanceRepository(
      * Re-run auto-detection over the last 120 days. Wipes prior unconfirmed auto-suggestions
      * and rewrites them; preserves user-confirmed and user-dismissed rows so the user's
      * decisions stick across runs.
+     *
+     * When [force] is false (default), the 30-min debounce skips redundant work from
+     * lifecycle hooks. User-triggered refreshes pass force=true so the action isn't
+     * silently swallowed when the user taps "Refresh now".
      */
-    suspend fun refreshRecurringPatterns(today: java.time.LocalDate = java.time.LocalDate.now()) {
+    suspend fun refreshRecurringPatterns(
+        today: java.time.LocalDate = java.time.LocalDate.now(),
+        force: Boolean = false,
+    ) {
         val currentMs = System.currentTimeMillis()
-        if (currentMs - lastRecurringRefreshMs.get() < RECURRING_REFRESH_DEBOUNCE_MS) return
+        if (!force && currentMs - lastRecurringRefreshMs.get() < RECURRING_REFRESH_DEBOUNCE_MS) return
         lastRecurringRefreshMs.set(currentMs)
 
         val lookbackStart = today.minusDays(120).toString()
@@ -779,15 +785,13 @@ class LocalFinanceRepository(
         title: String?,
         body: String,
     ) {
-        val writer = RawCaptureWriter(database)
-        val normalizer = NotificationSignalNormalizer(database)
-        val rawEvent = writer.storeNotificationEvent(
+        NotificationSignalNormalizer(database).ingestNotification(
+            userId = USER_ID,
             packageName = packageName,
             title = title,
             body = body,
             postedAtMillis = System.currentTimeMillis(),
-        ) ?: return
-        normalizer.normalize(rawEvent)
+        )
     }
 
     private fun TransactionCandidateEntity.toCanonicalType(): CanonicalTransactionType = when (candidateType) {
