@@ -14,7 +14,7 @@ In priority order:
 4. **`pattern_UID` + `obsolete` + `parserVersion` discipline** (§3.7) — so we can ship rule updates without breaking historical parses, and so Crashlytics-style failures point at a stable identifier.
 5. **Refund linking with the 5 Axio strategies** (§3.8) — we have *zero* today, this is the most visible user-facing PFM correctness win after notification breadth.
 
-Items 6–12 are real but defer-able. Items 10–11 are blocked on having a backend at all.
+Items 6–13 are real but defer-able. Item 13 (adaptive confidence from user behavior) is a Sprint 4–5 candidate — pairs with the balance reconciliation work. Items 10–11 are blocked on having a backend at all.
 
 ---
 
@@ -122,6 +122,30 @@ Items 6–12 are real but defer-able. Items 10–11 are blocked on having a back
 
 Both require a backend we don't have and don't plan to build for v1. **Defer indefinitely.** Do *not* design the schema speculatively — every backend-less feature designed in advance has rotted in this codebase before. The day we have a backend, design these against real auth and a real CMS, not a paper schema.
 
+### Item 13 — Adaptive confidence from user behavior ("implicit trust")
+
+- **What Axio does (§3.4 categorization propagation):** Walnut propagates user-set categories from one merchant to similar past/future transactions ("you set Swiggy to Food once → all Swiggy charges become Food"). They never formalize confidence learning across confirm/dismiss outcomes — they only learn category. We can do better here because Walnut never had to: their decision layer is hand-tuned over 9 years of rules and they don't dynamically reroute.
+- **What we have today:** `MerchantTrustRule` (manual: user toggles "Always trust Swiggy" → future Swiggy bodies auto-create as CONFIRMED). Decision engine thresholds are hardcoded constants (`HIGH_CONFIDENCE = 0.85`, `MEDIUM_CONFIDENCE = 0.6`). No implicit learning from confirm/dismiss outcomes; every new merchant restarts from zero.
+- **What we'd change:**
+  - New table `ingestion_signal_stats` keyed by `(packageName, parserKey, cleanedMerchant?)` storing `confirms: Int`, `dismisses: Int`, `firstSeenAt`, `lastSeenAt`.
+  - Repository hooks on `confirmInboxItem` / `dismissInboxItem` increment the appropriate counter for the candidate's `(packageName, parserKey, cleanedMerchant)` triple.
+  - `NotificationDecisionEngine.decide()` consults stats and shifts confidence:
+    - `confirms >= 3 && dismisses == 0 && spanDays >= 7` → bump confidence by `+0.15` (often crosses HIGH → auto-create)
+    - `dismisses >= 3 && confirms == 0` → drop confidence by `-0.20` (often crosses to IGNORED — kills repeat spam)
+    - mixed signals → leave alone
+  - "Bootstrap mode" for first 14 days post-install: temporarily lower `MEDIUM_CONFIDENCE` from 0.6 to 0.5 so everything questionable lands in Inbox. After bootstrap, threshold tightens. Tracked via `UserEntity.createdAt`.
+  - "Auto-promote to trust rule" pass: when `(cleanedMerchant)` has `confirms >= 3 && dismisses == 0 && spanDays >= 7`, silently create a `MerchantTrustRule` for that merchant. Shows a one-time toast "Now auto-confirming Swiggy charges" so it's not silent magic.
+  - Inbox UI: every auto-created row gets a small badge ("Auto • 5 prior confirms" or "Auto • trust rule") explaining why it didn't ask the user. Tap to open inspector with the full reason.
+- **Pitfalls to design around:**
+  - **Spend totals shift retroactively when we auto-classify.** A fraudulent Swiggy charge after 5 confirmed Swiggy charges shouldn't auto-create. Safety net: if amount > 2× the merchant's median confirmed amount, force to Inbox regardless of trust.
+  - **Sparse data is misleading.** 3 confirms in one afternoon is coincidence. Require `spanDays >= 7` before promotion fires.
+  - **Dismiss intent isn't uniform.** Dismiss-as-spam vs dismiss-to-merge vs dismiss-by-accident are different signals. Track the `decisionReason` on inbox dismissal so "merge" doesn't count as "noise" signal.
+  - **Local-only learning means reinstalls lose history.** Painful for testers. Include stats in the eventual backup/export. Add to backlog.
+  - **Silent magic is confusing.** Without the badge + inspector, users see "Rupee got it right sometimes and not other times" with no explanation. The visible-reason UI is non-negotiable.
+- **Why Sprint 4–5, not earlier:** the learner has nothing to learn from until the JSON rule engine (Sprint 2) and refund linking (Sprint 3) are capturing volume cleanly. Putting this ahead of those would be optimising for a problem we don't yet have.
+- **Size:** **medium** (~600 LoC + schema add + UI badge). Pairs naturally with refund linking since both add columns and touch the decision engine.
+- **Risk:** correctness > cleverness. Ship the visible-reason UI in the same PR as the learning, never separately. If users can't see why something was auto-created, they'll uninstall the moment something looks wrong.
+
 ### Item 12 — Two-pass classification (`pos_type_rules` / `transaction_type_rule`)
 
 - **What Axio does (§3.3 data_fields):** captured groups in the regex are re-run through small sub-rule tables for category + type refinement. "If captured merchant matches `(?i)(salary|sal credit)` → category = salary, type = INCOME". Baked into the parser layer.
@@ -176,9 +200,9 @@ The deep-dive (§5–§6) lands `NotificationExtractor` + `combinedBody`. The Ax
 | **1** | Now → +2 wk | `NotificationExtractor` + `combinedBody` (deep-dive §9); rides along: item 4 (column add), item 6 (networkRef), item 7 (account expense flag). | Low. Mostly additive. |
 | **2** | +2 → +4 wk | Item 1 (JSON rule engine) — port GPay/CRED/ICICI first behind flag, then PhonePe/Paytm/EMI/GenericUpi/Generic. Item 2 (chaining dedupe) layered in second half. | Medium. Parse regression risk; corpus tests are the safety net. |
 | **3** | +4 → +6 wk | Item 5 (refund linking, full 5 strategies + UX). Item 12 (two-pass classification) — extends item 1's rule schema. | Low–medium. Refund UX needs design. |
-| **4** | +6 → +8 wk | Item 8 (balance + missed-txn) — *partial*. Land balance extraction into `ParsedSignalEntity` and update `AccountEntity.derivedBalanceMinor`; skip the daily-alarm prompt for now (UX risk too high without real-user testing). | High. Honest call: balance reconciliation across 8 banks is hard and we don't have the corpus yet. |
+| **4** | +6 → +8 wk | Item 13 (adaptive confidence — implicit trust from confirm/dismiss). Pairs with item 8 (balance + missed-txn) since both touch the decision engine. Land balance extraction into `ParsedSignalEntity` + `AccountEntity.derivedBalanceMinor`; defer the daily-alarm prompt. | Medium–high. Adaptive confidence risk is silent miscategorization; safety net is the visible-reason UI shipped in same PR. Balance reconciliation is genuinely hard at this stage. |
 | **5+** | +8 → +12 wk | Item 9 (events) if a user has asked, item 10 (Kirana) if a user has asked. Otherwise polish + parser-coverage chasing. | n/a. |
-| **Deferred** | — | Items 11 (server cards), 13 (telemetry). Revisit only after a backend exists. | — |
+| **Deferred** | — | Items 10 (server cards), 11 (server-side pattern telemetry). Revisit only after a backend exists. | — |
 
 This sequencing trades item 5 (high user-visible win) being later than items 1–2 (parser-correctness wins) because items 1–2 *make* item 5 easier to write. Don't invert.
 
