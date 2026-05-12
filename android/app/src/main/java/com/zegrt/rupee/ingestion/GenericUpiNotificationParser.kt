@@ -19,26 +19,52 @@ class GenericUpiNotificationParser : NotificationParser {
         val body = rawEvent.body.lowercase()
         val mentionsUpi = body.contains("upi") || title.contains("upi")
         if (!mentionsUpi) return false
-        val mentionsPayment = body.contains("paid") || body.contains("payment to") ||
-            body.contains("paying") || title.contains("paid")
+        // Bank/wallet apps phrase UPI debits with multiple verbs:
+        //  - "paid"     (Google Pay, Paytm, generic UPI receipts)
+        //  - "sent"     (Kotak811, Fi, Jupiter — "₹X sent via UPI")
+        //  - "debited"  (banks confirming an account debit on a UPI flow)
+        // Without "sent"/"debited" we drop Kotak-style notifications entirely.
+        val hay = "$title\n$body"
+        val mentionsPayment =
+            hay.contains("paid") ||
+                hay.contains("payment to") ||
+                hay.contains("paying") ||
+                hay.contains("sent") ||
+                hay.contains("debited")
         return mentionsPayment
     }
 
     override fun parse(rawEvent: RawCaptureEventEntity): NotificationParseResult {
         val amountMinor = NotificationParsingUtils.extractAmountMinor(rawEvent.body)
         val merchant = NotificationParsingUtils.extractMerchant(rawEvent.body, merchantRegexes)
+        val maskedDigits = NotificationParsingUtils.extractMaskedDigits(rawEvent.body)
+
+        // Confidence ladder:
+        //  - merchant resolved → high enough for AUTO_CREATED (0.7 is medium tier today,
+        //    decision engine routes it to Inbox; raising to 0.85+ would auto-create
+        //    on stranger bodies — keep at 0.7 for now)
+        //  - merchant null but amount + masked digits both present → still a real
+        //    transaction signal, just missing the payee. 0.62 puts it in MEDIUM
+        //    so Inbox shows it instead of silently ignoring.
+        //  - everything else → 0.5 LOW, gets dropped (correct — not enough signal).
+        val confidence = when {
+            amountMinor != null && merchant != null -> 0.7
+            amountMinor != null && maskedDigits != null -> 0.62
+            else -> 0.5
+        }
 
         return NotificationParseResult(
             parserKey = "notification_upi_generic",
-            parserVersion = "v1",
+            parserVersion = "v2",
             providerHint = "upi",
             transactionKind = if (amountMinor != null) ParsedTransactionKind.SPEND else ParsedTransactionKind.UNKNOWN,
             candidateType = if (amountMinor != null) TransactionCandidateType.SPEND else TransactionCandidateType.UNKNOWN,
             amountMinor = amountMinor,
             currencyCode = if (amountMinor != null) "INR" else null,
             merchantRaw = merchant,
+            maskedDigits = maskedDigits,
             mode = Mode.UPI,
-            parseConfidence = if (amountMinor != null && merchant != null) 0.7 else 0.5,
+            parseConfidence = confidence,
             fromEntityType = AccountType.BANK,
             fromEntityHint = "upi",
             toEntityName = MerchantNameUtils.cleanForEntity(merchant),

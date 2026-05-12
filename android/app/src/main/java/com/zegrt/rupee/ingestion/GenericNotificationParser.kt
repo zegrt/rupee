@@ -12,19 +12,33 @@ class GenericNotificationParser : NotificationParser {
     override fun parse(rawEvent: RawCaptureEventEntity): NotificationParseResult {
         val amountMinor = extractAmountMinor(rawEvent.body)
         val merchant = extractMerchant(rawEvent.body)
+        val maskedDigits = NotificationParsingUtils.extractMaskedDigits(rawEvent.body)
         val mode = inferMode(rawEvent.body)
+
+        // Amount + masked digits is enough signal to surface an Inbox candidate
+        // even when no merchant is in the body (Kotak-style "Amount debited
+        // from XX4129. Check out details." has no payee — that lives in the
+        // bank app). 0.62 clears the MEDIUM threshold so it stops getting
+        // silently dropped as LOW.
+        val confidence = when {
+            amountMinor != null && merchant != null -> 0.62
+            amountMinor != null && maskedDigits != null -> 0.62
+            amountMinor != null -> 0.55
+            else -> 0.15
+        }
 
         return NotificationParseResult(
             parserKey = "notification_generic",
-            parserVersion = "v1",
+            parserVersion = "v2",
             providerHint = rawEvent.sourceAppPackage,
             transactionKind = if (amountMinor != null) ParsedTransactionKind.SPEND else ParsedTransactionKind.UNKNOWN,
             candidateType = if (amountMinor != null) TransactionCandidateType.SPEND else TransactionCandidateType.UNKNOWN,
             amountMinor = amountMinor,
             currencyCode = if (amountMinor != null) "INR" else null,
             merchantRaw = merchant,
+            maskedDigits = maskedDigits,
             mode = mode,
-            parseConfidence = if (amountMinor != null) 0.55 else 0.15,
+            parseConfidence = confidence,
             fromEntityType = AccountType.BANK,
             fromEntityHint = rawEvent.sourceAppPackage,
             toEntityName = MerchantNameUtils.cleanForEntity(merchant),
