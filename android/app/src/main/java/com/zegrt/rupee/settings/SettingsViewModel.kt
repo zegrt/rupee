@@ -76,7 +76,10 @@ class SettingsViewModel(
         ) { n, b, sn, sb, m ->
             arrayOf<Any?>(n, b, sn, sb, m)
         },
-    ) { entities, drafts ->
+        // Notification permission flips after the user toggles system settings; this flow
+        // belongs in the combine so the Settings card re-renders, not just sampled inside.
+        notificationGranted,
+    ) { entities, drafts, granted ->
         @Suppress("UNCHECKED_CAST")
         val user = entities[0] as UserEntity?
         @Suppress("UNCHECKED_CAST")
@@ -110,7 +113,7 @@ class SettingsViewModel(
             categories = cats.map { it.name },
             buckets = buckets.map { it.name },
             trustRules = trustRules,
-            notificationGranted = notificationGranted.value,
+            notificationGranted = granted,
             appVersion = appVersion,
             savingName = drafts[2] as Boolean,
             savingBudget = drafts[3] as Boolean,

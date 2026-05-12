@@ -14,6 +14,7 @@ class NotificationParserCanParseTest {
     private val phonepe = PhonePeNotificationParser()
     private val paytm = PaytmNotificationParser()
     private val genericUpi = GenericUpiNotificationParser()
+    private val emi = EmiNotificationParser()
     private val registry = NotificationParserRegistry.default()
 
     @Test
@@ -179,6 +180,33 @@ class NotificationParserCanParseTest {
         val event = event(body = "₹500 paid to Swiggy via Paytm UPI. UPI Ref: 123456")
         val result = registry.parse(event)
         assertEquals("notification_paytm", result.parserKey)
+    }
+
+    // ── EMI ───────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `emi parser matches a real debit body`() {
+        val event = event(body = "EMI of Rs.4,999 has been debited for iPhone 15 loan")
+        assertEquals(true, emi.canParse(event))
+    }
+
+    @Test
+    fun `emi parser matches a due-reminder body`() {
+        val event = event(title = "EMI Reminder", body = "Your EMI of Rs.4,999 is due on 15-May-26")
+        assertEquals(true, emi.canParse(event))
+    }
+
+    @Test
+    fun `emi parser rejects marketing copy mentioning EMI`() {
+        val event = event(body = "EMI options available on your next purchase")
+        assertEquals(false, emi.canParse(event))
+    }
+
+    @Test
+    fun `emi parser rejects body with EMI as substring of unrelated word`() {
+        // "remind" / "demi" etc. used to fire the old loose check; word-boundary covers it.
+        val event = event(body = "Reminder to update your KYC by Friday")
+        assertEquals(false, emi.canParse(event))
     }
 
     private fun event(

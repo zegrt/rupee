@@ -17,8 +17,9 @@ object MerchantNameUtils {
         " via ",
         " through ",
         " successfully",
+        // " was " catches "Zomato was successful. UPI Ref" → "Zomato". Reach for ". " is
+        // tempting but clips legit names like "St. Patrick's Restaurant" → "St".
         " was ",
-        ". ",
     )
     private val leadingTailWords = listOf("using", "via", "on", "through")
     // After all stripping, if the leftover is just a bare keyword like "at" or "using",
