@@ -52,16 +52,18 @@ class OnboardingViewModel(
     private val repository: LocalFinanceRepository,
     private val preferences: OnboardingPreferences,
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(
-        OnboardingUiState(
-            currentStep = if (preferences.isCompleted()) OnboardingStep.HOME else OnboardingStep.WELCOME,
-        ),
-    )
+    // Optimistic: assume not completed on cold start so we never block the UI thread
+    // reading SharedPreferences from disk. The viewModelScope launch below resolves
+    // the real value off-thread and snaps the step forward if onboarding is done.
+    private val _uiState = MutableStateFlow(OnboardingUiState(currentStep = OnboardingStep.WELCOME))
     val uiState: StateFlow<OnboardingUiState> = _uiState.asStateFlow()
 
     init {
         viewModelScope.launch {
             repository.ensureBaseData()
+            if (preferences.isCompletedAsync()) {
+                _uiState.update { it.copy(currentStep = OnboardingStep.HOME) }
+            }
         }
     }
 

@@ -6,7 +6,6 @@ import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.time.Instant
-import kotlin.system.exitProcess
 
 /**
  * Single-tester crash capture without an SDK. Installs a global uncaught-exception
@@ -21,17 +20,17 @@ import kotlin.system.exitProcess
 object CrashReporter {
 
     private const val FILE = "crash-log.txt"
-    private const val MAX_BYTES = 256 * 1024 // 256 KB; trim oldest if larger
+    private const val MAX_LINES = 4_000 // keep approx the most recent entries
 
     fun install(context: Context) {
         val appContext = context.applicationContext
         val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             runCatching { append(appContext, thread, throwable) }
+            // Delegate process termination to the existing handler (Android's default
+            // UEH does this). Avoids overriding any custom recovery a host runtime
+            // may have installed.
             previousHandler?.uncaughtException(thread, throwable)
-            // If the previous handler didn't kill us (rare), bail explicitly so we
-            // don't leave the process in a half-dead state.
-            exitProcess(2)
         }
     }
 
@@ -46,10 +45,13 @@ object CrashReporter {
 
     private fun append(context: Context, thread: Thread, throwable: Throwable) {
         val file = logFile(context)
-        // Trim file from the front if it's getting big; keep approx the last MAX_BYTES.
-        if (file.exists() && file.length() > MAX_BYTES) {
-            val keep = file.readBytes().takeLast(MAX_BYTES / 2).toByteArray()
-            file.writeBytes(keep)
+        // Trim line-wise rather than byte-wise so we never split a UTF-8 codepoint or
+        // a mid-entry stack frame. Cheap on a few-MB worst case.
+        if (file.exists()) {
+            val lines = file.readLines()
+            if (lines.size > MAX_LINES) {
+                file.writeText(lines.takeLast(MAX_LINES / 2).joinToString("\n") + "\n")
+            }
         }
         val sw = StringWriter()
         throwable.printStackTrace(PrintWriter(sw))
