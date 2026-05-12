@@ -34,6 +34,7 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 data class OnboardingSetupInput(
@@ -728,6 +729,26 @@ class LocalFinanceRepository(
             fromIso = month.atDay(1).toString(),
             untilIso = month.plusMonths(1).atDay(1).toString(),
         )
+    }
+
+    suspend fun getCreditCardsSnapshot(): List<CreditCardEntity> = withContext(Dispatchers.IO) {
+        database.creditCardDao().observeActiveCards().first()
+    }
+
+    suspend fun getEmiPlansSnapshot(): List<EmiPlanEntity> = withContext(Dispatchers.IO) {
+        database.emiPlanDao().observePlans(USER_ID).first()
+    }
+
+    suspend fun getRecurringPatternsSnapshot(): List<RecurringPatternEntity> = withContext(Dispatchers.IO) {
+        database.recurringPatternDao().observePatterns(USER_ID).first()
+    }
+
+    suspend fun wipeRawCaptureData() {
+        // Drop only the raw notification bodies, not the derived transactions / candidates.
+        // Future ingestion will rebuild fingerprints from new events.
+        withContext(Dispatchers.IO) {
+            database.rawCaptureEventDao().deleteAll()
+        }
     }
 
     suspend fun resetAllData() {

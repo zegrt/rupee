@@ -2,6 +2,7 @@ package com.zegrt.rupee.debug
 
 import android.app.NotificationManager
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.ViewModel
@@ -69,6 +70,7 @@ data class DebugUiState(
     val parseOutput: String? = null,
     val mockTitle: String = DebugSamples.gpay.title.orEmpty(),
     val mockBody: String = DebugSamples.gpay.body,
+    val crashLogPreview: String = "",
     val message: String? = null,
 )
 
@@ -79,6 +81,47 @@ class DebugViewModel(
     val uiState: StateFlow<DebugUiState> = _uiState.asStateFlow()
 
     private val parserRegistry = NotificationParserRegistry.default()
+
+    fun wipeRawCapture() {
+        viewModelScope.launch {
+            repository.wipeRawCaptureData()
+            _uiState.value = _uiState.value.copy(message = "Raw notification data wiped")
+        }
+    }
+
+    fun refreshCrashLog(context: Context) {
+        val log = com.zegrt.rupee.diagnostics.CrashReporter.readLog(context)
+        val preview = if (log.length > 1500) "…${log.takeLast(1500)}" else log
+        _uiState.value = _uiState.value.copy(
+            crashLogPreview = preview.ifBlank { "" },
+            message = if (log.isBlank()) "No crashes logged." else null,
+        )
+    }
+
+    fun clearCrashLog(context: Context) {
+        com.zegrt.rupee.diagnostics.CrashReporter.clearLog(context)
+        _uiState.value = _uiState.value.copy(crashLogPreview = "", message = "Crash log cleared")
+    }
+
+    fun emailCrashLog(context: Context) {
+        val log = com.zegrt.rupee.diagnostics.CrashReporter.readLog(context)
+        if (log.isBlank()) {
+            _uiState.value = _uiState.value.copy(message = "No crashes to email.")
+            return
+        }
+        val intent = Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:studioxero.biz@gmail.com")).apply {
+            putExtra(Intent.EXTRA_SUBJECT, "Rupee crash log")
+            // Tail the log to fit a sane email body.
+            val excerpt = if (log.length > 100_000) "…${log.takeLast(100_000)}" else log
+            putExtra(Intent.EXTRA_TEXT, excerpt)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching {
+            context.startActivity(Intent.createChooser(intent, "Email crash log").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.onFailure {
+            _uiState.value = _uiState.value.copy(message = "No email app installed.")
+        }
+    }
 
     fun resetAllData() {
         _uiState.value = _uiState.value.copy(isResetting = true)

@@ -3,6 +3,7 @@ package com.zegrt.rupee.debug
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -39,6 +40,11 @@ fun DebugScreen(
     onUpdateMockTitle: (String) -> Unit = {},
     onUpdateMockBody: (String) -> Unit = {},
     onLoadMockSample: (SampleNotification) -> Unit = {},
+    onWipeRawCapture: () -> Unit = {},
+    onViewCrashLog: () -> Unit = {},
+    onEmailCrashLog: () -> Unit = {},
+    onClearCrashLog: () -> Unit = {},
+    crashLogPreview: String = "",
 ) {
     var resetConfirmOpen by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -153,6 +159,41 @@ fun DebugScreen(
                 }
             }
         }
+        DebugCard(title = "Crash log") {
+            Text(
+                "Uncaught exceptions are appended to a local file. Email it to the dev or clear it after triage.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            if (crashLogPreview.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                ) {
+                    Text(
+                        crashLogPreview,
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onEmailCrashLog) { Text("Email log") }
+                OutlinedButton(onClick = onViewCrashLog) { Text("Refresh") }
+                OutlinedButton(onClick = onClearCrashLog) { Text("Clear") }
+            }
+        }
+        DebugCard(title = "Wipe raw capture") {
+            Text(
+                "Deletes every notification body Rupee has stored in raw_capture_events. " +
+                    "Keeps your transactions, budgets, and trust rules intact.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedButton(onClick = onWipeRawCapture) { Text("Wipe raw notification data") }
+        }
         DebugCard(title = "Danger zone") {
             Text(
                 "Reset wipes the entire local database (transactions, candidates, raw events, inbox items, user, accounts, cards, budget) and re-seeds default categories, buckets, user, and a fresh monthly budget for the current month. There is no undo.",
@@ -173,15 +214,35 @@ fun DebugScreen(
     }
 
     if (resetConfirmOpen) {
+        var typed by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { resetConfirmOpen = false },
             title = { Text("Reset app data?") },
-            text = { Text("This wipes the local database and re-seeds defaults. There is no undo.") },
+            text = {
+                Column {
+                    Text("This wipes the local database and re-seeds defaults. There is no undo.")
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "Type WIPE to confirm.",
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = typed,
+                        onValueChange = { typed = it },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
             confirmButton = {
-                TextButton(onClick = {
-                    resetConfirmOpen = false
-                    onReset()
-                }) {
+                TextButton(
+                    onClick = {
+                        resetConfirmOpen = false
+                        onReset()
+                    },
+                    enabled = typed.trim() == "WIPE",
+                ) {
                     Text("Reset")
                 }
             },

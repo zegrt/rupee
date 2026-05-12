@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -10,6 +12,30 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
+// Release signing config is read from local.properties — that file is gitignored, so the
+// keystore + passwords never get committed. Generate the keystore with:
+//   keytool -genkey -v -keystore rupee-release.jks -keyalg RSA -keysize 2048 \
+//           -validity 10000 -alias rupee
+// Then add to local.properties at the repo root:
+//   rupee.signing.storeFile=/absolute/path/to/rupee-release.jks
+//   rupee.signing.storePassword=...
+//   rupee.signing.keyAlias=rupee
+//   rupee.signing.keyPassword=...
+// Missing values mean release will build unsigned (still useful for CI smoke).
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val releaseStoreFile = localProps.getProperty("rupee.signing.storeFile")
+val releaseStorePassword = localProps.getProperty("rupee.signing.storePassword")
+val releaseKeyAlias = localProps.getProperty("rupee.signing.keyAlias")
+val releaseKeyPassword = localProps.getProperty("rupee.signing.keyPassword")
+val hasReleaseSigning = !releaseStoreFile.isNullOrBlank() &&
+    file(releaseStoreFile).exists() &&
+    !releaseStorePassword.isNullOrBlank() &&
+    !releaseKeyAlias.isNullOrBlank() &&
+    !releaseKeyPassword.isNullOrBlank()
+
 android {
     namespace = "com.zegrt.rupee"
     compileSdk = 35
@@ -18,12 +44,23 @@ android {
         applicationId = "com.zegrt.rupee"
         minSdk = 29
         targetSdk = 35
-        versionCode = 22
-        versionName = "0.10.2"
+        versionCode = 23
+        versionName = "0.11.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
+        }
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
         }
     }
 
@@ -34,6 +71,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

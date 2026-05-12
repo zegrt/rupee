@@ -92,7 +92,7 @@ The current preview build:
 
 APK output:
 
-- [rupee-0.10.2-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.10.2-debug.apk)
+- [rupee-0.11.0-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.11.0-debug.apk)
 
 ## Main Docs
 

@@ -36,6 +36,7 @@ fun SettingsScreen(
     onOpenBudgets: () -> Unit,
     onOpenRecurring: () -> Unit,
     onOpenRecap: () -> Unit,
+    onSendFeedback: () -> Unit,
     onOpenDebug: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -199,6 +200,42 @@ fun SettingsScreen(
                     Text(name, style = MaterialTheme.typography.bodyLarge)
                 }
             }
+        }
+        SettingsCard(title = "Supported notifications") {
+            Text(
+                "Rupee currently reads notifications from these apps with dedicated parsers:",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            listOf(
+                "Google Pay (GPay)",
+                "PhonePe",
+                "Paytm",
+                "CRED",
+                "ICICI credit card alerts",
+                "Generic UPI fallback (PhonePe-clones, BHIM, etc.)",
+                "EMI / loan reminders (heuristic)",
+            ).forEach { Text("• $it", style = MaterialTheme.typography.bodyMedium) }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "Other apps may fall through a generic parser with lower confidence — those land in Inbox for you to confirm or dismiss.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        SettingsCard(title = "Privacy & data") {
+            Text(
+                "Notification bodies stay on this device only — there is no cloud sync yet. " +
+                    "If you uninstall or reset, your data is gone. A cloud backup is on the roadmap.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        SettingsCard(title = "Feedback") {
+            Text(
+                "Found a bug or have a suggestion? Send me an email.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedButton(onClick = onSendFeedback) { Text("Send feedback") }
         }
         SettingsCard(title = "About") {
             Row(

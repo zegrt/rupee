@@ -14,5 +14,8 @@ interface RawCaptureEventDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertRawCaptureEvent(event: RawCaptureEventEntity): Long
+
+    @Query("DELETE FROM raw_capture_events")
+    suspend fun deleteAll()
 }
 
