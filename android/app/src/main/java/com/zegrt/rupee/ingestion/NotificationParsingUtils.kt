@@ -85,6 +85,50 @@ internal object NotificationParsingUtils {
         return needles.any { needle -> needle in text }
     }
 
+    data class NetworkReference(val id: String, val type: String)
+
+    // Ordered by specificity. RRN appears in card-network notifications;
+    // labelled "UPI Ref" / "IMPS Ref" patterns are explicit; the bare-number
+    // catch-alls run last so a labelled match always wins.
+    private val networkRefPatterns: List<Pair<Regex, String>> = listOf(
+        Regex(
+            """\b(?:UPI(?:\s+Ref(?:erence)?(?:\s*(?:No|Number))?\.?)?|UPI\s+txn\s+id|UTR)\s*[:#]?\s*([A-Z0-9]{8,22})\b""",
+            RegexOption.IGNORE_CASE,
+        ) to "UPI",
+        Regex(
+            """\bIMPS\s+(?:Ref(?:erence)?(?:\s*No)?\.?|ID)\s*[:#]?\s*([A-Z0-9]{8,22})\b""",
+            RegexOption.IGNORE_CASE,
+        ) to "IMPS",
+        Regex(
+            """\bNEFT\s+(?:Ref(?:erence)?(?:\s*No)?\.?|UTR)\s*[:#]?\s*([A-Z0-9]{8,22})\b""",
+            RegexOption.IGNORE_CASE,
+        ) to "NEFT",
+        Regex(
+            """\bRTGS\s+(?:Ref(?:erence)?(?:\s*No)?\.?|UTR)\s*[:#]?\s*([A-Z0-9]{8,22})\b""",
+            RegexOption.IGNORE_CASE,
+        ) to "RTGS",
+        Regex(
+            """\bRRN\s*[:#]?\s*(\d{10,14})\b""",
+            RegexOption.IGNORE_CASE,
+        ) to "CARD_AUTH",
+        // Generic "Ref No 123456789012" with no network prefix. Used when the
+        // body says only "Ref No 1234567890123" — assume UPI (most common in
+        // notifications today) and let downstream callers refine if needed.
+        Regex(
+            """\bRef(?:erence)?(?:\s*No)?\.?\s*[:#]?\s*([0-9]{10,18})\b""",
+            RegexOption.IGNORE_CASE,
+        ) to "UPI",
+    )
+
+    fun extractNetworkReference(text: String): NetworkReference? {
+        for ((regex, type) in networkRefPatterns) {
+            val match = regex.find(text) ?: continue
+            val id = match.groupValues.getOrNull(1)?.trim().orEmpty()
+            if (id.isNotBlank()) return NetworkReference(id = id, type = type)
+        }
+        return null
+    }
+
     private fun cleanupEntityName(value: String): String {
         return value
             .trim()

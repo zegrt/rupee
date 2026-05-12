@@ -60,4 +60,49 @@ class NotificationParsingUtilsTest {
             NotificationParsingUtils.extractDueDateIso("Bill due 32 May 2026", 2026),
         )
     }
+
+    // ── Network reference ────────────────────────────────────────────────────
+
+    @Test
+    fun `network ref extracts labelled UPI reference`() {
+        val ref = NotificationParsingUtils.extractNetworkReference(
+            "Paid ₹500 to Swiggy via UPI. UPI Ref 412356789012",
+        )
+        assertEquals("412356789012", ref?.id)
+        assertEquals("UPI", ref?.type)
+    }
+
+    @Test
+    fun `network ref extracts IMPS reference`() {
+        val ref = NotificationParsingUtils.extractNetworkReference(
+            "Rs 10,000 transferred via IMPS Ref No 412567890123",
+        )
+        assertEquals("412567890123", ref?.id)
+        assertEquals("IMPS", ref?.type)
+    }
+
+    @Test
+    fun `network ref extracts RRN for card transactions`() {
+        val ref = NotificationParsingUtils.extractNetworkReference(
+            "Rs 1234 spent on HDFC Card xx1234. RRN 412567890123",
+        )
+        assertEquals("412567890123", ref?.id)
+        assertEquals("CARD_AUTH", ref?.type)
+    }
+
+    @Test
+    fun `network ref falls back to generic Ref number`() {
+        val ref = NotificationParsingUtils.extractNetworkReference(
+            "Payment received. Ref No 412567890123",
+        )
+        assertEquals("412567890123", ref?.id)
+        assertEquals("UPI", ref?.type)
+    }
+
+    @Test
+    fun `network ref returns null when no reference is present`() {
+        assertNull(
+            NotificationParsingUtils.extractNetworkReference("Rs 500 spent at MERCHANT"),
+        )
+    }
 }

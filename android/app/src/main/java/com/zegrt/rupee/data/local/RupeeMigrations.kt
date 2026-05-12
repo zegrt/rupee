@@ -69,3 +69,30 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
         )
     }
 }
+
+/**
+ * v8 — Sprint 1 additive columns. No table renames or drops, so the migration
+ * is purely ALTER TABLE … ADD COLUMN. All new columns are nullable / default
+ * false so existing rows remain valid.
+ *
+ *  - `networkReferenceId` + `networkReferenceType` on `parsed_signals` and
+ *    `canonical_transactions` (Axio §3.4) — captured by parsers to enable
+ *    later cross-stream chaining dedupe.
+ *  - `patternUid` on `parsed_signals` — reserved for the JSON rule engine.
+ *  - `excludeFromExpenseTotals` / `excludeFromIncomeTotals` on `accounts` and
+ *    `credit_cards` (Axio §5.9) — per-account opt-out from spend/income
+ *    rollups so wallets don't double-count.
+ */
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `parsed_signals` ADD COLUMN `networkReferenceId` TEXT DEFAULT NULL")
+        db.execSQL("ALTER TABLE `parsed_signals` ADD COLUMN `networkReferenceType` TEXT DEFAULT NULL")
+        db.execSQL("ALTER TABLE `parsed_signals` ADD COLUMN `patternUid` INTEGER DEFAULT NULL")
+        db.execSQL("ALTER TABLE `canonical_transactions` ADD COLUMN `networkReferenceId` TEXT DEFAULT NULL")
+        db.execSQL("ALTER TABLE `canonical_transactions` ADD COLUMN `networkReferenceType` TEXT DEFAULT NULL")
+        db.execSQL("ALTER TABLE `accounts` ADD COLUMN `excludeFromExpenseTotals` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `accounts` ADD COLUMN `excludeFromIncomeTotals` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `credit_cards` ADD COLUMN `excludeFromExpenseTotals` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `credit_cards` ADD COLUMN `excludeFromIncomeTotals` INTEGER NOT NULL DEFAULT 0")
+    }
+}

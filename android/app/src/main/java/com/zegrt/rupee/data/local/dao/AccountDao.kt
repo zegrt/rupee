@@ -16,6 +16,9 @@ interface AccountDao {
     @Query("SELECT COUNT(*) FROM accounts WHERE userId = :userId AND accountType = :accountType")
     suspend fun countAccountsByType(userId: String, accountType: AccountType): Int
 
+    @Query("SELECT * FROM accounts WHERE id = :id LIMIT 1")
+    suspend fun getAccountById(id: String): AccountEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAccounts(accounts: List<AccountEntity>)
 }

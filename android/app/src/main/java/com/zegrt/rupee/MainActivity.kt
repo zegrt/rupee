@@ -324,6 +324,7 @@ private fun RupeeApp(
             onCloseCardDueDraft = cardsEmisViewModel::closeCardDueDraft,
             onUpdateCardDueDraft = cardsEmisViewModel::updateCardDueDraft,
             onSubmitCardDueDraft = cardsEmisViewModel::submitCardDueDraft,
+            onSetCardExclude = cardsEmisViewModel::setCardExcludeFromExpenseTotals,
             onCalendarPrev = calendarViewModel::goToPreviousMonth,
             onCalendarNext = calendarViewModel::goToNextMonth,
             onCalendarSelectDate = calendarViewModel::selectDate,
@@ -357,6 +358,9 @@ private fun RupeeApp(
             onDebugRefreshCrashLog = { debugViewModel.refreshCrashLog(context) },
             onDebugEmailCrashLog = { debugViewModel.emailCrashLog(context) },
             onDebugClearCrashLog = { debugViewModel.clearCrashLog(context) },
+            onDebugShareNotificationDumps = { debugViewModel.shareNotificationDumps(context) },
+            onDebugClearNotificationDumps = { debugViewModel.clearNotificationDumps(context) },
+            onDebugRefreshNotificationDumpSize = { debugViewModel.refreshNotificationDumpSize(context) },
         )
     }
 }
@@ -671,6 +675,7 @@ private fun RupeeHome(
     onCloseCardDueDraft: () -> Unit,
     onUpdateCardDueDraft: (com.zegrt.rupee.cards.CardDueDraft.() -> com.zegrt.rupee.cards.CardDueDraft) -> Unit,
     onSubmitCardDueDraft: () -> Unit,
+    onSetCardExclude: (String, Boolean) -> Unit,
     onCalendarPrev: () -> Unit,
     onCalendarNext: () -> Unit,
     onCalendarSelectDate: (java.time.LocalDate) -> Unit,
@@ -702,6 +707,9 @@ private fun RupeeHome(
     onDebugLoadMockSample: (com.zegrt.rupee.debug.SampleNotification) -> Unit,
     onDebugWipeRawCapture: () -> Unit,
     onDebugRefreshCrashLog: () -> Unit,
+    onDebugShareNotificationDumps: () -> Unit,
+    onDebugClearNotificationDumps: () -> Unit,
+    onDebugRefreshNotificationDumpSize: () -> Unit,
     onDebugEmailCrashLog: () -> Unit,
     onDebugClearCrashLog: () -> Unit,
 ) {
@@ -780,7 +788,10 @@ private fun RupeeHome(
                             showRecap = true
                         },
                         onSendFeedback = onSendFeedback,
-                        onOpenDebug = { showDebug = true },
+                        onOpenDebug = {
+                            onDebugRefreshNotificationDumpSize()
+                            showDebug = true
+                        },
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -795,7 +806,10 @@ private fun RupeeHome(
                     modifier = Modifier
                         .align(androidx.compose.ui.Alignment.BottomEnd)
                         .padding(20.dp)
-                        .clickable { showDebug = true },
+                        .clickable {
+                            onDebugRefreshNotificationDumpSize()
+                            showDebug = true
+                        },
                 ) {
                     Text(
                         "Debug",
@@ -896,6 +910,7 @@ private fun RupeeHome(
                         onAddEmi = onOpenEmiDraft,
                         onRemoveEmi = onRemoveEmi,
                         onSetCardDue = onOpenCardDueDraft,
+                        onSetCardExclude = onSetCardExclude,
                     )
                 }
             }
@@ -1064,6 +1079,9 @@ private fun RupeeHome(
                         onEmailCrashLog = onDebugEmailCrashLog,
                         onClearCrashLog = onDebugClearCrashLog,
                         crashLogPreview = debugState.crashLogPreview,
+                        onShareNotificationDumps = onDebugShareNotificationDumps,
+                        onClearNotificationDumps = onDebugClearNotificationDumps,
+                        notificationDumpSize = debugState.notificationDumpSize,
                     )
                 }
             }

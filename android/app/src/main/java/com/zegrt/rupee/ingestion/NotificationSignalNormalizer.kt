@@ -98,7 +98,20 @@ class NotificationSignalNormalizer(
     private suspend fun normalizeLocked(rawEvent: RawCaptureEventEntity) {
         run {
             val now = Instant.now().toString()
-            val parseResult = parserRegistry.parse(rawEvent)
+            // Enrich the parser's result with a network reference if the body
+            // had one. Done here instead of in each parser so all 8 parsers
+            // get this for free and the upcoming JSON rule engine inherits it.
+            val parseResult = parserRegistry.parse(rawEvent).let { result ->
+                if (result.networkReferenceId != null) result
+                else NotificationParsingUtils.extractNetworkReference(rawEvent.body)
+                    ?.let { ref ->
+                        result.copy(
+                            networkReferenceId = ref.id,
+                            networkReferenceType = ref.type,
+                        )
+                    }
+                    ?: result
+            }
             val dedupeResult = dedupeEngine.detect(rawEvent, parseResult)
             val baseDecision = decisionEngine.decide(parseResult)
             val trustRule = if (parseResult.amountMinor != null && !dedupeResult.isDuplicate) {
@@ -145,6 +158,9 @@ class NotificationSignalNormalizer(
                 maskedDigits = parseResult.maskedDigits,
                 mode = parseResult.mode,
                 eventOccurredAt = rawEvent.deviceEventTime ?: rawEvent.receivedAt,
+                networkReferenceId = parseResult.networkReferenceId,
+                networkReferenceType = parseResult.networkReferenceType,
+                patternUid = null,
                 parseConfidence = parseResult.parseConfidence,
                 structuredJson = null,
                 createdAt = now,
@@ -312,6 +328,8 @@ class NotificationSignalNormalizer(
             createdBy = if (status == CanonicalTransactionStatus.CONFIRMED) "trust_rule" else "notification_auto",
             confidenceTier = confidenceTier,
             dedupeFingerprint = dedupeFingerprint,
+            networkReferenceId = parseResult.networkReferenceId,
+            networkReferenceType = parseResult.networkReferenceType,
             createdAt = now,
             updatedAt = now,
             syncStatus = SyncStatus.LOCAL_ONLY,

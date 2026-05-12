@@ -25,5 +25,10 @@ data class NotificationParseResult(
     // ISO-8601 date (yyyy-MM-dd) extracted from the body for BILL_DUE / EMI_DUE candidates.
     // Null if no due date phrase was matched.
     val dueDateIso: String? = null,
+    // UPI/IMPS/NEFT/RTGS/RRN reference extracted from the body. Captured here
+    // for cross-stream dedupe later; flows into ParsedSignalEntity and the
+    // canonical txn. Null when no recognisable token was found.
+    val networkReferenceId: String? = null,
+    val networkReferenceType: String? = null,
 )
 

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Exposes the debug-only notification-dump folder so we can share-export
+         the JSONL file. Scoped tightly to that subfolder so other private
+         files (rupee.db, crash log) cannot be reached via FileProvider URIs. -->
+    <external-files-path
+        name="notif_dumps"
+        path="notif-dumps/" />
+</paths>

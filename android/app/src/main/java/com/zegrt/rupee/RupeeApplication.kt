@@ -8,6 +8,7 @@ import com.zegrt.rupee.budget.BudgetAlertManager
 import com.zegrt.rupee.budget.DuesAlertManager
 import com.zegrt.rupee.data.local.MIGRATION_5_6
 import com.zegrt.rupee.data.local.MIGRATION_6_7
+import com.zegrt.rupee.data.local.MIGRATION_7_8
 import com.zegrt.rupee.data.local.RupeeDatabase
 import com.zegrt.rupee.data.repository.LocalFinanceRepository
 import com.zegrt.rupee.onboarding.OnboardingPreferences
@@ -19,7 +20,7 @@ class RupeeApplication : Application() {
             RupeeDatabase::class.java,
             "rupee.db",
         )
-            .addMigrations(MIGRATION_5_6, MIGRATION_6_7)
+            .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
             .fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4)
             .build()
     }

@@ -71,6 +71,7 @@ data class DebugUiState(
     val mockTitle: String = DebugSamples.gpay.title.orEmpty(),
     val mockBody: String = DebugSamples.gpay.body,
     val crashLogPreview: String = "",
+    val notificationDumpSize: Long = 0L,
     val message: String? = null,
 )
 
@@ -101,6 +102,48 @@ class DebugViewModel(
     fun clearCrashLog(context: Context) {
         com.zegrt.rupee.diagnostics.CrashReporter.clearLog(context)
         _uiState.value = _uiState.value.copy(crashLogPreview = "", message = "Crash log cleared")
+    }
+
+    fun refreshNotificationDumpSize(context: Context) {
+        _uiState.value = _uiState.value.copy(
+            notificationDumpSize = com.zegrt.rupee.diagnostics.NotificationDumper.fileSize(context),
+        )
+    }
+
+    fun clearNotificationDumps(context: Context) {
+        com.zegrt.rupee.diagnostics.NotificationDumper.clear(context)
+        _uiState.value = _uiState.value.copy(
+            notificationDumpSize = 0L,
+            message = "Notification dump cleared",
+        )
+    }
+
+    fun shareNotificationDumps(context: Context) {
+        val dir = com.zegrt.rupee.diagnostics.NotificationDumper.directory(context) ?: run {
+            _uiState.value = _uiState.value.copy(message = "Dump folder unavailable.")
+            return
+        }
+        val file = java.io.File(dir, "dumps.jsonl").takeIf { it.exists() } ?: run {
+            _uiState.value = _uiState.value.copy(message = "No dumps to share.")
+            return
+        }
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file,
+        )
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/json"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, "Rupee notification dump")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching {
+            context.startActivity(Intent.createChooser(intent, "Share dumps").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.onFailure {
+            _uiState.value = _uiState.value.copy(message = "No share target available.")
+        }
     }
 
     fun emailCrashLog(context: Context) {

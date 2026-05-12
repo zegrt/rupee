@@ -68,6 +68,10 @@ data class CanonicalTransactionEntity(
     val confidenceTier: ConfidenceTier? = null,
     val similarHistoryKey: String? = null,
     val dedupeFingerprint: String? = null,
+    // Carried through from the parsed signal so the canonical txn can join
+    // with cross-stream duplicates (HDFC SMS + CRED mirror). See Axio §3.4.
+    val networkReferenceId: String? = null,
+    val networkReferenceType: String? = null,
     val isHiddenFromBudget: Boolean = false,
     val createdAt: String,
     val updatedAt: String,

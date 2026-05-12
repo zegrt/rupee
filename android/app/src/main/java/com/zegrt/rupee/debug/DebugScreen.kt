@@ -45,6 +45,9 @@ fun DebugScreen(
     onEmailCrashLog: () -> Unit = {},
     onClearCrashLog: () -> Unit = {},
     crashLogPreview: String = "",
+    onShareNotificationDumps: () -> Unit = {},
+    onClearNotificationDumps: () -> Unit = {},
+    notificationDumpSize: Long = 0L,
 ) {
     var resetConfirmOpen by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -183,6 +186,33 @@ fun DebugScreen(
                 OutlinedButton(onClick = onEmailCrashLog) { Text("Email log") }
                 OutlinedButton(onClick = onViewCrashLog) { Text("Refresh") }
                 OutlinedButton(onClick = onClearCrashLog) { Text("Clear") }
+            }
+        }
+        DebugCard(title = "Notification dumps") {
+            Text(
+                "Debug-only: every incoming notification's extras are saved to a JSONL " +
+                    "file. We use this corpus to test the JSON rule engine against real-world " +
+                    "bodies. Email the file to the dev or clear when triaged.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            val sizeLabel = when {
+                notificationDumpSize <= 0L -> "No dumps captured yet."
+                notificationDumpSize < 1024 -> "$notificationDumpSize bytes"
+                notificationDumpSize < 1024 * 1024 -> "${notificationDumpSize / 1024} KB"
+                else -> "${notificationDumpSize / 1024 / 1024} MB"
+            }
+            Text(sizeLabel, style = MaterialTheme.typography.bodyMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = onShareNotificationDumps,
+                    enabled = notificationDumpSize > 0L,
+                ) { Text("Share dump file") }
+                OutlinedButton(
+                    onClick = onClearNotificationDumps,
+                    enabled = notificationDumpSize > 0L,
+                ) { Text("Clear") }
             }
         }
         DebugCard(title = "Wipe raw capture") {

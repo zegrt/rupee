@@ -92,8 +92,8 @@ The current preview build:
 
 APK output:
 
-- [rupee-0.12.0-release.apk](./android/app/build/outputs/apk/release/rupee-0.12.0-release.apk) (signed; recommended for testers)
-- [rupee-0.12.0-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.12.0-debug.apk)
+- [rupee-0.13.0-release.apk](./android/app/build/outputs/apk/release/rupee-0.13.0-release.apk) (signed; recommended for testers)
+- [rupee-0.13.0-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.13.0-debug.apk)
 
 ## Main Docs
 

@@ -26,6 +26,7 @@ data class CardRow(
     val outstandingLabel: String?,
     val limitLabel: String?,
     val dueLabel: String?,
+    val excludeFromExpenseTotals: Boolean,
 )
 
 data class EmiRow(
@@ -195,7 +196,14 @@ class CardsEmisViewModel(
             val due = card.statementDueDate?.let { formatDueLabel(it) }
             if (due != null) "Due ${formatMinor(amount)} on $due" else "Due ${formatMinor(amount)}"
         },
+        excludeFromExpenseTotals = card.excludeFromExpenseTotals,
     )
+
+    fun setCardExcludeFromExpenseTotals(cardId: String, exclude: Boolean) {
+        viewModelScope.launch {
+            repository.setCardExcludeFromExpenseTotals(cardId, exclude)
+        }
+    }
 
     private fun toEmiRow(plan: EmiPlanEntity): EmiRow = EmiRow(
         id = plan.id,
