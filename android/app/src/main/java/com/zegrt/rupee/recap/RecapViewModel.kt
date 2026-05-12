@@ -86,16 +86,22 @@ class RecapViewModel(
         initialValue = RecapUiState(),
     )
 
+    // Tracks what "current month" was at construction / last user-driven reset.
+    // If `month.value` still equals this anchor when resume fires, the user hasn't
+    // navigated anywhere — safe to advance to the new current month. If they've
+    // tapped prev/next, anchor and month.value diverge, and resume leaves alone.
+    private var anchorMonth = YearMonth.from(clock())
+
     /**
      * Snap "current month" forward if the user kept the app open across a month
-     * boundary. No-op when the user has explicitly navigated to a non-current month.
+     * boundary AND hasn't manually navigated to another month.
      */
     fun refreshOnResume() {
         val nowMonth = YearMonth.from(clock())
-        if (month.value == nowMonth.minusMonths(1)) {
-            // user was viewing last month and never advanced — leave it alone
-            return
+        if (month.value == anchorMonth && nowMonth != anchorMonth) {
+            month.value = nowMonth
         }
+        anchorMonth = nowMonth
     }
 
     fun goToPreviousMonth() {
@@ -107,7 +113,9 @@ class RecapViewModel(
     }
 
     fun resetToCurrent() {
-        month.value = YearMonth.from(clock())
+        val nowMonth = YearMonth.from(clock())
+        anchorMonth = nowMonth
+        month.value = nowMonth
     }
 
     private fun toUiState(

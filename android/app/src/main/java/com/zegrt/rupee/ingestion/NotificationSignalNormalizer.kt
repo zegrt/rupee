@@ -244,18 +244,22 @@ class NotificationSignalNormalizer(
         cards: List<CreditCardEntity>,
         parseResult: NotificationParseResult,
     ): CreditCardEntity? {
-        // 1. Last-4 digit match wins when the parser captured them.
+        // 1. Last-4 digit match is the only fully unambiguous signal — use it
+        //    whenever the parser captured the masked digits.
         val digits = parseResult.maskedDigits
         if (!digits.isNullOrBlank()) {
             cards.firstOrNull { it.maskedIdentifier?.takeLast(4) == digits }?.let { return it }
         }
-        // 2. Provider hint match (e.g. "icici" → "ICICI").
+        // 2. Provider hint match — only when there's a single candidate. If the
+        //    user has multiple cards from the same provider (two ICICI cards),
+        //    refuse to guess and let the user set the due date manually instead.
         val hint = parseResult.sourceCardHint?.lowercase()
         if (!hint.isNullOrBlank() && hint != "cred_card") {
-            cards.firstOrNull { card ->
+            val matches = cards.filter { card ->
                 card.providerName?.lowercase()?.contains(hint) == true ||
                     card.displayName.lowercase().contains(hint)
-            }?.let { return it }
+            }
+            if (matches.size == 1) return matches.single()
         }
         // 3. Fall back to the single active card if there's exactly one — common
         // in current builds where users typically add one card during onboarding.
