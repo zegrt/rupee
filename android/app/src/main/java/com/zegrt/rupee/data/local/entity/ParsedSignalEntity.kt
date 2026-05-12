@@ -41,6 +41,15 @@ data class ParsedSignalEntity(
     val maskedDigits: String? = null,
     val mode: Mode? = null,
     val eventOccurredAt: String? = null,
+    // UPI/IMPS/NEFT/RTGS reference. Captured by parsers so two signals from the
+    // same charge across different streams (HDFC SMS + CRED notification) can
+    // be correlated later via the chaining engine. Null when the body had no
+    // recognisable reference token. (Axio §3.4.)
+    val networkReferenceId: String? = null,
+    val networkReferenceType: String? = null,
+    // Stable identifier for the matched rule, reserved for the upcoming
+    // JSON rule engine. Null until rules ship.
+    val patternUid: Long? = null,
     val parseConfidence: Double,
     val structuredJson: String? = null,
     val createdAt: String,

@@ -33,13 +33,20 @@ fun CardsEmisScreen(
     onAddEmi: () -> Unit,
     onRemoveEmi: (String) -> Unit,
     onSetCardDue: (String) -> Unit,
+    onSetCardExclude: (String, Boolean) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Text("Credit cards", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         if (state.cards.isEmpty()) {
             EmptyCard("No cards yet. Cards added during onboarding show up here.")
         } else {
-            state.cards.forEach { CardRowCard(it, onSetDue = { onSetCardDue(it.id) }) }
+            state.cards.forEach { card ->
+                CardRowCard(
+                    row = card,
+                    onSetDue = { onSetCardDue(card.id) },
+                    onToggleExclude = { exclude -> onSetCardExclude(card.id, exclude) },
+                )
+            }
         }
 
         Row(
@@ -126,7 +133,11 @@ fun EmiDraftSheet(
 }
 
 @Composable
-private fun CardRowCard(row: CardRow, onSetDue: () -> Unit) {
+private fun CardRowCard(
+    row: CardRow,
+    onSetDue: () -> Unit,
+    onToggleExclude: (Boolean) -> Unit,
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -142,6 +153,23 @@ private fun CardRowCard(row: CardRow, onSetDue: () -> Unit) {
             Spacer(modifier = Modifier.height(4.dp))
             TextButton(onClick = onSetDue) {
                 Text(if (row.dueLabel == null) "Set due" else "Edit due")
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Exclude from spend totals", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "For wallets/transit cards loaded from another bank you already track.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                androidx.compose.material3.Switch(
+                    checked = row.excludeFromExpenseTotals,
+                    onCheckedChange = onToggleExclude,
+                )
             }
         }
     }

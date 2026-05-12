@@ -28,6 +28,11 @@ data class AccountEntity(
     val currencyCode: String,
     val openingBalanceMinor: Long? = null,
     val currentBalanceMinor: Long? = null,
+    // When true, transactions on this account are skipped in spend totals.
+    // For wallets/transit cards where the inflow was already counted at the
+    // source bank — toggling this prevents double-counting. Per Axio §5.9.
+    val excludeFromExpenseTotals: Boolean = false,
+    val excludeFromIncomeTotals: Boolean = false,
     val isActive: Boolean = true,
     val sortOrder: Int = 0,
     val createdAt: String,

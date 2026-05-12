@@ -63,6 +63,22 @@ class LocalFinanceRepository(
 
     fun observeCards(): Flow<List<CreditCardEntity>> = database.creditCardDao().observeActiveCards()
 
+    suspend fun setAccountExcludeFromExpenseTotals(accountId: String, exclude: Boolean) {
+        val account = database.accountDao().getAccountById(accountId) ?: return
+        val now = Instant.now().toString()
+        database.accountDao().upsertAccounts(
+            listOf(account.copy(excludeFromExpenseTotals = exclude, updatedAt = now)),
+        )
+    }
+
+    suspend fun setCardExcludeFromExpenseTotals(cardId: String, exclude: Boolean) {
+        val card = database.creditCardDao().getCardById(cardId) ?: return
+        val now = Instant.now().toString()
+        database.creditCardDao().upsertCards(
+            listOf(card.copy(excludeFromExpenseTotals = exclude, updatedAt = now)),
+        )
+    }
+
     fun observeEmiPlans(): Flow<List<EmiPlanEntity>> = database.emiPlanDao().observePlans(USER_ID)
 
     fun observeRecurringPatterns(): Flow<List<RecurringPatternEntity>> =

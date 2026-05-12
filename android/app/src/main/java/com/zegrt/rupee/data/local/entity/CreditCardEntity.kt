@@ -25,6 +25,8 @@ data class CreditCardEntity(
     val statementDueDate: String? = null,
     val currentOutstandingMinor: Long? = null,
     val availableLimitMinor: Long? = null,
+    val excludeFromExpenseTotals: Boolean = false,
+    val excludeFromIncomeTotals: Boolean = false,
     val isActive: Boolean = true,
     val sortOrder: Int = 0,
     val createdAt: String,

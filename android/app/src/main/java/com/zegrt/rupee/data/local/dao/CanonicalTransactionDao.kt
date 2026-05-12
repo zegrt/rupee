@@ -25,16 +25,24 @@ interface CanonicalTransactionDao {
     @Query("SELECT * FROM canonical_transactions WHERE id = :id LIMIT 1")
     suspend fun getTransactionById(id: String): CanonicalTransactionEntity?
 
+    // Spend totals join accounts and credit_cards so per-account / per-card
+    // "exclude from expense totals" toggles take effect. Transactions without
+    // an accountId / creditCardId (cash, unattributed) still count — the
+    // IS NULL OR = 0 form covers that.
     @Query(
         """
-        SELECT COALESCE(SUM(amountMinor), 0)
-        FROM canonical_transactions
-        WHERE userId = :userId
-          AND type = 'EXPENSE'
-          AND status != 'IGNORED'
-          AND isHiddenFromBudget = 0
-          AND occurredAt >= :fromIso
-          AND occurredAt < :untilIso
+        SELECT COALESCE(SUM(t.amountMinor), 0)
+        FROM canonical_transactions AS t
+        LEFT JOIN accounts AS a ON t.accountId = a.id
+        LEFT JOIN credit_cards AS cc ON t.creditCardId = cc.id
+        WHERE t.userId = :userId
+          AND t.type = 'EXPENSE'
+          AND t.status != 'IGNORED'
+          AND t.isHiddenFromBudget = 0
+          AND (a.excludeFromExpenseTotals IS NULL OR a.excludeFromExpenseTotals = 0)
+          AND (cc.excludeFromExpenseTotals IS NULL OR cc.excludeFromExpenseTotals = 0)
+          AND t.occurredAt >= :fromIso
+          AND t.occurredAt < :untilIso
         """
     )
     fun observeSpentInPeriod(
@@ -45,14 +53,18 @@ interface CanonicalTransactionDao {
 
     @Query(
         """
-        SELECT COALESCE(SUM(amountMinor), 0)
-        FROM canonical_transactions
-        WHERE userId = :userId
-          AND type = 'EXPENSE'
-          AND status != 'IGNORED'
-          AND isHiddenFromBudget = 0
-          AND occurredAt >= :fromIso
-          AND occurredAt < :untilIso
+        SELECT COALESCE(SUM(t.amountMinor), 0)
+        FROM canonical_transactions AS t
+        LEFT JOIN accounts AS a ON t.accountId = a.id
+        LEFT JOIN credit_cards AS cc ON t.creditCardId = cc.id
+        WHERE t.userId = :userId
+          AND t.type = 'EXPENSE'
+          AND t.status != 'IGNORED'
+          AND t.isHiddenFromBudget = 0
+          AND (a.excludeFromExpenseTotals IS NULL OR a.excludeFromExpenseTotals = 0)
+          AND (cc.excludeFromExpenseTotals IS NULL OR cc.excludeFromExpenseTotals = 0)
+          AND t.occurredAt >= :fromIso
+          AND t.occurredAt < :untilIso
         """
     )
     suspend fun getSpentInPeriod(
@@ -123,16 +135,20 @@ interface CanonicalTransactionDao {
 
     @Query(
         """
-        SELECT categoryId AS categoryId, COALESCE(SUM(amountMinor), 0) AS amountMinor
-        FROM canonical_transactions
-        WHERE userId = :userId
-          AND type = 'EXPENSE'
-          AND status != 'IGNORED'
-          AND isHiddenFromBudget = 0
-          AND occurredAt >= :fromIso
-          AND occurredAt < :untilIso
-          AND categoryId IS NOT NULL
-        GROUP BY categoryId
+        SELECT t.categoryId AS categoryId, COALESCE(SUM(t.amountMinor), 0) AS amountMinor
+        FROM canonical_transactions AS t
+        LEFT JOIN accounts AS a ON t.accountId = a.id
+        LEFT JOIN credit_cards AS cc ON t.creditCardId = cc.id
+        WHERE t.userId = :userId
+          AND t.type = 'EXPENSE'
+          AND t.status != 'IGNORED'
+          AND t.isHiddenFromBudget = 0
+          AND (a.excludeFromExpenseTotals IS NULL OR a.excludeFromExpenseTotals = 0)
+          AND (cc.excludeFromExpenseTotals IS NULL OR cc.excludeFromExpenseTotals = 0)
+          AND t.occurredAt >= :fromIso
+          AND t.occurredAt < :untilIso
+          AND t.categoryId IS NOT NULL
+        GROUP BY t.categoryId
         """
     )
     fun observeSpentByCategoryInPeriod(

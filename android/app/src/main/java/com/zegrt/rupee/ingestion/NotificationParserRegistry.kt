@@ -16,6 +16,7 @@ class NotificationParserRegistry(
                 parsers = listOf(
                     CredNotificationParser(),
                     IciciNotificationParser(),
+                    KotakNotificationParser(),
                     GPayNotificationParser(),
                     PhonePeNotificationParser(),
                     PaytmNotificationParser(),

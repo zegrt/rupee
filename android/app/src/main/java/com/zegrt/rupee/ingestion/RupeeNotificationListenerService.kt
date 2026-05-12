@@ -3,7 +3,6 @@ package com.zegrt.rupee.ingestion
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import com.zegrt.rupee.RupeeApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,21 +33,42 @@ class RupeeNotificationListenerService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         super.onNotificationPosted(sbn)
 
-        val extras = sbn.notification.extras
-        val title = extras?.getCharSequence(NotificationCompat.EXTRA_TITLE)?.toString()?.trim()
-        val body = extras?.getCharSequence(NotificationCompat.EXTRA_TEXT)?.toString()?.trim().orEmpty()
-        val isDebugMock = extras?.getBoolean(RupeeApplication.DEBUG_MOCK_EXTRA, false) == true
+        // Debug-only: capture every incoming notification's extras for the
+        // real-world corpus we'll replay against parser v2.
+        com.zegrt.rupee.diagnostics.NotificationDumper.dump(this, sbn)
 
-        if (com.zegrt.rupee.BuildConfig.DEBUG) {
-            Log.d(TAG, "onPosted pkg=${sbn.packageName} mock=$isDebugMock body_len=${body.length}")
-        }
+        val isDebugMock = sbn.notification.extras
+            ?.getBoolean(RupeeApplication.DEBUG_MOCK_EXTRA, false) == true
 
-        if (body.isBlank()) {
-            Log.d(TAG, "Skipped: empty body")
+        // Group summaries duplicate content from their children — Android posts
+        // both. Skip the summary explicitly so we don't double-count once the
+        // extractor starts pulling EXTRA_TEXT_LINES (which can carry per-child
+        // snippets and would trigger false-positive parses).
+        if ((sbn.notification.flags and ExtractedNotification.FLAG_GROUP_SUMMARY) != 0) {
+            if (com.zegrt.rupee.BuildConfig.DEBUG) {
+                Log.d(TAG, "Skipped: group summary pkg=${sbn.packageName}")
+            }
             return
         }
+
         if (sbn.packageName == packageName && !isDebugMock) {
             Log.d(TAG, "Skipped: self-package without mock extra")
+            return
+        }
+
+        val extracted = NotificationExtractor.fromNotification(sbn.notification)
+
+        if (com.zegrt.rupee.BuildConfig.DEBUG) {
+            Log.d(
+                TAG,
+                "onPosted pkg=${sbn.packageName} mock=$isDebugMock " +
+                    "body_len=${extracted.combinedBody.length} " +
+                    "template=${extracted.template ?: "default"}",
+            )
+        }
+
+        if (extracted.combinedBody.isBlank()) {
+            Log.d(TAG, "Skipped: empty body after extraction (pkg=${sbn.packageName})")
             return
         }
 
@@ -62,14 +82,14 @@ class RupeeNotificationListenerService : NotificationListenerService() {
                 val rawEventId = normalizer.ingestNotification(
                     userId = "local-user",
                     packageName = sbn.packageName,
-                    title = title,
-                    body = body,
+                    title = extracted.title,
+                    body = extracted.combinedBody,
                     postedAtMillis = sbn.postTime,
                 )
                 if (rawEventId == null) {
                     Log.d(TAG, "Skipped: duplicate fingerprint already stored")
                 } else {
-                    Log.i(TAG, "Ingested raw event $rawEventId")
+                    Log.i(TAG, "Ingested raw event $rawEventId (pkg=${sbn.packageName})")
                 }
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to ingest notification from ${sbn.packageName}", t)

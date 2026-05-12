@@ -20,6 +20,7 @@ class NotificationParserParseTest {
     private val paytm = PaytmNotificationParser()
     private val genericUpi = GenericUpiNotificationParser()
     private val emi = EmiNotificationParser()
+    private val kotak = KotakNotificationParser()
 
     // ── GPay ──────────────────────────────────────────────────────────────────
 
@@ -230,6 +231,46 @@ class NotificationParserParseTest {
             event(title = "EMI Reminder", body = "Your EMI is due on 15-May")
         )
         assertEquals(null, result.amountMinor)
+    }
+
+    // ── Kotak ─────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `kotak parse handles real-world combined body from Kotak811`() {
+        // Real notification captured from the v0.13.0 dumper. Title carries the
+        // amount + UPI verb; body carries the masked digits; merchant is never in
+        // the bank-side notification (it's only in the Kotak app).
+        val result = kotak.parse(
+            event(
+                pkg = "com.kotak811mobilebankingapp.instantsavingsupiscanandpayrecharge",
+                body = "₹10.00 sent via UPI\nAmount debited from XX4129. Check out details.",
+            )
+        )
+        assertEquals(1000L, result.amountMinor)
+        assertEquals("4129", result.maskedDigits)
+        assertEquals(com.zegrt.rupee.data.local.entity.Mode.UPI, result.mode)
+        assertEquals("kotak", result.providerHint)
+        assertEquals(null, result.merchantRaw)
+        // 0.75 → MEDIUM tier → routes to INBOX_PENDING, not silently dropped.
+        org.junit.Assert.assertTrue(result.parseConfidence >= 0.6)
+    }
+
+    @Test
+    fun `kotak canParse matches main bank app package too`() {
+        val event = event(
+            pkg = "com.msf.kbank.mobile",
+            body = "Rs 500 debited from XX1234",
+        )
+        org.junit.Assert.assertTrue(kotak.canParse(event))
+    }
+
+    @Test
+    fun `kotak canParse rejects non-Kotak packages`() {
+        val event = event(
+            pkg = "com.phonepe.app",
+            body = "₹10 sent via UPI",
+        )
+        org.junit.Assert.assertFalse(kotak.canParse(event))
     }
 
     private fun event(
