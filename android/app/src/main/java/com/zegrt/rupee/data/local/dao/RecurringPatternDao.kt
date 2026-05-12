@@ -25,19 +25,6 @@ interface RecurringPatternDao {
     @Query("SELECT * FROM recurring_patterns WHERE userId = :userId")
     suspend fun getAllForUser(userId: String): List<RecurringPatternEntity>
 
-    @Query(
-        """
-        SELECT * FROM recurring_patterns
-        WHERE userId = :userId
-          AND merchantPattern = :merchantPattern
-        LIMIT 1
-        """
-    )
-    suspend fun findByMerchantPattern(
-        userId: String,
-        merchantPattern: String,
-    ): RecurringPatternEntity?
-
     @Query("DELETE FROM recurring_patterns WHERE id = :id")
     suspend fun deleteById(id: String)
 

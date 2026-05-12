@@ -225,6 +225,8 @@ private fun RupeeApp(
                     PermissionStateChecker.hasPostNotificationsPermission(context),
                 )
                 homeViewModel.refreshOnResume()
+                calendarViewModel.refreshOnResume()
+                recapViewModel.refreshOnResume()
             }
         }
 

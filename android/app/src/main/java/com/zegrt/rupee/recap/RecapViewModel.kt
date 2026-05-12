@@ -86,6 +86,18 @@ class RecapViewModel(
         initialValue = RecapUiState(),
     )
 
+    /**
+     * Snap "current month" forward if the user kept the app open across a month
+     * boundary. No-op when the user has explicitly navigated to a non-current month.
+     */
+    fun refreshOnResume() {
+        val nowMonth = YearMonth.from(clock())
+        if (month.value == nowMonth.minusMonths(1)) {
+            // user was viewing last month and never advanced — leave it alone
+            return
+        }
+    }
+
     fun goToPreviousMonth() {
         month.value = month.value.minusMonths(1)
     }

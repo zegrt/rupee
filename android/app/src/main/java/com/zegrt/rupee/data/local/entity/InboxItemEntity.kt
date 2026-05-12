@@ -16,9 +16,7 @@ enum class InboxReasonCode {
 enum class InboxDecisionState {
     PENDING,
     CONFIRMED,
-    EDITED,
     DISMISSED,
-    MERGED,
 }
 
 @Entity(

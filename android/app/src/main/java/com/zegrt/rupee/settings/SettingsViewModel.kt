@@ -21,8 +21,6 @@ import kotlinx.coroutines.launch
 data class SettingsUiState(
     val displayName: String = "",
     val displayNameDraft: String = "",
-    val monthlyBudgetRupees: String = "",
-    val monthlyBudgetDraft: String = "",
     val monthlyBudgetLabel: String = "",
     val currencyCode: String = "INR",
     val categories: List<String> = emptyList(),
@@ -33,7 +31,6 @@ data class SettingsUiState(
     val needsPostNotificationsPrompt: Boolean = false,
     val appVersion: String = "",
     val savingName: Boolean = false,
-    val savingBudget: Boolean = false,
     val message: String? = null,
 )
 
@@ -48,9 +45,7 @@ class SettingsViewModel(
     private val appVersion: String = "",
 ) : ViewModel() {
     private val nameDraft = MutableStateFlow<String?>(null)
-    private val budgetDraft = MutableStateFlow<String?>(null)
     private val savingName = MutableStateFlow(false)
-    private val savingBudget = MutableStateFlow(false)
     private val message = MutableStateFlow<String?>(null)
     private val notificationGranted = MutableStateFlow(false)
     private val postNotificationsGranted = MutableStateFlow(true)
@@ -70,15 +65,7 @@ class SettingsViewModel(
         ) { user, budget, cats, buckets, rules ->
             arrayOf<Any?>(user, budget, cats, buckets, rules)
         },
-        combine(
-            nameDraft,
-            budgetDraft,
-            savingName,
-            savingBudget,
-            message,
-        ) { n, b, sn, sb, m ->
-            arrayOf<Any?>(n, b, sn, sb, m)
-        },
+        combine(nameDraft, savingName, message) { n, s, m -> Triple(n, s, m) },
         // Notification permission flips after the user toggles system settings; this flow
         // belongs in the combine so the Settings card re-renders, not just sampled inside.
         combine(notificationGranted, postNotificationsGranted) { listener, post ->
@@ -95,11 +82,11 @@ class SettingsViewModel(
         val buckets = entities[3] as List<BucketEntity>
         @Suppress("UNCHECKED_CAST")
         val rules = entities[4] as List<MerchantTrustRuleEntity>
+        val (nameDraftValue, savingNameValue, messageValue) = drafts
         val (granted, postGranted) = perms
 
         val name = user?.displayName ?: ""
         val limitMinor = budget?.limitMinor ?: 0L
-        val limitRupees = if (limitMinor > 0L) (limitMinor / 100).toString() else ""
         val categoryLabelById = cats.associate { it.id to it.name }
         val trustRules = rules.map { r ->
             TrustRuleRow(
@@ -111,9 +98,7 @@ class SettingsViewModel(
 
         SettingsUiState(
             displayName = name,
-            displayNameDraft = drafts[0] as String? ?: name,
-            monthlyBudgetRupees = limitRupees,
-            monthlyBudgetDraft = drafts[1] as String? ?: limitRupees,
+            displayNameDraft = nameDraftValue ?: name,
             monthlyBudgetLabel = if (limitMinor > 0L) budgetFormatter.format(limitMinor / 100.0) else "Not set",
             currencyCode = user?.defaultCurrencyCode ?: "INR",
             categories = cats.map { it.name },
@@ -124,9 +109,8 @@ class SettingsViewModel(
             needsPostNotificationsPrompt = android.os.Build.VERSION.SDK_INT >=
                 android.os.Build.VERSION_CODES.TIRAMISU && !postGranted,
             appVersion = appVersion,
-            savingName = drafts[2] as Boolean,
-            savingBudget = drafts[3] as Boolean,
-            message = drafts[4] as String?,
+            savingName = savingNameValue,
+            message = messageValue,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -138,10 +122,6 @@ class SettingsViewModel(
         nameDraft.value = value
     }
 
-    fun updateBudgetDraft(value: String) {
-        budgetDraft.value = value.filter { it.isDigit() }
-    }
-
     fun saveDisplayName() {
         val current = nameDraft.value ?: return
         if (current.isBlank()) return
@@ -151,19 +131,6 @@ class SettingsViewModel(
             nameDraft.value = null
             savingName.value = false
             message.value = "Name saved"
-        }
-    }
-
-    fun saveMonthlyBudget() {
-        val current = budgetDraft.value ?: return
-        val rupees = current.toLongOrNull() ?: return
-        if (rupees <= 0L) return
-        savingBudget.value = true
-        viewModelScope.launch {
-            repository.setMonthlyBudgetLimit(rupees * 100)
-            budgetDraft.value = null
-            savingBudget.value = false
-            message.value = "Budget saved"
         }
     }
 

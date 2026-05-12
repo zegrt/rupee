@@ -14,6 +14,7 @@ import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
+import java.time.temporal.TemporalAdjusters
 import java.util.Currency
 import java.util.Locale
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -90,6 +91,15 @@ class CalendarViewModel(
         initialValue = CalendarUiState(),
     )
 
+    /**
+     * Advance the "today" anchor across midnight boundaries so the calendar's
+     * today-highlight stays accurate after the app's been open for a long session.
+     */
+    fun refreshOnResume() {
+        val now = clock()
+        if (today.value != now) today.value = now
+    }
+
     fun goToPreviousMonth() {
         displayMonth.value = displayMonth.value.minusMonths(1)
         selectedDate.value = null
@@ -120,9 +130,7 @@ class CalendarViewModel(
             .mapValues { (_, list) -> list.sumOf { it.amountMinor } }
 
         val firstOfMonth = month.atDay(1)
-        val gridStart = firstOfMonth.with(DayOfWeek.MONDAY).let {
-            if (it.isAfter(firstOfMonth)) it.minusWeeks(1) else it
-        }
+        val gridStart = firstOfMonth.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         val gridEnd = gridStart.plusWeeks(6)
         val cells = mutableListOf<CalendarDayCell>()
         var cursor = gridStart
