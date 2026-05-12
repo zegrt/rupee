@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Vector glyph for the launcher foreground layer of the adaptive icon.
+Renders a stylized rupee mark inside the 66dp safe zone. Two horizontal
+bars + a diagonal slash + a curved bowl — the canonical rupee symbol
+shape, simplified for crisp rendering at all densities.
+
+Replace with a real brand asset before broader release.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="1.0"
+        android:scaleY="1.0"
+        android:translateX="0"
+        android:translateY="0">
+        <!--
+        Rupee glyph. Drawn within the inner 66dp safe area (viewport 21..87).
+        Two top bars + diagonal slash + main vertical stroke with a curl.
+        -->
+        <path
+            android:fillColor="@color/ic_launcher_foreground_glyph"
+            android:pathData="M40,30 L74,30 L74,38 L40,38 Z" />
+        <path
+            android:fillColor="@color/ic_launcher_foreground_glyph"
+            android:pathData="M40,44 L74,44 L74,52 L60,52 C60,62 52,68 42,68 L62,86 L52,86 L34,68 L40,68 C48,68 52,62 52,52 L40,52 Z" />
+    </group>
+</vector>

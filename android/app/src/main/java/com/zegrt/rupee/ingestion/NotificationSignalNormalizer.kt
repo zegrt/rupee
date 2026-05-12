@@ -102,11 +102,16 @@ class NotificationSignalNormalizer(
             val dedupeResult = dedupeEngine.detect(rawEvent, parseResult)
             val baseDecision = decisionEngine.decide(parseResult)
             val trustRule = if (parseResult.amountMinor != null && !dedupeResult.isDuplicate) {
-                database.merchantTrustRuleDao().getRulesForUser(rawEvent.userId)
-                    .firstOrNull { rule ->
-                        MerchantNameUtils.matchesPattern(parseResult.toEntityName, rule.merchantPattern) ||
-                            MerchantNameUtils.matchesPattern(parseResult.merchantRaw, rule.merchantPattern)
-                    }
+                // Indexed lookup against the cleaned merchant form. Try toEntityName
+                // first (parser-cleaned) then merchantRaw cleaned at read time. Avoids
+                // scanning every rule on every notification.
+                val primary = parseResult.toEntityName
+                    ?.let(MerchantNameUtils::clean)?.takeIf { it != "Unnamed" }
+                val fallback = parseResult.merchantRaw
+                    ?.let(MerchantNameUtils::clean)?.takeIf { it != "Unnamed" }
+                val dao = database.merchantTrustRuleDao()
+                primary?.let { dao.findByCleanedPattern(rawEvent.userId, it) }
+                    ?: fallback?.takeIf { it != primary }?.let { dao.findByCleanedPattern(rawEvent.userId, it) }
             } else null
             val decision = when {
                 dedupeResult.isDuplicate -> CandidateDecision(

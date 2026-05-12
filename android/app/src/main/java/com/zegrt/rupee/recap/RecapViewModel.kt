@@ -135,27 +135,31 @@ class RecapViewModel(
         val topCategories = expenses
             .filter { it.categoryId != null }
             .groupBy { it.categoryId!! }
-            .map { (catId, list) ->
+            .map { (catId, list) -> catId to list.sumOf { it.amountMinor } to list.size }
+            .sortedByDescending { it.first.second }
+            .take(5)
+            .map { (idAndAmount, count) ->
+                val (catId, amountMinor) = idAndAmount
                 RecapHighlight(
                     name = catNameById[catId] ?: "Uncategorized",
-                    amountLabel = moneyFormatter.format(list.sumOf { it.amountMinor } / 100.0),
-                    countLabel = "${list.size} txn${if (list.size == 1) "" else "s"}",
+                    amountLabel = moneyFormatter.format(amountMinor / 100.0),
+                    countLabel = "$count txn${if (count == 1) "" else "s"}",
                 )
             }
-            .sortedByDescending { parseAmount(it.amountLabel) }
-            .take(5)
 
         val topMerchants = expenses
             .groupBy { MerchantNameUtils.clean(it.merchantName) }
-            .map { (merchant, list) ->
+            .map { (merchant, list) -> merchant to list.sumOf { it.amountMinor } to list.size }
+            .sortedByDescending { it.first.second }
+            .take(5)
+            .map { (nameAndAmount, count) ->
+                val (name, amountMinor) = nameAndAmount
                 RecapHighlight(
-                    name = merchant,
-                    amountLabel = moneyFormatter.format(list.sumOf { it.amountMinor } / 100.0),
-                    countLabel = "${list.size} txn${if (list.size == 1) "" else "s"}",
+                    name = name,
+                    amountLabel = moneyFormatter.format(amountMinor / 100.0),
+                    countLabel = "$count txn${if (count == 1) "" else "s"}",
                 )
             }
-            .sortedByDescending { parseAmount(it.amountLabel) }
-            .take(5)
 
         val biggest = expenses
             .sortedByDescending { it.amountMinor }
@@ -191,11 +195,6 @@ class RecapViewModel(
         )
     }
 
-    private fun parseAmount(label: String): Long {
-        // For sorting only; pull digits and parse.
-        val digits = label.filter { it.isDigit() }
-        return digits.toLongOrNull() ?: 0L
-    }
 }
 
 class RecapViewModelFactory(
