@@ -16,17 +16,20 @@ internal object NotificationParsingUtils {
         "jul" to 7, "aug" to 8, "sep" to 9, "sept" to 9, "oct" to 10, "nov" to 11, "dec" to 12,
     )
 
-    // Phrases that anchor a due date: "due on …", "due by …", "payable by …", "due …".
-    // We capture the trailing date in three common shapes and normalize to yyyy-MM-dd.
+    // Phrases that anchor a due date: "due on …", "due by …", "payable by …",
+    // "by 15 May", "Total due Rs. 1000 by 15 May 2026". We allow up to ~60 chars of
+    // intermediate text between the anchor word and the date so bodies that quote
+    // the amount inline still match. Restricting to BILL_DUE/EMI candidates upstream
+    // keeps the false-positive rate low even with the looser pattern.
     private val dueDateRegexes = listOf(
         // 15 May 2026 / 15-May-26 / 15/May/2026
         Regex(
-            """(?:due|payable)\s*(?:on|by)?\s*(\d{1,2})[\s\-/](jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*[\s\-/]?(\d{2,4})?""",
+            """\b(?:due|payable|by)\b[^\n]{0,60}?\b(\d{1,2})[\s\-/](jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*(?:[\s\-/]+(\d{2,4}))?""",
             RegexOption.IGNORE_CASE,
         ),
         // 15/05/2026 / 15-05-2026 / 15.05.26
         Regex(
-            """(?:due|payable)\s*(?:on|by)?\s*(\d{1,2})[\-/.](\d{1,2})[\-/.](\d{2,4})""",
+            """\b(?:due|payable|by)\b[^\n]{0,60}?\b(\d{1,2})[\-/.](\d{1,2})[\-/.](\d{2,4})""",
             RegexOption.IGNORE_CASE,
         ),
     )

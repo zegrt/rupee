@@ -17,56 +17,24 @@ data class DedupeResult(
         get() = duplicateCandidate != null || duplicateCanonicalTransaction != null
 }
 
-class NotificationDedupeEngine(
-    private val database: RupeeDatabase,
-) {
-    suspend fun detect(
-        rawEvent: RawCaptureEventEntity,
-        parseResult: NotificationParseResult,
-    ): DedupeResult {
-        // Look up duplicates against both the current 5-min bucket AND the previous
-        // bucket. Two notifications 11:59:30 and 12:00:30 fall into different bare
-        // buckets — checking the previous bucket too gives us a ~10-minute window
-        // for boundary catches without paying the cost of a true sliding window.
-        // The candidate stores the current-bucket fingerprint so the dedupe key
-        // remains stable for subsequent lookups.
-        val fingerprints = computeFingerprints(rawEvent, parseResult)
-        val current = fingerprints.first
-        val previous = fingerprints.second
+/**
+ * Pure fingerprint computation extracted from [NotificationDedupeEngine] so it can be
+ * unit-tested without a Room database. Buckets the event time into 5-minute windows;
+ * boundary cases (an event at 11:59:30 vs 12:00:30) are handled by the engine
+ * checking both the current bucket and the previous one.
+ */
+internal object DedupeFingerprint {
+    const val BUCKET_MINUTES = 5L
 
-        val duplicateCandidate = database.transactionCandidateDao()
-            .getLatestUsableByFingerprint(rawEvent.userId, current)
-            ?: previous?.let {
-                database.transactionCandidateDao().getLatestUsableByFingerprint(rawEvent.userId, it)
-            }
-        val duplicateCanonicalTransaction = database.canonicalTransactionDao()
-            .getLatestByDedupeFingerprint(rawEvent.userId, current)
-            ?: previous?.let {
-                database.canonicalTransactionDao().getLatestByDedupeFingerprint(rawEvent.userId, it)
-            }
-        return DedupeResult(
-            fingerprint = current,
-            duplicateCandidate = duplicateCandidate,
-            duplicateCanonicalTransaction = duplicateCanonicalTransaction,
-        )
-    }
-
-    private fun computeFingerprints(
-        rawEvent: RawCaptureEventEntity,
-        parseResult: NotificationParseResult,
-    ): Pair<String, String?> {
+    fun compute(rawEvent: RawCaptureEventEntity, parseResult: NotificationParseResult): Pair<String, String> {
         val occurredAt = rawEvent.deviceEventTime?.let(Instant::parse) ?: Instant.parse(rawEvent.receivedAt)
         val epochMinute = occurredAt.epochSecond / 60
         val bucketEpochMinute = epochMinute - (epochMinute % BUCKET_MINUTES)
-        val current = fingerprintForBucket(bucketEpochMinute, parseResult)
-        val previous = fingerprintForBucket(bucketEpochMinute - BUCKET_MINUTES, parseResult)
-        return current to previous
+        return forBucket(bucketEpochMinute, parseResult) to
+            forBucket(bucketEpochMinute - BUCKET_MINUTES, parseResult)
     }
 
-    private fun fingerprintForBucket(
-        bucketEpochMinute: Long,
-        parseResult: NotificationParseResult,
-    ): String {
+    fun forBucket(bucketEpochMinute: Long, parseResult: NotificationParseResult): String {
         val timeBucket = Instant.ofEpochSecond(bucketEpochMinute * 60).truncatedTo(ChronoUnit.MINUTES).toString()
         val normalizedCounterparty = (parseResult.toEntityName ?: parseResult.merchantRaw)
             ?.lowercase()
@@ -90,8 +58,27 @@ class NotificationDedupeEngine(
         val bytes = MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
         return bytes.joinToString("") { byte -> "%02x".format(byte) }
     }
+}
 
-    private companion object {
-        const val BUCKET_MINUTES = 5L
+class NotificationDedupeEngine(
+    private val database: RupeeDatabase,
+) {
+    suspend fun detect(
+        rawEvent: RawCaptureEventEntity,
+        parseResult: NotificationParseResult,
+    ): DedupeResult {
+        val (current, previous) = DedupeFingerprint.compute(rawEvent, parseResult)
+
+        val duplicateCandidate = database.transactionCandidateDao()
+            .getLatestUsableByFingerprint(rawEvent.userId, current)
+            ?: database.transactionCandidateDao().getLatestUsableByFingerprint(rawEvent.userId, previous)
+        val duplicateCanonicalTransaction = database.canonicalTransactionDao()
+            .getLatestByDedupeFingerprint(rawEvent.userId, current)
+            ?: database.canonicalTransactionDao().getLatestByDedupeFingerprint(rawEvent.userId, previous)
+        return DedupeResult(
+            fingerprint = current,
+            duplicateCandidate = duplicateCandidate,
+            duplicateCanonicalTransaction = duplicateCanonicalTransaction,
+        )
     }
 }
