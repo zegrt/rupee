@@ -111,6 +111,17 @@ class MerchantNameUtilsTest {
     }
 
     @Test
+    fun `clean does not clip merchant names containing abbreviations with periods`() {
+        // Regression for an earlier v0.10.1 build that included ". " as a tail and would
+        // turn "St. Patrick's Restaurant" into "St".
+        assertEquals("St. Patrick's Restaurant", MerchantNameUtils.clean("St. Patrick's Restaurant"))
+        assertEquals(
+            "St. Patrick's Restaurant",
+            MerchantNameUtils.clean("St. Patrick's Restaurant using UPI"),
+        )
+    }
+
+    @Test
     fun `matchesPattern handles both inputs null or blank`() {
         assertEquals(false, MerchantNameUtils.matchesPattern(null, "Swiggy"))
         assertEquals(false, MerchantNameUtils.matchesPattern("Swiggy", ""))

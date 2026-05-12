@@ -11,7 +11,14 @@ class EmiNotificationParser : NotificationParser {
     override fun canParse(rawEvent: RawCaptureEventEntity): Boolean {
         val title = rawEvent.title.orEmpty().lowercase()
         val body = rawEvent.body.lowercase()
-        return title.contains("emi") || body.contains("emi")
+        // "emi" alone is too loose — fires on marketing copy like "EMI options available"
+        // or "no EMI due this month". Require it to be paired with a transaction signal
+        // so we only claim bodies that are actually about a charge or upcoming due.
+        val hasEmiWord = " emi" in " $title" || " emi" in " $body" ||
+            title.startsWith("emi") || body.startsWith("emi")
+        if (!hasEmiWord) return false
+        val hasTransactionSignal = TRANSACTION_SIGNALS.any { it in title || it in body }
+        return hasTransactionSignal
     }
 
     override fun parse(rawEvent: RawCaptureEventEntity): NotificationParseResult {
@@ -47,6 +54,11 @@ class EmiNotificationParser : NotificationParser {
     }
 
     companion object {
+        private val TRANSACTION_SIGNALS = listOf(
+            "debited", "deducted", "paid", "auto-debit", "auto debit",
+            "due", "scheduled", "charged", "instalment", "installment",
+        )
+
         private val emiNameRegexes = listOf(
             Regex("""emi\s+of\s+[₹Rs.,0-9]+\s+for\s+([A-Za-z0-9 .&'_-]{3,50})""", RegexOption.IGNORE_CASE),
             Regex("""(?:emi|instalment)\s+(?:for|towards)\s+([A-Za-z0-9 .&'_-]{3,50})""", RegexOption.IGNORE_CASE),
