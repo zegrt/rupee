@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Legacy backup rules for API < 31 (Android 10 and 11, since minSdk = 29).
+The newer data_extraction_rules.xml supersedes this on API 31+.
+-->
+<full-backup-content>
+    <exclude domain="database" path="rupee.db" />
+    <exclude domain="database" path="rupee.db-journal" />
+    <exclude domain="database" path="rupee.db-shm" />
+    <exclude domain="database" path="rupee.db-wal" />
+    <exclude domain="sharedpref" path="rupee_onboarding.xml" />
+    <exclude domain="sharedpref" path="rupee_budget_alert_prefs.xml" />
+    <exclude domain="sharedpref" path="rupee_dues_alert_prefs.xml" />
+</full-backup-content>

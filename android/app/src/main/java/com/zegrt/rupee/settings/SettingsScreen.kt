@@ -31,6 +31,7 @@ fun SettingsScreen(
     onNameDraftChange: (String) -> Unit,
     onSaveName: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
+    onRequestPostNotifications: () -> Unit,
     onOpenTrustRules: () -> Unit,
     onOpenCardsEmis: () -> Unit,
     onOpenBudgets: () -> Unit,
@@ -90,6 +91,17 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedButton(onClick = onOpenNotificationSettings) {
                 Text(if (state.notificationGranted) "Manage permission" else "Grant access")
+            }
+            if (state.needsPostNotificationsPrompt) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "Rupee also needs permission to post its own alerts (budget warnings, due reminders).",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedButton(onClick = onRequestPostNotifications) {
+                    Text("Allow alerts")
+                }
             }
         }
         Card(

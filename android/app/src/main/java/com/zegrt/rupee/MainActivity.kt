@@ -2,11 +2,15 @@
 
 package com.zegrt.rupee
 
+import android.Manifest
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -190,10 +194,25 @@ private fun RupeeApp(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    val postNotificationsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        settingsViewModel.setPostNotificationsGranted(granted)
+    }
+
+    // Auto-prompt once per cold start on Android 13+ when the permission isn't granted.
+    // The system shows the OS dialog at most once per app install; subsequent calls
+    // no-op silently if the user dismissed it, so users can re-trigger via Settings.
     LaunchedEffect(Unit) {
         val granted = PermissionStateChecker.hasNotificationAccess(context)
         onboardingViewModel.syncPermissionState(notificationGranted = granted)
         settingsViewModel.setNotificationGranted(granted)
+
+        val postGranted = PermissionStateChecker.hasPostNotificationsPermission(context)
+        settingsViewModel.setPostNotificationsGranted(postGranted)
+        if (!postGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            postNotificationsLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     DisposableEffect(lifecycleOwner, context) {
@@ -202,6 +221,9 @@ private fun RupeeApp(
                 val granted = PermissionStateChecker.hasNotificationAccess(context)
                 onboardingViewModel.syncPermissionState(notificationGranted = granted)
                 settingsViewModel.setNotificationGranted(granted)
+                settingsViewModel.setPostNotificationsGranted(
+                    PermissionStateChecker.hasPostNotificationsPermission(context),
+                )
                 homeViewModel.refreshOnResume()
             }
         }
@@ -214,6 +236,12 @@ private fun RupeeApp(
 
     val openNotificationSettings = {
         context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+    }
+
+    val requestPostNotifications: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            postNotificationsLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     val sendFeedback: () -> Unit = {
@@ -306,6 +334,7 @@ private fun RupeeApp(
             onRecapNext = recapViewModel::goToNextMonth,
             onRecapResetToCurrent = recapViewModel::resetToCurrent,
             onOpenNotificationSettings = openNotificationSettings,
+            onRequestPostNotifications = requestPostNotifications,
             onSendFeedback = sendFeedback,
             onDebugReset = debugViewModel::resetAllData,
             onDebugSendSample = debugViewModel::sendSample,
@@ -648,6 +677,7 @@ private fun RupeeHome(
     onRecapNext: () -> Unit,
     onRecapResetToCurrent: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
+    onRequestPostNotifications: () -> Unit,
     onSendFeedback: () -> Unit,
     onDebugReset: () -> Unit,
     onDebugSendSample: (com.zegrt.rupee.debug.SampleNotification) -> Unit,
@@ -727,6 +757,7 @@ private fun RupeeHome(
                         onNameDraftChange = onSettingsNameDraftChange,
                         onSaveName = onSettingsSaveName,
                         onOpenNotificationSettings = onOpenNotificationSettings,
+                        onRequestPostNotifications = onRequestPostNotifications,
                         onOpenTrustRules = { showTrustRules = true },
                         onOpenCardsEmis = { showCardsEmis = true },
                         onOpenBudgets = { showBudgets = true },
@@ -744,21 +775,26 @@ private fun RupeeHome(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.85f),
-                modifier = Modifier
-                    .align(androidx.compose.ui.Alignment.BottomEnd)
-                    .padding(20.dp)
-                    .clickable { showDebug = true },
-            ) {
-                Text(
-                    "Debug",
-                    color = MaterialTheme.colorScheme.onTertiary,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                )
+            // Debug pill only in debug builds. Release-build access is via
+            // Settings → About → "Open debug tools" so the affordance still exists
+            // for dev work without surfacing it in user-facing flows.
+            if (BuildConfig.DEBUG) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.85f),
+                    modifier = Modifier
+                        .align(androidx.compose.ui.Alignment.BottomEnd)
+                        .padding(20.dp)
+                        .clickable { showDebug = true },
+                ) {
+                    Text(
+                        "Debug",
+                        color = MaterialTheme.colorScheme.onTertiary,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    )
+                }
             }
         }
     }
