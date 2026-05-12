@@ -22,5 +22,8 @@ data class NotificationParseResult(
     val fromEntityType: AccountType? = null,
     val fromEntityHint: String? = null,
     val toEntityName: String? = null,
+    // ISO-8601 date (yyyy-MM-dd) extracted from the body for BILL_DUE / EMI_DUE candidates.
+    // Null if no due date phrase was matched.
+    val dueDateIso: String? = null,
 )
 

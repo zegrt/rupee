@@ -63,6 +63,8 @@ class IciciNotificationParser : NotificationParser {
             parseConfidence = confidenceFor(transactionKind, amountMinor, maskedDigits, merchant),
             fromEntityHint = "icici",
             toEntityName = MerchantNameUtils.cleanForEntity(merchant),
+            dueDateIso = if (transactionKind == ParsedTransactionKind.BILL_DUE)
+                NotificationParsingUtils.extractDueDateIso(body) else null,
         )
     }
 

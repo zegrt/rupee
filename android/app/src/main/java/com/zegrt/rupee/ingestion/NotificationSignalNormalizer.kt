@@ -8,10 +8,12 @@ import com.zegrt.rupee.data.local.entity.CanonicalTransactionType
 import com.zegrt.rupee.data.local.entity.CandidateDecisionReason
 import com.zegrt.rupee.data.local.entity.CandidateDecisionState
 import com.zegrt.rupee.data.local.entity.ConfidenceTier
+import com.zegrt.rupee.data.local.entity.CreditCardEntity
 import com.zegrt.rupee.data.local.entity.InboxDecisionState
 import com.zegrt.rupee.data.local.entity.InboxItemEntity
 import com.zegrt.rupee.data.local.entity.InboxReasonCode
 import com.zegrt.rupee.data.local.entity.ParsedSignalEntity
+import com.zegrt.rupee.data.local.entity.ParsedTransactionKind
 import com.zegrt.rupee.data.local.entity.RawCaptureEventEntity
 import com.zegrt.rupee.data.local.entity.SyncStatus
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
@@ -130,7 +132,60 @@ class NotificationSignalNormalizer(
             )
 
             database.transactionCandidateDao().upsertTransactionCandidate(candidate)
+
+            // BILL_DUE side-effect: write the parsed amount/date into the matching
+            // credit_card row so DuesAlertManager and the Home dashboard have data
+            // to surface. Only fires for high-confidence card-due candidates with
+            // an extractable due date.
+            if (parseResult.transactionKind == ParsedTransactionKind.BILL_DUE &&
+                decision.confidenceTier == ConfidenceTier.HIGH &&
+                parseResult.amountMinor != null &&
+                parseResult.dueDateIso != null
+            ) {
+                applyBillDueToCard(rawEvent.userId, parseResult, now)
+            }
         }
+    }
+
+    private suspend fun applyBillDueToCard(
+        userId: String,
+        parseResult: NotificationParseResult,
+        now: String,
+    ) {
+        val cards = database.creditCardDao().getActiveCards(userId)
+        if (cards.isEmpty()) return
+        val match = findMatchingCard(cards, parseResult) ?: return
+        database.creditCardDao().upsertCards(
+            listOf(
+                match.copy(
+                    statementDueAmountMinor = parseResult.amountMinor,
+                    statementDueDate = parseResult.dueDateIso,
+                    updatedAt = now,
+                ),
+            ),
+        )
+    }
+
+    private fun findMatchingCard(
+        cards: List<CreditCardEntity>,
+        parseResult: NotificationParseResult,
+    ): CreditCardEntity? {
+        // 1. Last-4 digit match wins when the parser captured them.
+        val digits = parseResult.maskedDigits
+        if (!digits.isNullOrBlank()) {
+            cards.firstOrNull { it.maskedIdentifier?.takeLast(4) == digits }?.let { return it }
+        }
+        // 2. Provider hint match (e.g. "icici" → "ICICI").
+        val hint = parseResult.sourceCardHint?.lowercase()
+        if (!hint.isNullOrBlank() && hint != "cred_card") {
+            cards.firstOrNull { card ->
+                card.providerName?.lowercase()?.contains(hint) == true ||
+                    card.displayName.lowercase().contains(hint)
+            }?.let { return it }
+        }
+        // 3. Fall back to the single active card if there's exactly one — common
+        // in current builds where users typically add one card during onboarding.
+        return cards.singleOrNull()
     }
 
     private suspend fun createInboxItem(

@@ -60,6 +60,8 @@ class CredNotificationParser : NotificationParser {
             parseConfidence = confidenceFor(transactionKind, amountMinor, maskedDigits, merchant),
             fromEntityHint = "cred",
             toEntityName = MerchantNameUtils.cleanForEntity(merchant),
+            dueDateIso = if (transactionKind == ParsedTransactionKind.BILL_DUE)
+                NotificationParsingUtils.extractDueDateIso(body) else null,
         )
     }
 

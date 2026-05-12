@@ -48,10 +48,21 @@ data class EmiDraft(
     val error: String? = null,
 )
 
+data class CardDueDraft(
+    val isOpen: Boolean = false,
+    val cardId: String = "",
+    val cardName: String = "",
+    val amountRupees: String = "",
+    val dueDate: String = "",
+    val isSaving: Boolean = false,
+    val error: String? = null,
+)
+
 data class CardsEmisUiState(
     val cards: List<CardRow> = emptyList(),
     val emis: List<EmiRow> = emptyList(),
     val emiDraft: EmiDraft = EmiDraft(),
+    val cardDueDraft: CardDueDraft = CardDueDraft(),
 )
 
 class CardsEmisViewModel(
@@ -65,16 +76,19 @@ class CardsEmisViewModel(
     private val dueDateFormatter = DateTimeFormatter.ofPattern("d MMM yyyy")
 
     private val emiDraft = MutableStateFlow(EmiDraft())
+    private val cardDueDraft = MutableStateFlow(CardDueDraft())
 
     val uiState: StateFlow<CardsEmisUiState> = combine(
         repository.observeCards(),
         repository.observeEmiPlans(),
         emiDraft,
-    ) { cards, emis, draft ->
+        cardDueDraft,
+    ) { cards, emis, draft, due ->
         CardsEmisUiState(
             cards = cards.map(::toCardRow),
             emis = emis.map(::toEmiRow),
             emiDraft = draft,
+            cardDueDraft = due,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -126,6 +140,45 @@ class CardsEmisViewModel(
 
     fun removeEmi(id: String) {
         viewModelScope.launch { repository.removeEmiPlan(id) }
+    }
+
+    fun openCardDueDraft(cardId: String) {
+        val card = uiState.value.cards.firstOrNull { it.id == cardId } ?: return
+        cardDueDraft.value = CardDueDraft(
+            isOpen = true,
+            cardId = cardId,
+            cardName = card.displayName,
+            amountRupees = "",
+            dueDate = "",
+        )
+    }
+
+    fun closeCardDueDraft() {
+        cardDueDraft.value = CardDueDraft()
+    }
+
+    fun updateCardDueDraft(transform: CardDueDraft.() -> CardDueDraft) {
+        cardDueDraft.value = cardDueDraft.value.transform()
+    }
+
+    fun submitCardDueDraft() {
+        val draft = cardDueDraft.value
+        if (draft.cardId.isBlank()) return
+        val amountMinor = draft.amountRupees.filter { it.isDigit() }.toLongOrNull()?.times(100)
+        val dueIso = parseDueDate(draft.dueDate)
+        if (amountMinor == null) {
+            cardDueDraft.value = draft.copy(error = "Enter a valid amount")
+            return
+        }
+        if (draft.dueDate.isNotBlank() && dueIso == null) {
+            cardDueDraft.value = draft.copy(error = "Use d-MMM-yyyy or yyyy-MM-dd")
+            return
+        }
+        cardDueDraft.value = draft.copy(isSaving = true, error = null)
+        viewModelScope.launch {
+            repository.setCreditCardDue(draft.cardId, amountMinor, dueIso)
+            cardDueDraft.value = CardDueDraft()
+        }
     }
 
     private fun toCardRow(card: CreditCardEntity): CardRow = CardRow(
