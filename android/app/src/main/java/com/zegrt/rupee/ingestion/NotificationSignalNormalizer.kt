@@ -15,8 +15,11 @@ import com.zegrt.rupee.data.local.entity.InboxReasonCode
 import com.zegrt.rupee.data.local.entity.ParsedSignalEntity
 import com.zegrt.rupee.data.local.entity.ParsedTransactionKind
 import com.zegrt.rupee.data.local.entity.RawCaptureEventEntity
+import com.zegrt.rupee.data.local.entity.RawCaptureIngestionStatus
+import com.zegrt.rupee.data.local.entity.RawCaptureSourceType
 import com.zegrt.rupee.data.local.entity.SyncStatus
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
+import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
 
@@ -26,8 +29,74 @@ class NotificationSignalNormalizer(
     private val decisionEngine: NotificationDecisionEngine = NotificationDecisionEngine(),
     private val dedupeEngine: NotificationDedupeEngine = NotificationDedupeEngine(database),
 ) {
+    /**
+     * Single-transaction entry point: persists the raw event AND runs normalization
+     * atomically, then flips `ingestionStatus` to PARSED inside the same transaction.
+     * Returns the persisted event id, or null if a duplicate raw fingerprint already
+     * exists (OnConflict.IGNORE on the unique hashFingerprint index).
+     *
+     * Callers (listener service, debug ingest) use this instead of separate
+     * insert + normalize calls — if the coroutine is cancelled mid-flow,
+     * either both happen or neither, so we don't leave orphan raw events.
+     */
+    suspend fun ingestNotification(
+        userId: String,
+        packageName: String?,
+        title: String?,
+        body: String,
+        postedAtMillis: Long?,
+    ): String? {
+        return database.withTransaction {
+            val now = Instant.now().toString()
+            val fingerprint = sha256(
+                listOf(
+                    RawCaptureSourceType.NOTIFICATION.name,
+                    packageName.orEmpty(),
+                    title.orEmpty(),
+                    body,
+                    postedAtMillis?.toString().orEmpty(),
+                ).joinToString("|"),
+            )
+            val rawEvent = RawCaptureEventEntity(
+                id = UUID.randomUUID().toString(),
+                userId = userId,
+                sourceType = RawCaptureSourceType.NOTIFICATION,
+                sourceAppPackage = packageName,
+                title = title,
+                body = body,
+                receivedAt = now,
+                deviceEventTime = postedAtMillis?.let { Instant.ofEpochMilli(it).toString() },
+                hashFingerprint = fingerprint,
+                ingestionStatus = RawCaptureIngestionStatus.CAPTURED,
+                createdAt = now,
+                updatedAt = now,
+                syncStatus = SyncStatus.LOCAL_ONLY,
+            )
+            val inserted = database.rawCaptureEventDao().insertRawCaptureEvent(rawEvent)
+            if (inserted == -1L) return@withTransaction null
+            normalizeLocked(rawEvent)
+            database.rawCaptureEventDao().updateIngestionStatus(
+                id = rawEvent.id,
+                status = RawCaptureIngestionStatus.PARSED.name,
+                updatedAt = Instant.now().toString(),
+            )
+            rawEvent.id
+        }
+    }
+
+    private fun sha256(value: String): String {
+        val bytes = MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
+        return bytes.joinToString("") { byte -> "%02x".format(byte) }
+    }
+
     suspend fun normalize(rawEvent: RawCaptureEventEntity) {
         database.withTransaction {
+            normalizeLocked(rawEvent)
+        }
+    }
+
+    private suspend fun normalizeLocked(rawEvent: RawCaptureEventEntity) {
+        run {
             val now = Instant.now().toString()
             val parseResult = parserRegistry.parse(rawEvent)
             val dedupeResult = dedupeEngine.detect(rawEvent, parseResult)

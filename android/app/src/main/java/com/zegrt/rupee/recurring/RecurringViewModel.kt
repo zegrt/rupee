@@ -69,7 +69,7 @@ class RecurringViewModel(
     }
 
     fun refreshNow() {
-        viewModelScope.launch { repository.refreshRecurringPatterns() }
+        viewModelScope.launch { repository.refreshRecurringPatterns(force = true) }
     }
 
     private fun toRow(pattern: RecurringPatternEntity): RecurringRow {
