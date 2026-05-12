@@ -36,7 +36,11 @@ class RecurringDetectionEngine(
         val horizon = today.minusDays(LOOKBACK_DAYS.toLong())
         val candidates = transactions
             .asSequence()
-            .filter { it.status != CanonicalTransactionStatus.IGNORED }
+            // Pattern detection should only reinforce on transactions the user has
+            // confirmed (directly, or via a trust rule that wrote CONFIRMED at ingest).
+            // Including SUGGESTED would let unconfirmed auto-captures feed themselves
+            // into recurring suggestions and risk a self-reinforcing loop.
+            .filter { it.status == CanonicalTransactionStatus.CONFIRMED }
             .filter { it.merchantName != null }
             .mapNotNull { txn ->
                 val date = parseDate(txn.occurredAt) ?: return@mapNotNull null
