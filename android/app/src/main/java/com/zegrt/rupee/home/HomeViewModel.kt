@@ -188,6 +188,7 @@ class HomeViewModel(
     private val clock: () -> LocalDate = { LocalDate.now() },
     private val timeClock: () -> LocalTime = { LocalTime.now() },
     private val budgetAlertManager: BudgetAlertManager? = null,
+    private val duesAlertManager: com.zegrt.rupee.budget.DuesAlertManager? = null,
 ) : ViewModel() {
     private val headlineCurrencyFormatter = currencyFormatter(decimals = 0)
     private val rowCurrencyFormatter = currencyFormatter(decimals = 2)
@@ -329,6 +330,7 @@ class HomeViewModel(
             repository.ensureMonthlyBudgetForToday(clock())
             isSeeding.value = false
             runCatching { repository.refreshRecurringPatterns(clock()) }
+            runCatching { duesAlertManager?.checkAndNotify(repository, clock()) }
         }
     }
 
@@ -338,6 +340,7 @@ class HomeViewModel(
         viewModelScope.launch {
             repository.ensureMonthlyBudgetForToday(now)
             runCatching { repository.refreshRecurringPatterns(now) }
+            runCatching { duesAlertManager?.checkAndNotify(repository, now) }
         }
     }
 
@@ -783,12 +786,18 @@ class HomeViewModelFactory(
     private val repository: LocalFinanceRepository,
     private val clock: () -> LocalDate = { LocalDate.now() },
     private val budgetAlertManager: BudgetAlertManager? = null,
+    private val duesAlertManager: com.zegrt.rupee.budget.DuesAlertManager? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         require(modelClass.isAssignableFrom(HomeViewModel::class.java)) {
             "Unknown ViewModel class: ${modelClass.name}"
         }
-        return HomeViewModel(repository, clock, budgetAlertManager = budgetAlertManager) as T
+        return HomeViewModel(
+            repository,
+            clock,
+            budgetAlertManager = budgetAlertManager,
+            duesAlertManager = duesAlertManager,
+        ) as T
     }
 }

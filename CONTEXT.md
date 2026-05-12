@@ -115,18 +115,20 @@ References:
 - [Android Screen Spec](docs/rupee-android-screens.md)
 - [Engineering Roadmap](docs/rupee-roadmap.md)
 
-## Immediate Next Work
+## Immediate Next Work (post-MVP / user-testing follow-ups)
 
-1. "Merge with existing transaction" in Inbox — needs a transaction picker UX
-2. Dedicated PhonePe and Paytm parsers — currently their bodies hit `GenericUpiNotificationParser` with `providerHint = "upi"`. Real parsers would give a branded hint and a more reliable merchant extraction
-3. Hide the Debug pill behind `BuildConfig.DEBUG` before any external test build (intentionally still visible per current dev preference)
-4. Bottom-nav migration to replace the chip-row tab switcher (now 5 tabs incl. Calendar)
-5. Budget alerts — post a system notification when monthly or category spend crosses near-limit / over-limit thresholds (PRD §12.13)
-6. Custom bucket progress cards on Home — blocked on per-bucket budgets being seeded + a `transaction_bucket_assignments` DAO
-7. Parser refinement using real notification samples — both the Debug parser playground and the editable real-mock-notification surface make this easier
-8. Richer dedupe rules for fuzzy multi-source collisions (depends on observing real collisions)
-9. Auto-detection of EMIs and credit-card statement events from notifications (M8 follow-on now that the DAO is wired)
-10. Add the missing schema entities once their UI surfaces are scoped: `canonical_transaction_source_links`, `dedupe_groups` / `dedupe_group_members`, `recurring_patterns`, `alert_rules` / `alert_events`, `monthly_recaps`
+1. **Onboarding revisit** — fresh-install Welcome → Permissions → Setup → Home flow hasn't been walked end-to-end on a clean device; eyeball each screen and fix anything that looks broken
+2. **Gateway-merchant stripper** — bodies routed through Razorpay/PayU/BillDesk produce merchant strings like `"PAYTM-12345-RZRPAY-MERCH-XYZ"`. UI clamps with ellipsis now (v0.11.0); the data-level fix is a small alias/lookup layer that recognizes known gateway prefixes and either flags as "Unknown merchant" or maps to the underlying merchant
+3. **Expanded parser coverage** — SBI, HDFC (plain, non-CRED), Axis, Kotak, Yes, Amazon Pay, Slice, Jupiter, Fi, Niyo, BHIM standalone, Mobikwik, ride-share receipts. Generic UPI / Generic fallback catches some today but with low confidence
+4. **Cloud backup / restore** — none today. Tester data is gone on uninstall. Surfaced upfront in Settings → Privacy & data
+5. **Empty-state review (12)** — visually check Home / Calendar / Inbox / Recap on a first-run device with zero data
+6. **Hide the Debug pill behind `BuildConfig.DEBUG`** before any external test build (intentionally still visible per current dev preference; Reset is type-WIPE gated as of v0.11.0)
+7. **Bottom-nav migration** — chip row works but Material3 `NavigationBar` is the spec; cosmetic
+8. **Inbox merge guardrails extras** — picker filter by "same-merchant suggestion" + "amount within 20%"; an undo affordance
+9. **Bucket-level budgeting** — needs transaction-to-bucket tagging first (probably category → bucket mapping + a per-tx override). Currently surfaced as "coming soon" in Budgets page
+10. **Richer dedupe** — replace the flat `dedupeFingerprint` with `dedupe_groups` / `dedupe_group_members` once we observe fuzzy multi-source collisions
+11. **Schema gap (low priority)** — `canonical_transaction_source_links`, `alert_rules` / `alert_events`, `monthly_recaps`, `emi_transaction_links`, `budget_category_assignments` (recurring_patterns shipped in v0.9.1)
+12. **Auto-detection of EMIs and credit-card statement events from notifications** — partially covered by `EmiNotificationParser`; card-statement-detection parser is still missing
 
 ## Current Implementation State
 
@@ -164,7 +166,7 @@ References:
 - Manual transaction entry is wired to the dashboard "Add transaction" button via a `ModalBottomSheet` form (merchant, amount, mode chip selector, category chips, notes)
 - Settings tab exists with profile (display name), monthly budget edit, notification permission re-check, and read-only category/bucket lists; documented in `docs/rupee-settings-debug.md`
 - Debug tab exists with three preset sample notifications (GPay/CRED/ICICI) that exercise the real ingestion pipeline, a parser playground that runs the parser registry against arbitrary input without persisting, and a confirm-gated reset that wipes the DB and re-seeds defaults
-- Build now exposes versionName (currently `0.10.2`) via `BuildConfig`; the Home greeting renders a small `v0.10.2-debug` pill top-right and Settings → About reflects the same value. The debug APK output is renamed to `rupee-{versionName}-{buildType}.apk` so the file itself carries the version
+- Build now exposes versionName (currently `0.11.0`) via `BuildConfig`; the Home greeting renders a small `v0.11.0-debug` pill top-right and Settings → About reflects the same value. The debug APK output is renamed to `rupee-{versionName}-{buildType}.apk` so the file itself carries the version
 - Recent activity, Inbox review, and Transactions tab all show cleaner merchant text via `cleanMerchant()` (trims " on / using / via" tails, prefers segment after " at " for CRED-style bodies). DB-level `merchantName` is left untouched
 - Sublines now use `formatOccurredAt()` to render ISO instants as friendly local-time labels ("7 May, 11:29 PM") instead of raw timestamps
 - Inbox review row uses a Material3 `DropdownMenu` for category selection; manual entry still uses chips since that form has more vertical room
@@ -191,6 +193,7 @@ References:
 - v0.10.0 (other-machine commits): real `MIGRATION_5_6` and `MIGRATION_6_7` replacing destructive migration; bottom-nav + inbox merge + bucket progress cards + EMI parser; PhonePe/Paytm parsers; `BudgetAlertManager`; `Mode.WALLET` added; expanded parser tests (`NotificationParserParseTest`)
 - v0.10.1 (test fix): `MerchantNameUtils.clean` tightened — handles trailing bare " at" (returns "Unnamed"), leading tail keywords (`"using UPI"` → "Unnamed"), bare noise tokens (`"at"`/`"using"` → "Unnamed"). Tail set extended with `" successfully"`, `" was "` so payment notifications like `"Netflix successfully"` and `"Zomato was successful. UPI Ref"` clean down to the merchant. New `MerchantNameUtils.cleanForEntity(raw)` helper — returns null when raw has no usable merchant — applied to `toEntityName` in every parser so canonical merchantName is now stored cleaned (raw stays in `merchantRaw` for fingerprinting/trust matching)
 - v0.10.2 (audit + bug-fix pass): (1) `SettingsViewModel.uiState` now folds `notificationGranted` into the `combine` — previously it was sampled as `.value` inside the transform, so the Settings card never re-emitted when the OS toggle flipped and stayed stuck on "required" after the user granted access. (2) Dropped the `". "` tail from `MerchantNameUtils.clean` (was clipping `"St. Patrick's Restaurant"` → `"St"`); `" was "` already covers the case it was added for, with a regression test. (3) `EmiNotificationParser.canParse` no longer fires on any "emi" substring — requires the word "emi" *and* a transaction signal (`debited`/`due`/`paid`/`charged`/`instalment`/…) so marketing copy and unrelated `"reminder"`-style bodies don't get routed into the EMI lane. Added 4 EMI canParse tests
+- v0.11.0 (pre-test prep + MVP gaps): big shipment. **(a)** `DuesAlertManager` — system notifications 2 days before credit-card statement due, 2 days before EMI due, 1 day before recurring auto-debits. Dedupes per (item id, due date) in SharedPreferences; checks fire on app init and on resume. **(b)** EMI parser test coverage in `NotificationParserParseTest` (3 cases). **(c)** Bucket-budgets surface defers to a "coming soon" note in Budgets page — needs transaction-to-bucket tagging first. **(d)** Inbox merge UX already shows `→ {merchant}` + flips Confirm button to "Merge" when a target is picked (two-step soft confirm) — left as-is, additional dialog deferred. **(e)** Debug pill stays visible per user preference. **(f)** Pre-test prep additions: Settings → Supported notifications, Settings → Privacy & data, Settings → Feedback (emails `studioxero.biz@gmail.com` with device/app info), type-WIPE confirm on Reset, Debug → Wipe raw capture (clears raw_capture_events only, not derived transactions). **(g)** Lightweight crash reporting: `CrashReporter` installs `Thread.setDefaultUncaughtExceptionHandler` that appends stacktraces to a file; Debug → Crash log can view / email / clear. No Firebase / Sentry SDK. **(h)** Release signing scaffold in `build.gradle.kts` — reads keystore path/passwords from `local.properties`; keystore stays out of the repo. **(i)** UI: `maxLines = 1, overflow = Ellipsis` on merchant Text composables in Inbox + Transactions + Recent activity so gateway-style long merchant strings don't break the layout. **(j)** New `Mode.WALLET` (added in 02f70b3) preserved; `ParsedTransactionKind.REFUND` preserved
 
 ## Known Gaps vs Schema and Architecture
 

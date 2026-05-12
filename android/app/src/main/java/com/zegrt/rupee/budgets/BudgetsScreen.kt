@@ -56,6 +56,23 @@ fun BudgetsScreen(
             )
         }
 
+        Text("Custom buckets", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Bucket-level budgets are on the roadmap.", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "Today you can set buckets in Settings → Buckets, but spend isn't aggregated to them yet. " +
+                        "We need transaction-to-bucket tagging first.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+
         state.message?.let {
             Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         }

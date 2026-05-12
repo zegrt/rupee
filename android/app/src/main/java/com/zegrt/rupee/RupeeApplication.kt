@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import androidx.room.Room
 import com.zegrt.rupee.budget.BudgetAlertManager
+import com.zegrt.rupee.budget.DuesAlertManager
 import com.zegrt.rupee.data.local.MIGRATION_5_6
 import com.zegrt.rupee.data.local.MIGRATION_6_7
 import com.zegrt.rupee.data.local.RupeeDatabase
@@ -35,8 +36,13 @@ class RupeeApplication : Application() {
         BudgetAlertManager(applicationContext)
     }
 
+    val duesAlertManager: DuesAlertManager by lazy {
+        DuesAlertManager(applicationContext)
+    }
+
     override fun onCreate() {
         super.onCreate()
+        com.zegrt.rupee.diagnostics.CrashReporter.install(this)
         val nm = getSystemService(NotificationManager::class.java) ?: return
         nm.createNotificationChannel(
             NotificationChannel(
@@ -46,6 +52,7 @@ class RupeeApplication : Application() {
             ).apply { description = "Mock notifications used by Rupee's debug tools" },
         )
         budgetAlertManager.registerChannel()
+        duesAlertManager.registerChannel()
     }
 
     companion object {

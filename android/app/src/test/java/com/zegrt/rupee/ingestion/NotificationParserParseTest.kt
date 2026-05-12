@@ -19,6 +19,7 @@ class NotificationParserParseTest {
     private val phonepe = PhonePeNotificationParser()
     private val paytm = PaytmNotificationParser()
     private val genericUpi = GenericUpiNotificationParser()
+    private val emi = EmiNotificationParser()
 
     // ── GPay ──────────────────────────────────────────────────────────────────
 
@@ -197,6 +198,38 @@ class NotificationParserParseTest {
     fun `paytm parse returns null amount when body has no amount`() {
         val result = paytm.parse(event(body = "Paytm: Your KYC is pending"))
         assertNull(result.amountMinor)
+    }
+
+    // ── EMI ───────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `emi parse extracts amount from auto-debit body`() {
+        val result = emi.parse(
+            event(body = "EMI of Rs.4,999 has been debited from your account for iPhone 15")
+        )
+        assertEquals(499900L, result.amountMinor)
+        assertEquals("INR", result.currencyCode)
+        assertEquals(TransactionCandidateType.EMI_DUE, result.candidateType)
+        assertEquals("notification_emi", result.parserKey)
+    }
+
+    @Test
+    fun `emi parse extracts merchant name from emi for clause`() {
+        val result = emi.parse(
+            event(body = "Your EMI of Rs.2,499 has been deducted for HomeCredit Loan")
+        )
+        assertEquals(249900L, result.amountMinor)
+        assertEquals("HomeCredit Loan", result.toEntityName)
+    }
+
+    @Test
+    fun `emi parse handles a due-reminder body without amount`() {
+        // Body has the EMI word and a "due" signal but no rupee amount — should still
+        // produce a candidate, just with null amount and lower confidence.
+        val result = emi.parse(
+            event(title = "EMI Reminder", body = "Your EMI is due on 15-May")
+        )
+        assertEquals(null, result.amountMinor)
     }
 
     private fun event(

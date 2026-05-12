@@ -59,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -121,6 +122,7 @@ class MainActivity : ComponentActivity() {
                         homeViewModelFactory = HomeViewModelFactory(
                             repository = app.localFinanceRepository,
                             budgetAlertManager = app.budgetAlertManager,
+                            duesAlertManager = app.duesAlertManager,
                         ),
                         onboardingViewModelFactory = OnboardingViewModelFactory(
                             repository = app.localFinanceRepository,
@@ -214,6 +216,20 @@ private fun RupeeApp(
         context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
     }
 
+    val sendFeedback: () -> Unit = {
+        val intent = Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:studioxero.biz@gmail.com")).apply {
+            putExtra(Intent.EXTRA_SUBJECT, "Rupee feedback (v${BuildConfig.VERSION_NAME})")
+            putExtra(
+                Intent.EXTRA_TEXT,
+                "Found a bug or have a suggestion?\n\n— App version: ${BuildConfig.VERSION_NAME}\n— Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}\n— Android: ${android.os.Build.VERSION.RELEASE}\n\n",
+            )
+        }
+        runCatching {
+            context.startActivity(Intent.createChooser(intent, "Send feedback"))
+        }
+        Unit
+    }
+
     when (onboardingUiState.currentStep) {
         OnboardingStep.WELCOME -> WelcomeScreen(onContinue = onboardingViewModel::advanceFromWelcome)
         OnboardingStep.PERMISSIONS -> PermissionsScreen(
@@ -290,6 +306,7 @@ private fun RupeeApp(
             onRecapNext = recapViewModel::goToNextMonth,
             onRecapResetToCurrent = recapViewModel::resetToCurrent,
             onOpenNotificationSettings = openNotificationSettings,
+            onSendFeedback = sendFeedback,
             onDebugReset = debugViewModel::resetAllData,
             onDebugSendSample = debugViewModel::sendSample,
             onDebugUpdateParseTitle = debugViewModel::updateParseTitle,
@@ -301,6 +318,10 @@ private fun RupeeApp(
             onDebugUpdateMockTitle = debugViewModel::updateMockTitle,
             onDebugUpdateMockBody = debugViewModel::updateMockBody,
             onDebugLoadMockSample = debugViewModel::loadMockFromSample,
+            onDebugWipeRawCapture = debugViewModel::wipeRawCapture,
+            onDebugRefreshCrashLog = { debugViewModel.refreshCrashLog(context) },
+            onDebugEmailCrashLog = { debugViewModel.emailCrashLog(context) },
+            onDebugClearCrashLog = { debugViewModel.clearCrashLog(context) },
         )
     }
 }
@@ -627,6 +648,7 @@ private fun RupeeHome(
     onRecapNext: () -> Unit,
     onRecapResetToCurrent: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
+    onSendFeedback: () -> Unit,
     onDebugReset: () -> Unit,
     onDebugSendSample: (com.zegrt.rupee.debug.SampleNotification) -> Unit,
     onDebugUpdateParseTitle: (String) -> Unit,
@@ -638,6 +660,10 @@ private fun RupeeHome(
     onDebugUpdateMockTitle: (String) -> Unit,
     onDebugUpdateMockBody: (String) -> Unit,
     onDebugLoadMockSample: (com.zegrt.rupee.debug.SampleNotification) -> Unit,
+    onDebugWipeRawCapture: () -> Unit,
+    onDebugRefreshCrashLog: () -> Unit,
+    onDebugEmailCrashLog: () -> Unit,
+    onDebugClearCrashLog: () -> Unit,
 ) {
     var showDebug by remember { mutableStateOf(false) }
     var showTrustRules by remember { mutableStateOf(false) }
@@ -712,6 +738,7 @@ private fun RupeeHome(
                             onRecapResetToCurrent()
                             showRecap = true
                         },
+                        onSendFeedback = onSendFeedback,
                         onOpenDebug = { showDebug = true },
                     )
                 }
@@ -977,6 +1004,11 @@ private fun RupeeHome(
                         onUpdateMockTitle = onDebugUpdateMockTitle,
                         onUpdateMockBody = onDebugUpdateMockBody,
                         onLoadMockSample = onDebugLoadMockSample,
+                        onWipeRawCapture = onDebugWipeRawCapture,
+                        onViewCrashLog = onDebugRefreshCrashLog,
+                        onEmailCrashLog = onDebugEmailCrashLog,
+                        onClearCrashLog = onDebugClearCrashLog,
+                        crashLogPreview = debugState.crashLogPreview,
                     )
                 }
             }
@@ -1341,7 +1373,13 @@ private fun RecentRow(row: HomeRecentRow) {
         verticalAlignment = Alignment.Top,
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(row.merchant, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                row.merchant,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Text(row.subline, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
             if (row.isSuggested) {
                 Spacer(modifier = Modifier.height(6.dp))
@@ -1605,7 +1643,13 @@ private fun ReviewRowCard(
                 verticalAlignment = Alignment.Top,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(row.merchant, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        row.merchant,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                     Text(row.subline, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -1805,7 +1849,13 @@ private fun TransactionRow(
             verticalAlignment = Alignment.Top,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(row.headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    row.headline,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 Text(row.subline, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
             }
             Spacer(modifier = Modifier.width(12.dp))
