@@ -318,6 +318,10 @@ private fun RupeeApp(
             onUpdateEmiDraft = cardsEmisViewModel::updateEmiDraft,
             onSubmitEmiDraft = cardsEmisViewModel::submitEmiDraft,
             onRemoveEmi = cardsEmisViewModel::removeEmi,
+            onOpenCardDueDraft = cardsEmisViewModel::openCardDueDraft,
+            onCloseCardDueDraft = cardsEmisViewModel::closeCardDueDraft,
+            onUpdateCardDueDraft = cardsEmisViewModel::updateCardDueDraft,
+            onSubmitCardDueDraft = cardsEmisViewModel::submitCardDueDraft,
             onCalendarPrev = calendarViewModel::goToPreviousMonth,
             onCalendarNext = calendarViewModel::goToNextMonth,
             onCalendarSelectDate = calendarViewModel::selectDate,
@@ -661,6 +665,10 @@ private fun RupeeHome(
     onUpdateEmiDraft: (com.zegrt.rupee.cards.EmiDraft.() -> com.zegrt.rupee.cards.EmiDraft) -> Unit,
     onSubmitEmiDraft: () -> Unit,
     onRemoveEmi: (String) -> Unit,
+    onOpenCardDueDraft: (String) -> Unit,
+    onCloseCardDueDraft: () -> Unit,
+    onUpdateCardDueDraft: (com.zegrt.rupee.cards.CardDueDraft.() -> com.zegrt.rupee.cards.CardDueDraft) -> Unit,
+    onSubmitCardDueDraft: () -> Unit,
     onCalendarPrev: () -> Unit,
     onCalendarNext: () -> Unit,
     onCalendarSelectDate: (java.time.LocalDate) -> Unit,
@@ -885,6 +893,7 @@ private fun RupeeHome(
                         state = cardsEmisState,
                         onAddEmi = onOpenEmiDraft,
                         onRemoveEmi = onRemoveEmi,
+                        onSetCardDue = onOpenCardDueDraft,
                     )
                 }
             }
@@ -895,6 +904,14 @@ private fun RupeeHome(
                 onClose = onCloseEmiDraft,
                 onUpdate = onUpdateEmiDraft,
                 onSubmit = onSubmitEmiDraft,
+            )
+        }
+        if (cardsEmisState.cardDueDraft.isOpen) {
+            com.zegrt.rupee.cards.CardDueDraftSheet(
+                draft = cardsEmisState.cardDueDraft,
+                onClose = onCloseCardDueDraft,
+                onUpdate = onUpdateCardDueDraft,
+                onSubmit = onSubmitCardDueDraft,
             )
         }
     }

@@ -148,6 +148,24 @@ class LocalFinanceRepository(
         }
     }
 
+    suspend fun setCreditCardDue(
+        cardId: String,
+        statementDueAmountMinor: Long?,
+        statementDueDateIso: String?,
+    ) {
+        val card = database.creditCardDao().getCardById(cardId) ?: return
+        val now = Instant.now().toString()
+        database.creditCardDao().upsertCards(
+            listOf(
+                card.copy(
+                    statementDueAmountMinor = statementDueAmountMinor,
+                    statementDueDate = statementDueDateIso,
+                    updatedAt = now,
+                ),
+            ),
+        )
+    }
+
     suspend fun addEmiPlan(
         name: String,
         monthlyAmountMinor: Long,

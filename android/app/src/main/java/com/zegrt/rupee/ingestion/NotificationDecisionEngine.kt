@@ -28,9 +28,15 @@ class NotificationDecisionEngine {
             else -> ConfidenceTier.LOW
         }
 
-        if (parseResult.transactionKind == ParsedTransactionKind.SPEND &&
+        val isSpendLike = parseResult.transactionKind == ParsedTransactionKind.SPEND &&
             parseResult.candidateType == TransactionCandidateType.SPEND
-        ) {
+        // EMI debits ("Rs 5000 debited as EMI for HDFC home loan") behave like high-
+        // confidence spend events — they impact monthly spend and benefit from auto-
+        // creation. The user still confirms via Inbox if confidence is medium.
+        val isEmiDebit = parseResult.transactionKind == ParsedTransactionKind.EMI &&
+            parseResult.candidateType == TransactionCandidateType.EMI_DUE
+
+        if (isSpendLike || isEmiDebit) {
             return when (confidenceTier) {
                 ConfidenceTier.HIGH -> CandidateDecision(
                     confidenceTier = confidenceTier,

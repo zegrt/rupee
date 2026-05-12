@@ -15,6 +15,12 @@ interface CreditCardDao {
     @Query("SELECT COUNT(*) FROM credit_cards WHERE userId = :userId")
     suspend fun countCards(userId: String): Int
 
+    @Query("SELECT * FROM credit_cards WHERE userId = :userId AND isActive = 1")
+    suspend fun getActiveCards(userId: String): List<CreditCardEntity>
+
+    @Query("SELECT * FROM credit_cards WHERE id = :id LIMIT 1")
+    suspend fun getCardById(id: String): CreditCardEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertCards(cards: List<CreditCardEntity>)
 }

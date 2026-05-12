@@ -23,9 +23,20 @@ class EmiNotificationParser : NotificationParser {
 
     override fun parse(rawEvent: RawCaptureEventEntity): NotificationParseResult {
         val body = rawEvent.body
+        val lower = body.lowercase()
         val amountMinor = NotificationParsingUtils.extractAmountMinor(body)
         val merchant = extractEmiName(body)
             ?: NotificationParsingUtils.extractMerchant(body, fallbackRegexes)
+        // "debited", "deducted", "auto-debit" are unambiguous debit verbs — when all of
+        // (amount, merchant, debit verb) are present we treat the parse as high-
+        // confidence so the decision engine auto-creates the SUGGESTED txn.
+        val hasDebitVerb = DEBIT_VERBS.any { it in lower }
+
+        val confidence = when {
+            amountMinor != null && merchant != null && hasDebitVerb -> 0.88
+            amountMinor != null && merchant != null -> 0.72
+            else -> 0.50
+        }
 
         return NotificationParseResult(
             parserKey = "notification_emi",
@@ -37,10 +48,11 @@ class EmiNotificationParser : NotificationParser {
             currencyCode = if (amountMinor != null) "INR" else null,
             merchantRaw = merchant,
             mode = Mode.BANK_TRANSFER,
-            parseConfidence = if (amountMinor != null && merchant != null) 0.72 else 0.50,
+            parseConfidence = confidence,
             fromEntityType = AccountType.BANK,
             fromEntityHint = null,
             toEntityName = MerchantNameUtils.cleanForEntity(merchant),
+            dueDateIso = NotificationParsingUtils.extractDueDateIso(body),
         )
     }
 
@@ -57,6 +69,9 @@ class EmiNotificationParser : NotificationParser {
         private val TRANSACTION_SIGNALS = listOf(
             "debited", "deducted", "paid", "auto-debit", "auto debit",
             "due", "scheduled", "charged", "instalment", "installment",
+        )
+        private val DEBIT_VERBS = listOf(
+            "debited", "deducted", "auto-debit", "auto debit",
         )
 
         private val emiNameRegexes = listOf(

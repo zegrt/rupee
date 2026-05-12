@@ -32,13 +32,14 @@ fun CardsEmisScreen(
     state: CardsEmisUiState,
     onAddEmi: () -> Unit,
     onRemoveEmi: (String) -> Unit,
+    onSetCardDue: (String) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Text("Credit cards", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         if (state.cards.isEmpty()) {
             EmptyCard("No cards yet. Cards added during onboarding show up here.")
         } else {
-            state.cards.forEach { CardRowCard(it) }
+            state.cards.forEach { CardRowCard(it, onSetDue = { onSetCardDue(it.id) }) }
         }
 
         Row(
@@ -125,7 +126,7 @@ fun EmiDraftSheet(
 }
 
 @Composable
-private fun CardRowCard(row: CardRow) {
+private fun CardRowCard(row: CardRow, onSetDue: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -138,6 +139,59 @@ private fun CardRowCard(row: CardRow) {
             row.outstandingLabel?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
             row.limitLabel?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
             row.dueLabel?.let { Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold) }
+            Spacer(modifier = Modifier.height(4.dp))
+            TextButton(onClick = onSetDue) {
+                Text(if (row.dueLabel == null) "Set due" else "Edit due")
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CardDueDraftSheet(
+    draft: CardDueDraft,
+    onClose: () -> Unit,
+    onUpdate: (CardDueDraft.() -> CardDueDraft) -> Unit,
+    onSubmit: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onClose) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                "Due for ${draft.cardName}",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            OutlinedTextField(
+                value = draft.amountRupees,
+                onValueChange = { v -> onUpdate { copy(amountRupees = v.filter { it.isDigit() }, error = null) } },
+                label = { Text("Amount due (₹)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+            OutlinedTextField(
+                value = draft.dueDate,
+                onValueChange = { v -> onUpdate { copy(dueDate = v, error = null) } },
+                label = { Text("Due date — yyyy-MM-dd") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            draft.error?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(onClick = onSubmit, enabled = !draft.isSaving, modifier = Modifier.weight(1f)) {
+                    Text(if (draft.isSaving) "Saving..." else "Save")
+                }
+                OutlinedButton(onClick = onClose, modifier = Modifier.weight(1f)) { Text("Cancel") }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
