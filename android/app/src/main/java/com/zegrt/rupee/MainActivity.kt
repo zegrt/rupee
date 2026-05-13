@@ -262,6 +262,12 @@ private fun RupeeApp(
 
     when (onboardingUiState.currentStep) {
         OnboardingStep.WELCOME -> WelcomeScreen(onContinue = onboardingViewModel::advanceFromWelcome)
+        OnboardingStep.PROFILE -> ProfileScreen(
+            uiState = onboardingUiState,
+            onDisplayNameChange = onboardingViewModel::updateDisplayName,
+            onMonthlyBudgetChange = onboardingViewModel::updateMonthlyBudgetInput,
+            onContinue = onboardingViewModel::continueFromProfile,
+        )
         OnboardingStep.PERMISSIONS -> PermissionsScreen(
             uiState = onboardingUiState,
             onGrantNotification = openNotificationSettings,
@@ -367,13 +373,18 @@ private fun RupeeApp(
 
 @Composable
 private fun WelcomeScreen(onContinue: () -> Unit) {
+    // Scroll-safe layout: at large font scales / short screens the centered
+    // arrangement would push the CTA off-screen. verticalScroll lets the user
+    // reach it; Arrangement.Top keeps natural top-anchored flow.
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.Start,
     ) {
+        Spacer(modifier = Modifier.height(48.dp))
         Text("Rupee", style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold)
         Text(
             text = "Auto-track spending from your phone's transaction signals, then keep budgets, dues, and EMIs in one calm place.",
@@ -399,6 +410,7 @@ private fun PermissionsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
     ) {
         Text("Permissions", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
@@ -414,29 +426,6 @@ private fun PermissionsScreen(
             onPrimaryAction = onGrantNotification,
         )
         Spacer(modifier = Modifier.height(16.dp))
-        Card(
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Text(
-                    text = "SMS reading",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = uiState.smsLaterMessage,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-                Text(
-                    text = "Later build",
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(top = 12.dp),
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = "The current preview uses notification access only, which keeps install friction lower.",
             style = MaterialTheme.typography.bodyMedium,
@@ -444,6 +433,60 @@ private fun PermissionsScreen(
         Spacer(modifier = Modifier.height(24.dp))
         Button(onClick = onContinue, enabled = uiState.notificationPermission.isGranted) {
             Text("Continue")
+        }
+    }
+}
+
+@Composable
+private fun ProfileScreen(
+    uiState: OnboardingUiState,
+    onDisplayNameChange: (String) -> Unit,
+    onMonthlyBudgetChange: (String) -> Unit,
+    onContinue: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
+    ) {
+        Text("Quick profile", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+        Text(
+            text = "Tell us what to call you and a rough monthly spend target. You can edit both later in Settings.",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(top = 12.dp),
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        OutlinedTextField(
+            value = uiState.profileForm.displayName,
+            onValueChange = onDisplayNameChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Your name") },
+            singleLine = true,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        OutlinedTextField(
+            value = uiState.profileForm.monthlyBudgetInput,
+            onValueChange = { v -> onMonthlyBudgetChange(v.filter { it.isDigit() || it == '.' || it == ',' }) },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Monthly budget (₹)") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        )
+        uiState.profileError?.let {
+            Text(
+                it,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(
+            onClick = onContinue,
+            enabled = !uiState.isSavingProfile,
+        ) {
+            Text(if (uiState.isSavingProfile) "Saving..." else "Continue")
         }
     }
 }
@@ -1175,10 +1218,23 @@ private fun DashboardGreeting(
     Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(greeting, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            // weight(1f) gives the greeting all remaining horizontal space;
+            // maxLines = 1 + Ellipsis bounds the Row's height so the monthLabel
+            // below sits at a predictable distance regardless of name length
+            // or font scale. Previously SpaceBetween let the greeting wrap on
+            // long names / large font, creating the "weird gap" above the
+            // month label.
+            Text(
+                greeting,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
             if (versionLabel.isNotBlank()) {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
