@@ -28,6 +28,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -1564,11 +1567,12 @@ private fun ManualEntrySheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("Add transaction", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                com.zegrt.rupee.home.ManualEntryType.values().forEach { t ->
-                    androidx.compose.material3.FilterChip(
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                com.zegrt.rupee.home.ManualEntryType.entries.forEachIndexed { index, t ->
+                    SegmentedButton(
                         selected = draft.type == t,
                         onClick = { onUpdate { copy(type = t) } },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = com.zegrt.rupee.home.ManualEntryType.entries.size),
                         label = { Text(if (t == com.zegrt.rupee.home.ManualEntryType.INCOME) "Income" else "Expense") },
                     )
                 }
@@ -1743,19 +1747,6 @@ private fun TransactionsTab(
             )
         }
     }
-}
-
-@Composable
-private fun HomeTabChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(label) },
-    )
 }
 
 @Composable
@@ -2214,6 +2205,23 @@ fun HomeScreenPreview() {
             budgetsState = BudgetsUiState(),
             onReviewInbox = {},
             onAddTransaction = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun ManualEntrySheetPreview() {
+    RupeeTheme {
+        ManualEntrySheet(
+            draft = ManualEntryDraft(isOpen = true),
+            categories = listOf(
+                com.zegrt.rupee.home.CategoryOption("1", "Food"),
+                com.zegrt.rupee.home.CategoryOption("2", "Transport"),
+            ),
+            onClose = {},
+            onUpdate = {},
+            onSubmit = {},
         )
     }
 }
