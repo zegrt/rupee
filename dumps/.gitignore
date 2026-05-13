@@ -1,0 +1,7 @@
+# Drop any *.jsonl notification dumps in here for offline analysis.
+# Everything in this folder is gitignored EXCEPT this file and README.md
+# so real notification bodies (which contain account IDs, amounts, etc.)
+# never accidentally get committed.
+*
+!.gitignore
+!README.md
