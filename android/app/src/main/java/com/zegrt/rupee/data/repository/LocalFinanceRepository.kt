@@ -669,6 +669,7 @@ class LocalFinanceRepository(
         categoryId: String?,
         notes: String?,
         occurredAt: Instant = Instant.now(),
+        type: CanonicalTransactionType = CanonicalTransactionType.EXPENSE,
     ) {
         val now = Instant.now().toString()
         val txnId = "txn-manual-${UUID.randomUUID()}"
@@ -677,7 +678,7 @@ class LocalFinanceRepository(
                 CanonicalTransactionEntity(
                     id = txnId,
                     userId = USER_ID,
-                    type = CanonicalTransactionType.EXPENSE,
+                    type = type,
                     status = CanonicalTransactionStatus.CONFIRMED,
                     amountMinor = amountMinor,
                     currencyCode = "INR",

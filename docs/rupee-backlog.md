@@ -2,7 +2,7 @@
 
 **Purpose:** durable, in-repo backlog. Anything Claude promised to do "next sprint" or "later" lives here, not just in conversation context. This file is the single source of truth for what's deferred — if it's not here, it doesn't exist.
 
-**Last updated:** 2026-05-13 (after Sprint 1.4 partial / v0.13.6)
+**Last updated:** 2026-05-13 (after Sprint 1.4 / v0.13.7)
 
 ---
 
@@ -31,14 +31,7 @@ _(nothing right now — v0.13.5 just landed)_
 **Touchpoints:** `NotificationParseResult.parseConfidence`, all 9 parsers in `ingestion/`, `NotificationDecisionEngineTest`.
 **Blocked by:** nothing. Can do one parser at a time — start with `GenericNotificationParser` + `GenericUpiNotificationParser` (the two with the loosest current scoring).
 
-### S1.4 polish — remaining income work (Layer C)
-**What:** the income data layer landed in v0.13.6 (kinds, parsers branch on direction, normalizer + DAO write INCOME, Recap shows "Received +₹X" + net). What still needs UI work:
-- **Home dashboard income line.** `LocalFinanceRepository.observeReceivedInPeriod` exists and is unused on Home. Add a "Received this month" sub-line under the monthly-budget hero (or a small chip next to weekly spend). The wiring in HomeViewModel was sketched then reverted — flow definition can be re-added cleanly.
-- **Transactions list visual diff.** Today income shows up in the list with the same red-tinted style as a spend. Show income with a `+₹X` prefix and a green/positive tint. Same in the detail sheet.
-- **Manual entry income toggle.** Bottom-sheet has no Income type today — every manual entry writes EXPENSE. Add an Income/Expense segmented control. `LocalFinanceRepository.createManualTransaction` should accept a type param.
-- **Per-parser INCOME coverage.** Only Kotak / Generic / GenericUpi branch on direction today. CRED/ICICI/PhonePe/Paytm/GPay parsers still hardcode SPEND — fine until a user dogfoods a credit-side notification through one of those packages. Audit each parser as it bites.
-**Why:** load-bearing for credibility — user can see the data is captured in Recap but won't notice income at-a-glance until Home / Transactions / manual entry show it.
-**Blocked by:** nothing. Take when next dogfood session produces an income notification we can verify against.
+_(S1.4 fully shipped in v0.13.7 — Home income line, Transactions list +₹X tinted rows, manual entry Expense/Income toggle, GPay/PhonePe/Paytm INCOME branching all landed. CRED/ICICI parsers still hardcode SPEND — fine for card alerts, audit if a real card-credit notification slips through.)_
 
 ---
 

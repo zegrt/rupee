@@ -22,16 +22,18 @@ class PaytmNotificationParser : NotificationParser {
         val amountMinor = NotificationParsingUtils.extractAmountMinor(body)
         val merchant = NotificationParsingUtils.extractMerchant(body, merchantRegexes)
 
-        // Drop "received" — too generic, fires on routine spend bodies.
-        val isRefund = NotificationParsingUtils.containsAny(lower, listOf("refund", "credited", "cashback"))
+        val direction = NotificationParsingUtils.classifyDirection(body)
+        val isRefund = "refund" in lower || "cashback" in lower
         val isWallet = lower.contains("paytm wallet") || lower.contains("wallet balance")
         val transactionKind = when {
-            isRefund && amountMinor != null -> ParsedTransactionKind.REFUND
-            amountMinor != null -> ParsedTransactionKind.SPEND
-            else -> ParsedTransactionKind.UNKNOWN
+            amountMinor == null -> ParsedTransactionKind.UNKNOWN
+            isRefund -> ParsedTransactionKind.REFUND
+            direction == NotificationParsingUtils.MoneyDirection.IN -> ParsedTransactionKind.INCOME
+            else -> ParsedTransactionKind.SPEND
         }
         val candidateType = when (transactionKind) {
             ParsedTransactionKind.SPEND -> TransactionCandidateType.SPEND
+            ParsedTransactionKind.INCOME -> TransactionCandidateType.INCOME
             else -> TransactionCandidateType.UNKNOWN
         }
         val mode = when {
