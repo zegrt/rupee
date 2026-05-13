@@ -21,13 +21,26 @@ class GPayNotificationParser : NotificationParser {
     override fun parse(rawEvent: RawCaptureEventEntity): NotificationParseResult {
         val amountMinor = NotificationParsingUtils.extractAmountMinor(rawEvent.body)
         val merchant = NotificationParsingUtils.extractMerchant(rawEvent.body, merchantRegexes)
+        val direction = NotificationParsingUtils.classifyDirection(rawEvent.body)
+        val isIncome = direction == NotificationParsingUtils.MoneyDirection.IN
+
+        val kind = when {
+            amountMinor == null -> ParsedTransactionKind.UNKNOWN
+            isIncome -> ParsedTransactionKind.INCOME
+            else -> ParsedTransactionKind.SPEND
+        }
+        val candidateType = when {
+            amountMinor == null -> TransactionCandidateType.UNKNOWN
+            isIncome -> TransactionCandidateType.INCOME
+            else -> TransactionCandidateType.SPEND
+        }
 
         return NotificationParseResult(
             parserKey = "notification_gpay",
-            parserVersion = "v1",
+            parserVersion = "v2",
             providerHint = "gpay",
-            transactionKind = if (amountMinor != null) ParsedTransactionKind.SPEND else ParsedTransactionKind.UNKNOWN,
-            candidateType = if (amountMinor != null) TransactionCandidateType.SPEND else TransactionCandidateType.UNKNOWN,
+            transactionKind = kind,
+            candidateType = candidateType,
             amountMinor = amountMinor,
             currencyCode = if (amountMinor != null) "INR" else null,
             merchantRaw = merchant,

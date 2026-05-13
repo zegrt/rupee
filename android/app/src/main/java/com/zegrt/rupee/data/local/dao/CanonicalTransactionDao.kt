@@ -73,6 +73,54 @@ interface CanonicalTransactionDao {
         untilIso: String,
     ): Long
 
+    // Income totals — symmetric with observeSpentInPeriod above. INCOME rows
+    // honour the same per-account/per-card exclusion flags so a wallet flagged
+    // "exclude from income totals" (added in v0.13.0) doesn't double-count
+    // money that's already credited to a tracked source. Status filter mirrors
+    // spend (drop IGNORED, keep SUGGESTED+CONFIRMED so freshly-auto-created
+    // income still counts on Home before the user reviews it).
+    @Query(
+        """
+        SELECT COALESCE(SUM(t.amountMinor), 0)
+        FROM canonical_transactions AS t
+        LEFT JOIN accounts AS a ON t.accountId = a.id
+        LEFT JOIN credit_cards AS cc ON t.creditCardId = cc.id
+        WHERE t.userId = :userId
+          AND t.type = 'INCOME'
+          AND t.status != 'IGNORED'
+          AND (a.excludeFromIncomeTotals IS NULL OR a.excludeFromIncomeTotals = 0)
+          AND (cc.excludeFromIncomeTotals IS NULL OR cc.excludeFromIncomeTotals = 0)
+          AND t.occurredAt >= :fromIso
+          AND t.occurredAt < :untilIso
+        """
+    )
+    fun observeReceivedInPeriod(
+        userId: String,
+        fromIso: String,
+        untilIso: String,
+    ): Flow<Long>
+
+    @Query(
+        """
+        SELECT COALESCE(SUM(t.amountMinor), 0)
+        FROM canonical_transactions AS t
+        LEFT JOIN accounts AS a ON t.accountId = a.id
+        LEFT JOIN credit_cards AS cc ON t.creditCardId = cc.id
+        WHERE t.userId = :userId
+          AND t.type = 'INCOME'
+          AND t.status != 'IGNORED'
+          AND (a.excludeFromIncomeTotals IS NULL OR a.excludeFromIncomeTotals = 0)
+          AND (cc.excludeFromIncomeTotals IS NULL OR cc.excludeFromIncomeTotals = 0)
+          AND t.occurredAt >= :fromIso
+          AND t.occurredAt < :untilIso
+        """
+    )
+    suspend fun getReceivedInPeriod(
+        userId: String,
+        fromIso: String,
+        untilIso: String,
+    ): Long
+
     @Query(
         """
         SELECT * FROM canonical_transactions

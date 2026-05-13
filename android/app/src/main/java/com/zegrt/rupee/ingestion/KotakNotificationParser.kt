@@ -29,16 +29,37 @@ class KotakNotificationParser : NotificationParser {
 
     override fun canParse(rawEvent: RawCaptureEventEntity): Boolean {
         val pkg = rawEvent.sourceAppPackage.orEmpty().lowercase()
-        // Known Kotak packages — the substring catches Kotak811 ("kotak811..."),
-        // the explicit prefixes catch the main Kotak Bank app (com.msf.kbank).
-        // Add more variants here as they're observed in real dumps.
-        return "kotak" in pkg || pkg.startsWith("com.msf.kbank")
+        val isKotakPkg = "kotak" in pkg || pkg.startsWith("com.msf.kbank")
+        if (!isKotakPkg) return false
+        // Kotak's app sends both real txn alerts AND marketing pushes (e.g.
+        // "Just ₹2,500/month → ₹64,415 with Kotak Recurring Deposit. T&C").
+        // Since we always emit merchantRaw=null, a marketing match becomes a
+        // null-merchant MEDIUM-confidence candidate → "Unnamed" Inbox row.
+        // Require at least one transactional verb in the combined body to fire.
+        val body = rawEvent.body.lowercase()
+        return TRANSACTIONAL_VERBS.any { it in body }
+    }
+
+    private companion object {
+        private val TRANSACTIONAL_VERBS = listOf(
+            "sent via",
+            "debited",
+            "credited",
+            "paid",
+            "received",
+            "deducted",
+            "auto-debit",
+            "withdrawn",
+            "spent",
+        )
     }
 
     override fun parse(rawEvent: RawCaptureEventEntity): NotificationParseResult {
         val amountMinor = NotificationParsingUtils.extractAmountMinor(rawEvent.body)
         val maskedDigits = NotificationParsingUtils.extractMaskedDigits(rawEvent.body)
         val isUpi = "upi" in rawEvent.body.lowercase()
+        val direction = NotificationParsingUtils.classifyDirection(rawEvent.body)
+        val isIncome = direction == NotificationParsingUtils.MoneyDirection.IN
 
         val confidence = when {
             amountMinor != null && maskedDigits != null -> 0.75
@@ -46,12 +67,23 @@ class KotakNotificationParser : NotificationParser {
             else -> 0.4
         }
 
+        val kind = when {
+            amountMinor == null -> ParsedTransactionKind.UNKNOWN
+            isIncome -> ParsedTransactionKind.INCOME
+            else -> ParsedTransactionKind.SPEND
+        }
+        val candidateType = when {
+            amountMinor == null -> TransactionCandidateType.UNKNOWN
+            isIncome -> TransactionCandidateType.INCOME
+            else -> TransactionCandidateType.SPEND
+        }
+
         return NotificationParseResult(
             parserKey = "notification_kotak",
-            parserVersion = "v1",
+            parserVersion = "v2",
             providerHint = "kotak",
-            transactionKind = if (amountMinor != null) ParsedTransactionKind.SPEND else ParsedTransactionKind.UNKNOWN,
-            candidateType = if (amountMinor != null) TransactionCandidateType.SPEND else TransactionCandidateType.UNKNOWN,
+            transactionKind = kind,
+            candidateType = candidateType,
             amountMinor = amountMinor,
             currencyCode = if (amountMinor != null) "INR" else null,
             merchantRaw = null,

@@ -273,6 +273,56 @@ class NotificationParserParseTest {
         org.junit.Assert.assertFalse(kotak.canParse(event))
     }
 
+    @Test
+    fun `kotak canParse rejects marketing push from Kotak811 with no transactional verb`() {
+        // Real body captured in the v0.13.3 dump — a Recurring Deposit promo.
+        // Without a transactional-verb gate this routed to Inbox as Unnamed
+        // (since Kotak parser intentionally emits merchantRaw = null).
+        val event = event(
+            pkg = "com.kotak811mobilebankingapp.instantsavingsupiscanandpayrecharge",
+            body = "That's all it takes? 👀\nJust ₹2,500/month → ₹64,415 with Kotak Recurring Deposit. T&C",
+        )
+        org.junit.Assert.assertFalse(kotak.canParse(event))
+    }
+
+    @Test
+    fun `kotak canParse rejects FD promo with no transactional verb`() {
+        val event = event(
+            pkg = "com.kotak811mobilebankingapp.instantsavingsupiscanandpayrecharge",
+            body = "Is your ₹5,000 earning enough? 🤔\nPut it in a Kotak FD for assured 6.8% p.a. returns. T&C",
+        )
+        org.junit.Assert.assertFalse(kotak.canParse(event))
+    }
+
+    @Test
+    fun `kotak parse classifies credited body as INCOME not SPEND`() {
+        // Before S1.4 every Kotak body got transactionKind = SPEND. A "Rs 50,000
+        // credited" salary alert was therefore subtracted from monthly budget.
+        val result = kotak.parse(
+            event(
+                pkg = "com.kotak811mobilebankingapp.instantsavingsupiscanandpayrecharge",
+                body = "₹50,000 credited to XX4129. Available balance: ₹1,20,000.",
+            )
+        )
+        assertEquals(5_000_000L, result.amountMinor)
+        assertEquals(com.zegrt.rupee.data.local.entity.ParsedTransactionKind.INCOME, result.transactionKind)
+        assertEquals(
+            com.zegrt.rupee.data.local.entity.TransactionCandidateType.INCOME,
+            result.candidateType,
+        )
+    }
+
+    @Test
+    fun `kotak parse keeps debit body as SPEND`() {
+        val result = kotak.parse(
+            event(
+                pkg = "com.kotak811mobilebankingapp.instantsavingsupiscanandpayrecharge",
+                body = "₹10.00 sent via UPI\nAmount debited from XX4129. Check out details.",
+            )
+        )
+        assertEquals(com.zegrt.rupee.data.local.entity.ParsedTransactionKind.SPEND, result.transactionKind)
+    }
+
     private fun event(
         pkg: String = "com.example.test",
         title: String? = null,

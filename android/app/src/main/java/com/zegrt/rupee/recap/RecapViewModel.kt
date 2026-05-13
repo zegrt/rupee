@@ -44,6 +44,12 @@ data class RecapUiState(
     val topMerchants: List<RecapHighlight> = emptyList(),
     val biggestTransactions: List<RecapHighlight> = emptyList(),
     val hasData: Boolean = false,
+    // INCOME tile — surfaces inflow alongside spend. Null when no income rows
+    // landed in the month (most users today, until parsers start emitting INCOME
+    // for "credited" notifications). When present, label is already formatted
+    // as "+₹X" so callers don't need to know about minor units.
+    val totalReceivedLabel: String? = null,
+    val netLabel: String? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -190,6 +196,22 @@ class RecapViewModel(
             )
         } else null
 
+        // Income side. Mirrors the expense filter but on type=INCOME. We only
+        // surface labels when there's a non-zero inflow — most users will have
+        // nothing here until "credited" notifications start emitting INCOME.
+        val incomeMinor = current.filter {
+            it.type == CanonicalTransactionType.INCOME &&
+                it.status != CanonicalTransactionStatus.IGNORED
+        }.sumOf { it.amountMinor }
+        val receivedLabel = if (incomeMinor > 0L)
+            "+${moneyFormatter.format(incomeMinor / 100.0)}"
+        else null
+        val netLabel = if (incomeMinor > 0L) {
+            val net = incomeMinor - totalMinor
+            val prefix = if (net >= 0) "+" else ""
+            "$prefix${moneyFormatter.format(net / 100.0)} net"
+        } else null
+
         return RecapUiState(
             monthLabel = "${ym.month.getDisplayName(TextStyle.FULL, Locale.ENGLISH)} ${ym.year}",
             totalLabel = moneyFormatter.format(totalMinor / 100.0),
@@ -199,7 +221,9 @@ class RecapViewModel(
             topCategories = topCategories,
             topMerchants = topMerchants,
             biggestTransactions = biggest,
-            hasData = expenses.isNotEmpty(),
+            hasData = expenses.isNotEmpty() || incomeMinor > 0L,
+            totalReceivedLabel = receivedLabel,
+            netLabel = netLabel,
         )
     }
 

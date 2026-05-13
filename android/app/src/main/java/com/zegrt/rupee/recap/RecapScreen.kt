@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -71,6 +72,22 @@ private fun HeroCard(state: RecapUiState) {
                     style = MaterialTheme.typography.labelLarge,
                     color = if (delta.isUp) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                 )
+            }
+            state.totalReceivedLabel?.let { received ->
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 6.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                )
+                Text("Received", style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    received,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                state.netLabel?.let { net ->
+                    Text(net, style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
     }

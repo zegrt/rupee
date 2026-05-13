@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.zegrt.rupee.data.local.entity.BudgetEntity
 import com.zegrt.rupee.data.local.entity.CanonicalTransactionEntity
 import com.zegrt.rupee.data.local.entity.CanonicalTransactionStatus
+import com.zegrt.rupee.data.local.entity.CanonicalTransactionType
 import com.zegrt.rupee.data.local.entity.CategoryEntity
 import com.zegrt.rupee.data.local.entity.CreditCardEntity
 import com.zegrt.rupee.data.local.entity.EmiPlanEntity
@@ -74,6 +75,7 @@ data class HomeTransactionRow(
     val categoryId: String?,
     val categoryIdDraft: String?,
     val categoryLabel: String?,
+    val isIncome: Boolean = false,
 )
 
 data class HomeRecentRow(
@@ -82,6 +84,7 @@ data class HomeRecentRow(
     val subline: String,
     val amountLabel: String,
     val isSuggested: Boolean,
+    val isIncome: Boolean = false,
 )
 
 data class CategoryOption(
@@ -89,8 +92,11 @@ data class CategoryOption(
     val name: String,
 )
 
+enum class ManualEntryType { EXPENSE, INCOME }
+
 data class ManualEntryDraft(
     val isOpen: Boolean = false,
+    val type: ManualEntryType = ManualEntryType.EXPENSE,
     val merchant: String = "",
     val amountRupees: String = "",
     val mode: Mode = Mode.UPI,
@@ -112,6 +118,9 @@ data class HomeDashboard(
     val isNearLimit: Boolean = false,
     val weeklySpentLabel: String = "",
     val weekRangeLabel: String = "",
+    // Income (v0.13.7). Null when zero — UI hides the line entirely so users
+    // without any captured income don't see a permanent "+₹0" zero state.
+    val monthlyIncomeLabel: String? = null,
     val pendingReviewCount: Int = 0,
     val recentTransactions: List<HomeRecentRow> = emptyList(),
     val hasAnyTransactions: Boolean = false,
@@ -154,6 +163,7 @@ private data class DashboardData(
     val budget: BudgetEntity?,
     val monthlySpent: Long,
     val weeklySpent: Long,
+    val monthlyIncome: Long,
     val cards: List<CreditCardEntity>,
     val emis: List<EmiPlanEntity>,
     val recurringPatterns: List<RecurringPatternEntity>,
@@ -225,6 +235,13 @@ class HomeViewModel(
             untilIso = weekStart.plusDays(7).toString(),
         )
     }
+    private val monthlyIncomeFlow: Flow<Long> = today.flatMapLatest { date ->
+        val month = YearMonth.from(date)
+        repository.observeReceivedInPeriod(
+            fromIso = month.atDay(1).toString(),
+            untilIso = month.plusMonths(1).atDay(1).toString(),
+        )
+    }
 
     private val obligationsBundle: Flow<Triple<List<CreditCardEntity>, List<EmiPlanEntity>, List<RecurringPatternEntity>>> = combine(
         repository.observeCards(),
@@ -247,8 +264,9 @@ class HomeViewModel(
             monthlyBudgetFlow,
             monthlySpendFlow,
             weeklySpendFlow,
-        ) { suggested, b, m, w ->
-            arrayOf<Any?>(suggested, b, m, w)
+            monthlyIncomeFlow,
+        ) { suggested, b, m, w, inc ->
+            arrayOf<Any?>(suggested, b, m, w, inc)
         },
         obligationsBundle,
     ) { entities, periods, dues ->
@@ -263,6 +281,7 @@ class HomeViewModel(
             budget = periods[1] as BudgetEntity?,
             monthlySpent = periods[2] as Long,
             weeklySpent = periods[3] as Long,
+            monthlyIncome = periods[4] as Long,
             cards = dues.first,
             emis = dues.second,
             recurringPatterns = dues.third,
@@ -493,6 +512,8 @@ class HomeViewModel(
                 mode = draft.mode,
                 categoryId = draft.categoryId,
                 notes = draft.notes.ifBlank { null },
+                type = if (draft.type == ManualEntryType.INCOME)
+                    CanonicalTransactionType.INCOME else CanonicalTransactionType.EXPENSE,
             )
             manualEntry.value = ManualEntryDraft()
             checkBudgetAlert()
@@ -530,6 +551,7 @@ class HomeViewModel(
                 val draftCategory = if (selection.transactionCategoryDrafts.containsKey(transaction.id))
                     selection.transactionCategoryDrafts[transaction.id]
                 else transaction.categoryId
+                val income = transaction.type == CanonicalTransactionType.INCOME
                 HomeTransactionRow(
                     id = transaction.id,
                     headline = cleanedMerchant,
@@ -537,7 +559,8 @@ class HomeViewModel(
                         transaction.mode?.name?.replace('_', ' '),
                         formatOccurredAt(transaction.occurredAt),
                     ).joinToString(" • "),
-                    amountLabel = formatRowAmount(transaction.amountMinor),
+                    amountLabel = if (income) "+${formatRowAmount(transaction.amountMinor)}"
+                    else formatRowAmount(transaction.amountMinor),
                     notes = transaction.notes.orEmpty(),
                     merchantDraft = selection.transactionMerchantDrafts[transaction.id]
                         ?: cleanedMerchant,
@@ -546,6 +569,7 @@ class HomeViewModel(
                     categoryId = transaction.categoryId,
                     categoryIdDraft = draftCategory,
                     categoryLabel = transaction.categoryId?.let { categoryLabelById[it] },
+                    isIncome = income,
                 )
             }
 
@@ -636,6 +660,7 @@ class HomeViewModel(
             .filter { it.status != CanonicalTransactionStatus.IGNORED }
             .take(5)
             .map { txn ->
+                val income = txn.type == CanonicalTransactionType.INCOME
                 HomeRecentRow(
                     id = txn.id,
                     merchant = cleanMerchant(txn.merchantName),
@@ -643,8 +668,10 @@ class HomeViewModel(
                         txn.mode?.name?.replace('_', ' ')?.lowercase()?.replaceFirstChar { it.uppercase() },
                         formatOccurredAt(txn.occurredAt),
                     ).joinToString(" • "),
-                    amountLabel = formatRowAmount(txn.amountMinor),
+                    amountLabel = if (income) "+${formatRowAmount(txn.amountMinor)}"
+                    else formatRowAmount(txn.amountMinor),
                     isSuggested = txn.status == CanonicalTransactionStatus.SUGGESTED,
+                    isIncome = income,
                 )
             }
 
@@ -660,6 +687,8 @@ class HomeViewModel(
             isNearLimit = isNear,
             weeklySpentLabel = formatHeadlineAmount(data.weeklySpent),
             weekRangeLabel = formatWeekRange(weekStart, weekEnd),
+            monthlyIncomeLabel = if (data.monthlyIncome > 0L)
+                "+${formatHeadlineAmount(data.monthlyIncome)}" else null,
             pendingReviewCount = pendingReviewCount,
             recentTransactions = recents,
             hasAnyTransactions = data.transactions.any { it.status != CanonicalTransactionStatus.IGNORED },

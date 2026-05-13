@@ -85,6 +85,62 @@ internal object NotificationParsingUtils {
         return needles.any { needle -> needle in text }
     }
 
+    /**
+     * Classifies a body as money-IN, money-OUT, or unknown by inspecting the
+     * verb vocabulary. Centralised so every parser routes the same way — Kotak
+     * and the Generic fallback used to both force SPEND regardless of verb,
+     * which meant a "Rs 50,000 credited to A/c XX1234" body was getting
+     * recorded as a spend and inflating the user's monthly burn.
+     *
+     * Order matters: we check credit-side verbs first because some bodies
+     * mention both ("Rs.500 debited and Rs.500 credited" is rare but possible
+     * during reversals). When ambiguous, the parser's `transactionKind` should
+     * fall back to UNKNOWN — the user adjudicates in Inbox.
+     */
+    fun classifyDirection(text: String): MoneyDirection {
+        val lower = text.lowercase()
+        val hasCredit = CREDIT_VERBS.any { it in lower }
+        val hasDebit = DEBIT_VERBS.any { it in lower }
+        return when {
+            hasCredit && !hasDebit -> MoneyDirection.IN
+            hasDebit && !hasCredit -> MoneyDirection.OUT
+            hasDebit && hasCredit -> MoneyDirection.UNKNOWN
+            else -> MoneyDirection.UNKNOWN
+        }
+    }
+
+    enum class MoneyDirection { IN, OUT, UNKNOWN }
+
+    private val CREDIT_VERBS = listOf(
+        "credited",
+        " credit ",
+        "received from",
+        "received via",
+        "received rs",
+        "received inr",
+        "received ₹",
+        "deposited",
+        "salary credit",
+    )
+
+    private val DEBIT_VERBS = listOf(
+        "debited",
+        " debit ",
+        "spent",
+        "paid",
+        "sent via",
+        "sent to",
+        "sent rs",
+        "sent inr",
+        "transferred",
+        "withdrawn",
+        "deducted",
+        "auto-debit",
+        "auto debit",
+        "swiped",
+        "charged",
+    )
+
     data class NetworkReference(val id: String, val type: String)
 
     // Ordered by specificity. RRN appears in card-network notifications;

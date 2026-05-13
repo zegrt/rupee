@@ -6,6 +6,7 @@ import androidx.room.PrimaryKey
 
 enum class TransactionCandidateType {
     SPEND,
+    INCOME,
     CASH_WITHDRAWAL,
     CARD_DUE,
     EMI_DUE,
@@ -28,6 +29,7 @@ enum class CandidateDecisionReason {
     MISSING_AMOUNT,
     DUPLICATE_IGNORED,
     MERCHANT_TRUSTED,
+    NOT_TRANSACTIONAL,
 }
 
 @Entity(

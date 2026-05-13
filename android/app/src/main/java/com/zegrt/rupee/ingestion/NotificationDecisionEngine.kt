@@ -35,8 +35,15 @@ class NotificationDecisionEngine {
         // creation. The user still confirms via Inbox if confidence is medium.
         val isEmiDebit = parseResult.transactionKind == ParsedTransactionKind.EMI &&
             parseResult.candidateType == TransactionCandidateType.EMI_DUE
+        // Income (salary, P2P-received, interest credit) follows the same routing
+        // ladder as spend so confirmed inflows show up immediately on the home
+        // dashboard. The reasoning is HIGH_CONFIDENCE_SPEND-shaped — we reuse
+        // the decision-reason enum rather than add a SPEND/INCOME split, since
+        // downstream code branches on transactionKind anyway.
+        val isIncome = parseResult.transactionKind == ParsedTransactionKind.INCOME &&
+            parseResult.candidateType == TransactionCandidateType.INCOME
 
-        if (isSpendLike || isEmiDebit) {
+        if (isSpendLike || isEmiDebit || isIncome) {
             return when (confidenceTier) {
                 ConfidenceTier.HIGH -> CandidateDecision(
                     confidenceTier = confidenceTier,

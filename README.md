@@ -95,8 +95,8 @@ The current preview build:
 
 APK output:
 
-- [rupee-0.13.3-release.apk](./android/app/build/outputs/apk/release/rupee-0.13.3-release.apk) (signed; for friends/family)
-- [rupee-0.13.3-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.13.3-debug.apk) (for personal dogfooding — includes the notification-dump tool that bootstraps the parser corpus)
+- [rupee-0.13.7-release.apk](./android/app/build/outputs/apk/release/rupee-0.13.7-release.apk) (signed; for friends/family)
+- [rupee-0.13.7-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.13.7-debug.apk) (for personal dogfooding — includes the notification-dump tool that bootstraps the parser corpus)
 
 ## Main Docs
 
@@ -106,6 +106,7 @@ APK output:
 - [Schema Spec](./docs/rupee-schema.md)
 - [Android Screen Spec](./docs/rupee-android-screens.md)
 - [Engineering Roadmap](./docs/rupee-roadmap.md)
+- [Deferred Work & Sprint Backlog](./docs/rupee-backlog.md)
 
 ## Project Context
 

@@ -98,6 +98,15 @@ class NotificationSignalNormalizer(
     private suspend fun normalizeLocked(rawEvent: RawCaptureEventEntity) {
         run {
             val now = Instant.now().toString()
+            // Stage 1: transactional gate. Rejects promo pushes (Kotak RD ads,
+            // ICICI upgrade offers, OTPs, payment-requests) before any parser
+            // gets a chance to extract bogus fields from them. See
+            // TransactionalGate.kt for the keyword sets.
+            val gateDecision = TransactionalGate.evaluate(rawEvent.body)
+            if (gateDecision is TransactionalGate.Decision.Reject) {
+                writeGateRejectedSignal(rawEvent, gateDecision, now)
+                return@run
+            }
             // Enrich the parser's result with a network reference if the body
             // had one. Done here instead of in each parser so all 8 parsers
             // get this for free and the upcoming JSON rule engine inherits it.
@@ -237,6 +246,77 @@ class NotificationSignalNormalizer(
         }
     }
 
+    /**
+     * Writes auditable trail rows for a notification the transactional gate
+     * rejected. We could just drop these silently, but persisting them lets us
+     * (a) see why a body was dropped when debugging from dumps, (b) compute a
+     * "notifs received vs notifs accepted" health metric later. The candidate
+     * is written with decisionState = IGNORED so it never reaches Inbox or any
+     * auto-create path.
+     */
+    private suspend fun writeGateRejectedSignal(
+        rawEvent: RawCaptureEventEntity,
+        rejection: TransactionalGate.Decision.Reject,
+        now: String,
+    ) {
+        val parsedSignalId = UUID.randomUUID().toString()
+        val matchedSummary = if (rejection.matched.isNotEmpty())
+            "${rejection.reason.name}:${rejection.matched}" else rejection.reason.name
+        database.parsedSignalDao().upsertParsedSignal(
+            ParsedSignalEntity(
+                id = parsedSignalId,
+                userId = rawEvent.userId,
+                rawCaptureEventId = rawEvent.id,
+                parserKey = "gate_rejected",
+                parserVersion = "v1",
+                providerHint = rawEvent.sourceAppPackage,
+                transactionKind = ParsedTransactionKind.UNKNOWN,
+                amountMinor = null,
+                currencyCode = null,
+                merchantRaw = null,
+                sourceAccountHint = null,
+                sourceCardHint = null,
+                maskedDigits = null,
+                mode = null,
+                eventOccurredAt = rawEvent.deviceEventTime ?: rawEvent.receivedAt,
+                networkReferenceId = null,
+                networkReferenceType = null,
+                patternUid = null,
+                parseConfidence = 0.0,
+                structuredJson = matchedSummary,
+                createdAt = now,
+                updatedAt = now,
+                syncStatus = SyncStatus.LOCAL_ONLY,
+            ),
+        )
+        database.transactionCandidateDao().upsertTransactionCandidate(
+            TransactionCandidateEntity(
+                id = UUID.randomUUID().toString(),
+                userId = rawEvent.userId,
+                parsedSignalId = parsedSignalId,
+                candidateType = com.zegrt.rupee.data.local.entity.TransactionCandidateType.UNKNOWN,
+                amountMinor = null,
+                currencyCode = null,
+                fromEntityType = null,
+                fromEntityHint = rawEvent.sourceAppPackage,
+                toEntityName = null,
+                mode = null,
+                occurredAt = rawEvent.deviceEventTime ?: rawEvent.receivedAt,
+                candidateFingerprint = null,
+                confidenceTier = null,
+                decisionState = CandidateDecisionState.IGNORED,
+                decisionReason = CandidateDecisionReason.NOT_TRANSACTIONAL,
+                duplicateOfCandidateId = null,
+                linkedInboxItemId = null,
+                linkedCanonicalTransactionId = null,
+                normalizationVersion = "v1",
+                createdAt = now,
+                updatedAt = now,
+                syncStatus = SyncStatus.LOCAL_ONLY,
+            ),
+        )
+    }
+
     private suspend fun applyBillDueToCard(
         userId: String,
         parseResult: NotificationParseResult,
@@ -311,10 +391,13 @@ class NotificationSignalNormalizer(
         status: CanonicalTransactionStatus = CanonicalTransactionStatus.SUGGESTED,
         overrideCategoryId: String? = null,
     ): String {
+        val canonicalType = if (parseResult.transactionKind == ParsedTransactionKind.INCOME)
+            CanonicalTransactionType.INCOME
+        else CanonicalTransactionType.EXPENSE
         val canonicalTransaction = CanonicalTransactionEntity(
             id = UUID.randomUUID().toString(),
             userId = rawEvent.userId,
-            type = CanonicalTransactionType.EXPENSE,
+            type = canonicalType,
             status = status,
             amountMinor = parseResult.amountMinor ?: 0L,
             currencyCode = parseResult.currencyCode ?: "INR",
@@ -354,6 +437,8 @@ class NotificationSignalNormalizer(
                 InboxReasonCode.POSSIBLE_DUPLICATE_CONFLICT
             CandidateDecisionReason.MERCHANT_TRUSTED ->
                 InboxReasonCode.MEDIUM_CONFIDENCE
+            CandidateDecisionReason.NOT_TRANSACTIONAL ->
+                InboxReasonCode.AMBIGUOUS_KIND
         }
     }
 }

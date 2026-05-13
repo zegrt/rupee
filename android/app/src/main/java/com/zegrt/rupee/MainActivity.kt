@@ -1359,6 +1359,14 @@ private fun WeeklySpendCard(dashboard: HomeDashboard) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(dashboard.weekRangeLabel, style = MaterialTheme.typography.bodySmall)
+                dashboard.monthlyIncomeLabel?.let { incomeLabel ->
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        "Received this month $incomeLabel",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
             Surface(
                 shape = RoundedCornerShape(14.dp),
@@ -1474,6 +1482,8 @@ private fun RecentRow(row: HomeRecentRow) {
             text = row.amountLabel,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
+            color = if (row.isIncome) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurface,
         )
     }
 }
@@ -1497,11 +1507,20 @@ private fun ManualEntrySheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("Add transaction", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                com.zegrt.rupee.home.ManualEntryType.values().forEach { t ->
+                    androidx.compose.material3.FilterChip(
+                        selected = draft.type == t,
+                        onClick = { onUpdate { copy(type = t) } },
+                        label = { Text(if (t == com.zegrt.rupee.home.ManualEntryType.INCOME) "Income" else "Expense") },
+                    )
+                }
+            }
             OutlinedTextField(
                 value = draft.merchant,
                 onValueChange = { v -> onUpdate { copy(merchant = v) } },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Merchant / payee") },
+                label = { Text(if (draft.type == com.zegrt.rupee.home.ManualEntryType.INCOME) "Source / payer" else "Merchant / payee") },
                 singleLine = true,
             )
             OutlinedTextField(
@@ -1936,6 +1955,8 @@ private fun TransactionRow(
                 text = row.amountLabel,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
+                color = if (row.isIncome) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurface,
             )
         }
     }
