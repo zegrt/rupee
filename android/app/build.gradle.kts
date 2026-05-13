@@ -4,8 +4,8 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.0.21"
-    id("com.google.devtools.ksp") version "2.0.21-1.0.27"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.1.20"
+    id("com.google.devtools.ksp") version "2.1.20-1.0.32"
 }
 
 ksp {
@@ -44,8 +44,8 @@ android {
         applicationId = "com.zegrt.rupee"
         minSdk = 29
         targetSdk = 35
-        versionCode = 33
-        versionName = "0.13.8"
+        versionCode = 34
+        versionName = "0.13.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -97,12 +97,12 @@ android {
         }
     }
 
-    // Release builds run `lintVitalAnalyzeRelease`, which currently crashes on a known
-    // AGP/Kotlin incompatibility (NonNullableMutableLiveDataDetector). Skipping lint on
-    // release until AGP fixes it; debug builds still lint normally.
+    // AGP 8.8 + Kotlin 2.1 lifted the NonNullableMutableLiveDataDetector crash that
+    // forced us to skip release lint on the AGP 8.7.3 / Kotlin 2.0.21 stack. Lint now
+    // runs on both buildTypes again; abortOnError stays false so warnings don't
+    // fail builds during the dep refresh.
     lint {
         abortOnError = false
-        checkReleaseBuilds = false
     }
 
     applicationVariants.all {
@@ -116,12 +116,12 @@ android {
 }
 
 dependencies {
-    val bom = platform("androidx.compose:compose-bom:2025.01.01")
+    val bom = platform("androidx.compose:compose-bom:2025.04.01")
 
     implementation(bom)
     androidTestImplementation(bom)
 
-    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0")
@@ -130,11 +130,11 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.room:room-runtime:2.7.0")
-    implementation("androidx.room:room-ktx:2.7.0")
+    implementation("androidx.room:room-runtime:2.7.1")
+    implementation("androidx.room:room-ktx:2.7.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
 
-    ksp("androidx.room:room-compiler:2.7.0")
+    ksp("androidx.room:room-compiler:2.7.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
