@@ -106,6 +106,7 @@ APK output:
 - [Schema Spec](./docs/rupee-schema.md)
 - [Android Screen Spec](./docs/rupee-android-screens.md)
 - [Engineering Roadmap](./docs/rupee-roadmap.md)
+- [Deferred Work & Sprint Backlog](./docs/rupee-backlog.md)
 
 ## Project Context
 
