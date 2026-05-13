@@ -75,6 +75,9 @@ Right now the project has:
 - a unified Budgets page (Settings → Budgets) covering monthly total + per-category limits with progress bars and over-limit highlighting
 - recurring-spend detection that auto-finds monthly subscriptions in the last 120 days and asks the user to confirm or dismiss; confirmed ones surface as "Upcoming dues" on Home alongside cards/EMIs
 - a Monthly recap surface (Settings → Monthly recap) with total spent, change vs last month, top categories, top merchants, and biggest transactions
+- light/dark theme following the Android system setting
+- per-account / per-card "exclude from spend totals" toggle for wallets that double-count from another tracked source
+- dedicated parsers for GPay, CRED, ICICI, Kotak (incl. Kotak811), PhonePe, Paytm, EMI debits, generic UPI fallback; debug-only notification-dump tool to bootstrap real-world parser corpus
 - manual transaction entry through a bottom sheet
 - a Settings page (display name, monthly budget, notification permission re-check, version, category/bucket lists)
 - a Debug page (preset + editable mock notifications, parser playground, DB reset) accessible via a floating pill and from Settings
@@ -92,8 +95,8 @@ The current preview build:
 
 APK output:
 
-- [rupee-0.13.1-release.apk](./android/app/build/outputs/apk/release/rupee-0.13.1-release.apk) (signed; recommended for testers)
-- [rupee-0.13.1-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.13.1-debug.apk)
+- [rupee-0.13.3-release.apk](./android/app/build/outputs/apk/release/rupee-0.13.3-release.apk) (signed; for friends/family)
+- [rupee-0.13.3-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.13.3-debug.apk) (for personal dogfooding — includes the notification-dump tool that bootstraps the parser corpus)
 
 ## Main Docs
 

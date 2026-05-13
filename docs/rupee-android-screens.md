@@ -48,7 +48,7 @@ Primary navigation for v1 — five top-level surfaces:
 - Calendar
 - Settings
 
-Currently rendered as a chip-row tab switcher inside `MainActivity` (v0.8.0+). Migration to a Material3 `BottomNavigationBar` is a tracked follow-up; the structural shape (5 tabs, same labels) will not change.
+Currently rendered as a chip-row tab switcher inside `MainActivity` (v0.8.0+). Migration to a Material3 `BottomNavigationBar` is a tracked follow-up; the structural shape (5 tabs, same labels) will not change. Theme follows `isSystemInDarkTheme()` since v0.13.3 — light and dark palettes both defined in `ui/theme/Theme.kt`.
 
 Secondary entry points (currently reached from Settings; in v1 several should also surface from Home):
 
