@@ -58,6 +58,8 @@ class KotakNotificationParser : NotificationParser {
         val amountMinor = NotificationParsingUtils.extractAmountMinor(rawEvent.body)
         val maskedDigits = NotificationParsingUtils.extractMaskedDigits(rawEvent.body)
         val isUpi = "upi" in rawEvent.body.lowercase()
+        val direction = NotificationParsingUtils.classifyDirection(rawEvent.body)
+        val isIncome = direction == NotificationParsingUtils.MoneyDirection.IN
 
         val confidence = when {
             amountMinor != null && maskedDigits != null -> 0.75
@@ -65,12 +67,23 @@ class KotakNotificationParser : NotificationParser {
             else -> 0.4
         }
 
+        val kind = when {
+            amountMinor == null -> ParsedTransactionKind.UNKNOWN
+            isIncome -> ParsedTransactionKind.INCOME
+            else -> ParsedTransactionKind.SPEND
+        }
+        val candidateType = when {
+            amountMinor == null -> TransactionCandidateType.UNKNOWN
+            isIncome -> TransactionCandidateType.INCOME
+            else -> TransactionCandidateType.SPEND
+        }
+
         return NotificationParseResult(
             parserKey = "notification_kotak",
-            parserVersion = "v1",
+            parserVersion = "v2",
             providerHint = "kotak",
-            transactionKind = if (amountMinor != null) ParsedTransactionKind.SPEND else ParsedTransactionKind.UNKNOWN,
-            candidateType = if (amountMinor != null) TransactionCandidateType.SPEND else TransactionCandidateType.UNKNOWN,
+            transactionKind = kind,
+            candidateType = candidateType,
             amountMinor = amountMinor,
             currencyCode = if (amountMinor != null) "INR" else null,
             merchantRaw = null,

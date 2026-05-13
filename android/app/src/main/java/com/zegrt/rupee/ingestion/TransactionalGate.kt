@@ -67,6 +67,11 @@ object TransactionalGate {
         "sent via", "sent to", "sent rs", "sent inr",
         "transferred", "withdrawn", "withdraw ", "deducted",
         "auto-debit", "auto debit", "autodebit", "charged ", "swiped",
+        // ICICI canonical ("Your card has been used for a transaction of INR X")
+        // — adding these surfaced from a Gmail-forwarded ICICI alert in the
+        // v0.13.3 dump that would otherwise have been false-rejected on
+        // "no verb".
+        "transaction of", "used for a transaction", "purchase of",
         // Credit-side
         "credited", " credit ", "received ", "deposited", "refunded",
         // Bill / EMI reminders we want to keep
@@ -88,7 +93,17 @@ object TransactionalGate {
         "eligible for", "selected for", "you are eligible",
         "explore", "know more", "click here", "tap here",
         "register now", "sign up", "download now",
-        "avail offer", "claim now", "unlock ",
+        "avail offer", "claim now", "unlock ", "is unlocked",
+        // Loan / credit-product promo framing. Real bank txns never mention
+        // "personal loan" / "instant loan" / "loan offer" — those phrases are
+        // exclusively marketing copy. EMI debit alerts say "EMI debited" or
+        // "EMI for HDFC home loan" but don't combine with the promo verbs.
+        "personal loan", "instant loan", "loan offer",
+        "disbursed instantly", "approved for ₹", "approved for rs",
+        // "Get ₹10k instantly credited" — clickbait that would otherwise pass
+        // the credit-side verb check. The "instantly + amount" combo is
+        // exclusively promotional.
+        "instantly credited", "instant ₹", "instant rs.",
         // Promo / reward framing
         "cashback offer", " offer ", "limited offer",
         "congratulations", "you have won", "lucky draw",
@@ -98,7 +113,7 @@ object TransactionalGate {
         " p.a.", "% p.a", "per annum",
         // Aspirational / projection framing (the Kotak RD smoking gun)
         " → ", " -> ", "becomes ₹", "grows to ₹", "as low as", "starting at",
-        "starting from", "up to ₹", "up to rs",
+        "starting from", "up to ₹", "up to rs", "upto ₹", "upto rs",
         " emi starting ", " emi as low ",
         "/month → ", "/month -> ",
         // Time-pressure
@@ -110,5 +125,9 @@ object TransactionalGate {
         // Payment requests (someone asking US for money — not a debit yet)
         "has requested", "payment request", "collect request",
         "requesting payment", "requests rs", "ignore if already paid",
+        // Truecaller (the SMS mirror) explicitly tags spam; if it's still
+        // tagged that way by the time we see it, the real bank notification
+        // would have come through the bank's own package anyway.
+        "🚨 spam", "spam ·",
     )
 }

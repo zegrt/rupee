@@ -256,6 +256,13 @@ class LocalFinanceRepository(
             untilIso = untilIso,
         )
 
+    fun observeReceivedInPeriod(fromIso: String, untilIso: String): Flow<Long> =
+        database.canonicalTransactionDao().observeReceivedInPeriod(
+            userId = USER_ID,
+            fromIso = fromIso,
+            untilIso = untilIso,
+        )
+
     fun observeTransactionsInPeriod(fromIso: String, untilIso: String): Flow<List<CanonicalTransactionEntity>> =
         database.canonicalTransactionDao().observeTransactionsInPeriod(
             userId = USER_ID,
@@ -813,6 +820,7 @@ class LocalFinanceRepository(
     private fun TransactionCandidateEntity.toCanonicalType(): CanonicalTransactionType = when (candidateType) {
         com.zegrt.rupee.data.local.entity.TransactionCandidateType.TRANSFER -> CanonicalTransactionType.TRANSFER
         com.zegrt.rupee.data.local.entity.TransactionCandidateType.CASH_WITHDRAWAL -> CanonicalTransactionType.CASH_ADJUSTMENT
+        com.zegrt.rupee.data.local.entity.TransactionCandidateType.INCOME -> CanonicalTransactionType.INCOME
         else -> CanonicalTransactionType.EXPENSE
     }
 }

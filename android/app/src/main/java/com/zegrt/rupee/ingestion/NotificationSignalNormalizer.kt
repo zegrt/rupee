@@ -391,10 +391,13 @@ class NotificationSignalNormalizer(
         status: CanonicalTransactionStatus = CanonicalTransactionStatus.SUGGESTED,
         overrideCategoryId: String? = null,
     ): String {
+        val canonicalType = if (parseResult.transactionKind == ParsedTransactionKind.INCOME)
+            CanonicalTransactionType.INCOME
+        else CanonicalTransactionType.EXPENSE
         val canonicalTransaction = CanonicalTransactionEntity(
             id = UUID.randomUUID().toString(),
             userId = rawEvent.userId,
-            type = CanonicalTransactionType.EXPENSE,
+            type = canonicalType,
             status = status,
             amountMinor = parseResult.amountMinor ?: 0L,
             currencyCode = parseResult.currencyCode ?: "INR",

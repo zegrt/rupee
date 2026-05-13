@@ -30,7 +30,9 @@ class GenericUpiNotificationParser : NotificationParser {
                 hay.contains("payment to") ||
                 hay.contains("paying") ||
                 hay.contains("sent") ||
-                hay.contains("debited")
+                hay.contains("debited") ||
+                hay.contains("received") ||
+                hay.contains("credited")
         return mentionsPayment
     }
 
@@ -38,6 +40,8 @@ class GenericUpiNotificationParser : NotificationParser {
         val amountMinor = NotificationParsingUtils.extractAmountMinor(rawEvent.body)
         val merchant = NotificationParsingUtils.extractMerchant(rawEvent.body, merchantRegexes)
         val maskedDigits = NotificationParsingUtils.extractMaskedDigits(rawEvent.body)
+        val direction = NotificationParsingUtils.classifyDirection(rawEvent.body)
+        val isIncome = direction == NotificationParsingUtils.MoneyDirection.IN
 
         // Confidence ladder:
         //  - merchant resolved → high enough for AUTO_CREATED (0.7 is medium tier today,
@@ -53,12 +57,23 @@ class GenericUpiNotificationParser : NotificationParser {
             else -> 0.5
         }
 
+        val kind = when {
+            amountMinor == null -> ParsedTransactionKind.UNKNOWN
+            isIncome -> ParsedTransactionKind.INCOME
+            else -> ParsedTransactionKind.SPEND
+        }
+        val candidateType = when {
+            amountMinor == null -> TransactionCandidateType.UNKNOWN
+            isIncome -> TransactionCandidateType.INCOME
+            else -> TransactionCandidateType.SPEND
+        }
+
         return NotificationParseResult(
             parserKey = "notification_upi_generic",
-            parserVersion = "v2",
+            parserVersion = "v3",
             providerHint = "upi",
-            transactionKind = if (amountMinor != null) ParsedTransactionKind.SPEND else ParsedTransactionKind.UNKNOWN,
-            candidateType = if (amountMinor != null) TransactionCandidateType.SPEND else TransactionCandidateType.UNKNOWN,
+            transactionKind = kind,
+            candidateType = candidateType,
             amountMinor = amountMinor,
             currencyCode = if (amountMinor != null) "INR" else null,
             merchantRaw = merchant,

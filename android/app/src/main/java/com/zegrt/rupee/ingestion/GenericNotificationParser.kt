@@ -14,6 +14,8 @@ class GenericNotificationParser : NotificationParser {
         val merchant = extractMerchant(rawEvent.body)
         val maskedDigits = NotificationParsingUtils.extractMaskedDigits(rawEvent.body)
         val mode = inferMode(rawEvent.body)
+        val direction = NotificationParsingUtils.classifyDirection(rawEvent.body)
+        val isIncome = direction == NotificationParsingUtils.MoneyDirection.IN
 
         // Amount + masked digits is enough signal to surface an Inbox candidate
         // even when no merchant is in the body (Kotak-style "Amount debited
@@ -27,12 +29,23 @@ class GenericNotificationParser : NotificationParser {
             else -> 0.15
         }
 
+        val kind = when {
+            amountMinor == null -> ParsedTransactionKind.UNKNOWN
+            isIncome -> ParsedTransactionKind.INCOME
+            else -> ParsedTransactionKind.SPEND
+        }
+        val candidateType = when {
+            amountMinor == null -> TransactionCandidateType.UNKNOWN
+            isIncome -> TransactionCandidateType.INCOME
+            else -> TransactionCandidateType.SPEND
+        }
+
         return NotificationParseResult(
             parserKey = "notification_generic",
-            parserVersion = "v2",
+            parserVersion = "v3",
             providerHint = rawEvent.sourceAppPackage,
-            transactionKind = if (amountMinor != null) ParsedTransactionKind.SPEND else ParsedTransactionKind.UNKNOWN,
-            candidateType = if (amountMinor != null) TransactionCandidateType.SPEND else TransactionCandidateType.UNKNOWN,
+            transactionKind = kind,
+            candidateType = candidateType,
             amountMinor = amountMinor,
             currencyCode = if (amountMinor != null) "INR" else null,
             merchantRaw = merchant,

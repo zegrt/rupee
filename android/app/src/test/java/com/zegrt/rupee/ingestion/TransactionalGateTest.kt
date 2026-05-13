@@ -118,6 +118,55 @@ class TransactionalGateTest {
         assertRejectsOnPromo(body)
     }
 
+    @Test
+    fun `reject Truecaller spam-flagged Kotak loan offer from dump`() {
+        // Entry #332 of the v0.13.3 dump.
+        val body = "🚨 Spam · Dear Cyril, pre-approved Rs.65,000 Kotak Personal Loan is unlocked & can be disbursed instantly. Tap: https://1.kotak.bank.in/KOTAKB/XfhZe8 T&C"
+        assertRejectsOnPromo(body)
+    }
+
+    @Test
+    fun `reject clickbait instantly-credited promo`() {
+        // Hypothetical clickbait the user flagged. Without the "instantly credited"
+        // negative this would pass the gate (has "credited" positive verb) and
+        // route to Inbox as a 0.55 MEDIUM income candidate.
+        val body = "Get ₹10,000 instantly credited to your account when you apply for our personal loan"
+        assertRejectsOnPromo(body)
+    }
+
+    @Test
+    fun `reject SBI Life policy promo from dump`() {
+        // Entry #184 — has "₹2CR Cover at ₹915/month" but no money verb.
+        val body = "Get ₹2CR Cover at ₹915/month. No GST adds more Savings to your Policy"
+        val decision = TransactionalGate.evaluate(body)
+        assertTrue(decision is TransactionalGate.Decision.Reject)
+    }
+
+    @Test
+    fun `reject Uber Parcel upto-rupees promo from dump`() {
+        // Entry #277 — "upto ₹50" (no space) is the gap that "up to ₹" missed.
+        val body = "Get upto ₹50 off on Parcel. Send items securely across town anytime with live tracking and pin verification"
+        assertRejectsOnPromo(body)
+    }
+
+    @Test
+    fun `reject MakeMyTrip vacation sale from dump`() {
+        // Entry #377.
+        val body = "Vacation ka Occasion Sale ☀️\nHurry and book your summer travel before the best deals of the season run out ⏳ Enjoy up to ₹500 OFF* on bus tickets, code: MMTVACATION. T&Cs apply."
+        assertRejectsOnPromo(body)
+    }
+
+    // ── Real bodies that the gate previously false-rejected ───────────────────
+
+    @Test
+    fun `accept ICICI Gmail-forwarded transaction-of phrasing`() {
+        // Entries #371/#372 of the v0.13.3 dump — Gmail showing a real ICICI
+        // alert. Before adding "transaction of" / "used for a transaction" to
+        // positive verbs, the gate false-rejected this as no-verb.
+        val body = "Transaction alert for your ICICI Bank Credit Card\nDear Customer, Your ICICI Bank Credit Card XX3001 has been used for a transaction of INR 451.00 on May 13, 2026 at 12:49:59."
+        assertAccept(body)
+    }
+
     // ── Bodies with neither verbs nor promo keywords ───────────────────────────
 
     @Test
