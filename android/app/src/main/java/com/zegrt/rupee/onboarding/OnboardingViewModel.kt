@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 
 enum class OnboardingStep {
     WELCOME,
+    PROFILE,
     PERMISSIONS,
     SETUP,
     HOME,
@@ -23,6 +24,11 @@ data class PermissionCardState(
     val description: String,
     val statusLabel: String,
     val isGranted: Boolean,
+)
+
+data class ProfileFormState(
+    val displayName: String = "",
+    val monthlyBudgetInput: String = "",
 )
 
 data class SetupFormState(
@@ -42,7 +48,9 @@ data class OnboardingUiState(
         statusLabel = "Required for best coverage",
         isGranted = false,
     ),
-    val smsLaterMessage: String = "SMS reading is planned for a later build once the notification-based flow is stable.",
+    val profileForm: ProfileFormState = ProfileFormState(),
+    val profileError: String? = null,
+    val isSavingProfile: Boolean = false,
     val setupForm: SetupFormState = SetupFormState(),
     val setupError: String? = null,
     val isSavingSetup: Boolean = false,
@@ -79,7 +87,47 @@ class OnboardingViewModel(
     }
 
     fun advanceFromWelcome() {
-        _uiState.update { it.copy(currentStep = OnboardingStep.PERMISSIONS) }
+        _uiState.update { it.copy(currentStep = OnboardingStep.PROFILE) }
+    }
+
+    fun updateDisplayName(value: String) {
+        _uiState.update { it.copy(profileForm = it.profileForm.copy(displayName = value), profileError = null) }
+    }
+
+    fun updateMonthlyBudgetInput(value: String) {
+        _uiState.update { it.copy(profileForm = it.profileForm.copy(monthlyBudgetInput = value), profileError = null) }
+    }
+
+    fun continueFromProfile() {
+        val form = _uiState.value.profileForm
+        val trimmedName = form.displayName.trim()
+        if (trimmedName.isBlank()) {
+            _uiState.update { it.copy(profileError = "Tell us what to call you.") }
+            return
+        }
+        val budgetMinor = form.monthlyBudgetInput
+            .trim()
+            .takeIf { it.isNotEmpty() }
+            ?.replace(",", "")
+            ?.toDoubleOrNull()
+            ?.takeIf { it > 0.0 }
+            ?.times(100)
+            ?.toLong()
+        if (budgetMinor == null) {
+            _uiState.update { it.copy(profileError = "Enter a monthly budget greater than 0.") }
+            return
+        }
+        _uiState.update { it.copy(isSavingProfile = true, profileError = null) }
+        viewModelScope.launch {
+            repository.updateUserDisplayName(trimmedName)
+            repository.setMonthlyBudgetLimit(budgetMinor)
+            _uiState.update {
+                it.copy(
+                    isSavingProfile = false,
+                    currentStep = OnboardingStep.PERMISSIONS,
+                )
+            }
+        }
     }
 
     fun continueFromPermissions() {
