@@ -1,6 +1,7 @@
 package com.zegrt.rupee.onboarding
 
 import android.content.Context
+import androidx.core.content.edit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -19,7 +20,7 @@ class OnboardingPreferences(private val context: Context) {
     }
 
     fun setCompleted(completed: Boolean) {
-        prefs.edit().putBoolean(KEY_COMPLETED, completed).apply()
+        prefs.edit { putBoolean(KEY_COMPLETED, completed) }
     }
 
     private companion object {

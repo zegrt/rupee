@@ -3,6 +3,7 @@ package com.zegrt.rupee.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.zegrt.rupee.budget.DuesAlertManager
 import com.zegrt.rupee.data.local.entity.BudgetEntity
 import com.zegrt.rupee.data.local.entity.CanonicalTransactionEntity
 import com.zegrt.rupee.data.local.entity.CanonicalTransactionStatus
@@ -198,7 +199,7 @@ class HomeViewModel(
     private val clock: () -> LocalDate = { LocalDate.now() },
     private val timeClock: () -> LocalTime = { LocalTime.now() },
     private val budgetAlertManager: BudgetAlertManager? = null,
-    private val duesAlertManager: com.zegrt.rupee.budget.DuesAlertManager? = null,
+    private val duesAlertManager: DuesAlertManager? = null,
 ) : ViewModel() {
     private val headlineCurrencyFormatter = currencyFormatter(decimals = 0)
     private val rowCurrencyFormatter = currencyFormatter(decimals = 2)
@@ -815,7 +816,7 @@ class HomeViewModelFactory(
     private val repository: LocalFinanceRepository,
     private val clock: () -> LocalDate = { LocalDate.now() },
     private val budgetAlertManager: BudgetAlertManager? = null,
-    private val duesAlertManager: com.zegrt.rupee.budget.DuesAlertManager? = null,
+    private val duesAlertManager: DuesAlertManager? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {

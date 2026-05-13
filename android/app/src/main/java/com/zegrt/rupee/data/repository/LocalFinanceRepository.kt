@@ -1,6 +1,8 @@
 package com.zegrt.rupee.data.repository
 
 import com.zegrt.rupee.data.local.RupeeDatabase
+import com.zegrt.rupee.data.local.dao.CategorySpend
+import com.zegrt.rupee.data.local.entity.TransactionCandidateType
 import com.zegrt.rupee.data.local.entity.AccountEntity
 import com.zegrt.rupee.data.local.entity.AccountType
 import com.zegrt.rupee.data.local.entity.BucketEntity
@@ -720,7 +722,7 @@ class LocalFinanceRepository(
     fun observeCategoryBudgets(today: LocalDate = LocalDate.now()): Flow<List<BudgetEntity>> =
         database.budgetDao().observeCategoryBudgetsForDate(USER_ID, today.toString())
 
-    fun observeSpentByCategory(fromIso: String, untilIso: String): Flow<List<com.zegrt.rupee.data.local.dao.CategorySpend>> =
+    fun observeSpentByCategory(fromIso: String, untilIso: String): Flow<List<CategorySpend>> =
         database.canonicalTransactionDao().observeSpentByCategoryInPeriod(
             userId = USER_ID,
             fromIso = fromIso,
@@ -819,9 +821,9 @@ class LocalFinanceRepository(
     }
 
     private fun TransactionCandidateEntity.toCanonicalType(): CanonicalTransactionType = when (candidateType) {
-        com.zegrt.rupee.data.local.entity.TransactionCandidateType.TRANSFER -> CanonicalTransactionType.TRANSFER
-        com.zegrt.rupee.data.local.entity.TransactionCandidateType.CASH_WITHDRAWAL -> CanonicalTransactionType.CASH_ADJUSTMENT
-        com.zegrt.rupee.data.local.entity.TransactionCandidateType.INCOME -> CanonicalTransactionType.INCOME
+        TransactionCandidateType.TRANSFER -> CanonicalTransactionType.TRANSFER
+        TransactionCandidateType.CASH_WITHDRAWAL -> CanonicalTransactionType.CASH_ADJUSTMENT
+        TransactionCandidateType.INCOME -> CanonicalTransactionType.INCOME
         else -> CanonicalTransactionType.EXPENSE
     }
 }

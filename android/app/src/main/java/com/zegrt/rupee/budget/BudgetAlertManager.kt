@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.content.Context
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.edit
 import com.zegrt.rupee.data.repository.LocalFinanceRepository
 import java.time.LocalDate
 import java.time.YearMonth
@@ -41,7 +42,13 @@ class BudgetAlertManager(private val context: Context) {
         val lastLevel = prefs.getString(monthKey, AlertLevel.NONE.name)
         if (lastLevel == level.name || (lastLevel == AlertLevel.OVER.name && level == AlertLevel.NEAR)) return
 
-        prefs.edit().putString(monthKey, level.name).apply()
+        // Gate before mutating prefs so a user with notifications disabled
+        // doesn't get the dedupe pref bumped for an alert they never saw.
+        // Android 13+ requires POST_NOTIFICATIONS, which may have been denied.
+        val notifier = NotificationManagerCompat.from(context)
+        if (!notifier.areNotificationsEnabled()) return
+
+        prefs.edit { putString(monthKey, level.name) }
 
         val budgetLabel = formatRupees(budget.limitMinor)
         val spentLabel = formatRupees(spent)
@@ -59,9 +66,7 @@ class BudgetAlertManager(private val context: Context) {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
 
-        runCatching {
-            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
-        }
+        runCatching { notifier.notify(NOTIFICATION_ID, notification) }
     }
 
     private fun formatRupees(minor: Long): String {

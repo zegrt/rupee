@@ -3,7 +3,9 @@ package com.zegrt.rupee.ingestion
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import com.zegrt.rupee.BuildConfig
 import com.zegrt.rupee.RupeeApplication
+import com.zegrt.rupee.diagnostics.NotificationDumper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,7 +37,7 @@ class RupeeNotificationListenerService : NotificationListenerService() {
 
         // Debug-only: capture every incoming notification's extras for the
         // real-world corpus we'll replay against parser v2.
-        com.zegrt.rupee.diagnostics.NotificationDumper.dump(this, sbn)
+        NotificationDumper.dump(this, sbn)
 
         val isDebugMock = sbn.notification.extras
             ?.getBoolean(RupeeApplication.DEBUG_MOCK_EXTRA, false) == true
@@ -45,7 +47,7 @@ class RupeeNotificationListenerService : NotificationListenerService() {
         // extractor starts pulling EXTRA_TEXT_LINES (which can carry per-child
         // snippets and would trigger false-positive parses).
         if ((sbn.notification.flags and ExtractedNotification.FLAG_GROUP_SUMMARY) != 0) {
-            if (com.zegrt.rupee.BuildConfig.DEBUG) {
+            if (BuildConfig.DEBUG) {
                 Log.d(TAG, "Skipped: group summary pkg=${sbn.packageName}")
             }
             return
@@ -58,7 +60,7 @@ class RupeeNotificationListenerService : NotificationListenerService() {
 
         val extracted = NotificationExtractor.fromNotification(sbn.notification)
 
-        if (com.zegrt.rupee.BuildConfig.DEBUG) {
+        if (BuildConfig.DEBUG) {
             Log.d(
                 TAG,
                 "onPosted pkg=${sbn.packageName} mock=$isDebugMock " +

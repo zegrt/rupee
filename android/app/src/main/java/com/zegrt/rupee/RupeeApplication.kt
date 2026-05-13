@@ -10,6 +10,7 @@ import com.zegrt.rupee.data.local.MIGRATION_5_6
 import com.zegrt.rupee.data.local.MIGRATION_6_7
 import com.zegrt.rupee.data.local.MIGRATION_7_8
 import com.zegrt.rupee.data.local.RupeeDatabase
+import com.zegrt.rupee.diagnostics.CrashReporter
 import com.zegrt.rupee.data.repository.LocalFinanceRepository
 import com.zegrt.rupee.onboarding.OnboardingPreferences
 
@@ -43,7 +44,7 @@ class RupeeApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        com.zegrt.rupee.diagnostics.CrashReporter.install(this)
+        CrashReporter.install(this)
         val nm = getSystemService(NotificationManager::class.java) ?: return
         nm.createNotificationChannel(
             NotificationChannel(

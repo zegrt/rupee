@@ -3,16 +3,22 @@ package com.zegrt.rupee.debug
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.core.app.NotificationCompat
+import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.zegrt.rupee.BuildConfig
 import com.zegrt.rupee.RupeeApplication
 import com.zegrt.rupee.data.local.entity.RawCaptureEventEntity
+import com.zegrt.rupee.data.local.entity.RawCaptureIngestionStatus
 import com.zegrt.rupee.data.local.entity.RawCaptureSourceType
 import com.zegrt.rupee.data.local.entity.SyncStatus
 import com.zegrt.rupee.data.repository.LocalFinanceRepository
+import com.zegrt.rupee.diagnostics.CrashReporter
+import com.zegrt.rupee.diagnostics.NotificationDumper
 import com.zegrt.rupee.ingestion.NotificationParserRegistry
 import java.time.Instant
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -91,7 +97,7 @@ class DebugViewModel(
     }
 
     fun refreshCrashLog(context: Context) {
-        val log = com.zegrt.rupee.diagnostics.CrashReporter.readLog(context)
+        val log = CrashReporter.readLog(context)
         val preview = if (log.length > 1500) "…${log.takeLast(1500)}" else log
         _uiState.value = _uiState.value.copy(
             crashLogPreview = preview.ifBlank { "" },
@@ -100,18 +106,18 @@ class DebugViewModel(
     }
 
     fun clearCrashLog(context: Context) {
-        com.zegrt.rupee.diagnostics.CrashReporter.clearLog(context)
+        CrashReporter.clearLog(context)
         _uiState.value = _uiState.value.copy(crashLogPreview = "", message = "Crash log cleared")
     }
 
     fun refreshNotificationDumpSize(context: Context) {
         _uiState.value = _uiState.value.copy(
-            notificationDumpSize = com.zegrt.rupee.diagnostics.NotificationDumper.fileSize(context),
+            notificationDumpSize = NotificationDumper.fileSize(context),
         )
     }
 
     fun clearNotificationDumps(context: Context) {
-        com.zegrt.rupee.diagnostics.NotificationDumper.clear(context)
+        NotificationDumper.clear(context)
         _uiState.value = _uiState.value.copy(
             notificationDumpSize = 0L,
             message = "Notification dump cleared",
@@ -119,7 +125,7 @@ class DebugViewModel(
     }
 
     fun shareNotificationDumps(context: Context) {
-        val dir = com.zegrt.rupee.diagnostics.NotificationDumper.directory(context) ?: run {
+        val dir = NotificationDumper.directory(context) ?: run {
             _uiState.value = _uiState.value.copy(message = "Dump folder unavailable.")
             return
         }
@@ -132,13 +138,13 @@ class DebugViewModel(
         // overwrite each other in the recipient's downloads folder, and the
         // file is self-describing: app version + device + ISO-ish timestamp.
         // Example: rupee-notif-dumps-0.13.1-Pixel-7-20260513-104215.jsonl
-        val device = "${android.os.Build.MANUFACTURER}-${android.os.Build.MODEL}"
+        val device = "${Build.MANUFACTURER}-${Build.MODEL}"
             .replace(Regex("[^A-Za-z0-9-]"), "")
             .take(24)
         val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US)
             .apply { timeZone = java.util.TimeZone.getDefault() }
             .format(java.util.Date())
-        val shareName = "rupee-notif-dumps-${com.zegrt.rupee.BuildConfig.VERSION_NAME}-$device-$stamp.jsonl"
+        val shareName = "rupee-notif-dumps-${BuildConfig.VERSION_NAME}-$device-$stamp.jsonl"
         val sharedFile = java.io.File(dir, shareName)
         // Tidy: drop any prior shared copies so the folder doesn't accumulate.
         dir.listFiles { _, name -> name.startsWith("rupee-notif-dumps-") }
@@ -169,12 +175,12 @@ class DebugViewModel(
     }
 
     fun emailCrashLog(context: Context) {
-        val log = com.zegrt.rupee.diagnostics.CrashReporter.readLog(context)
+        val log = CrashReporter.readLog(context)
         if (log.isBlank()) {
             _uiState.value = _uiState.value.copy(message = "No crashes to email.")
             return
         }
-        val intent = Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:studioxero.biz@gmail.com")).apply {
+        val intent = Intent(Intent.ACTION_SENDTO, "mailto:studioxero.biz@gmail.com".toUri()).apply {
             putExtra(Intent.EXTRA_SUBJECT, "Rupee crash log")
             // Tail the log to fit a sane email body.
             val excerpt = if (log.length > 100_000) "…${log.takeLast(100_000)}" else log
@@ -234,7 +240,7 @@ class DebugViewModel(
             receivedAt = now,
             deviceEventTime = now,
             hashFingerprint = "debug-parse-${System.nanoTime()}",
-            ingestionStatus = com.zegrt.rupee.data.local.entity.RawCaptureIngestionStatus.CAPTURED,
+            ingestionStatus = RawCaptureIngestionStatus.CAPTURED,
             createdAt = now,
             updatedAt = now,
             syncStatus = SyncStatus.LOCAL_ONLY,
