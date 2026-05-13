@@ -123,19 +123,41 @@ class DebugViewModel(
             _uiState.value = _uiState.value.copy(message = "Dump folder unavailable.")
             return
         }
-        val file = java.io.File(dir, "dumps.jsonl").takeIf { it.exists() } ?: run {
+        val source = java.io.File(dir, "dumps.jsonl").takeIf { it.exists() } ?: run {
             _uiState.value = _uiState.value.copy(message = "No dumps to share.")
             return
         }
+
+        // Copy to a uniquely-named file before sharing so multiple shares don't
+        // overwrite each other in the recipient's downloads folder, and the
+        // file is self-describing: app version + device + ISO-ish timestamp.
+        // Example: rupee-notif-dumps-0.13.1-Pixel-7-20260513-104215.jsonl
+        val device = "${android.os.Build.MANUFACTURER}-${android.os.Build.MODEL}"
+            .replace(Regex("[^A-Za-z0-9-]"), "")
+            .take(24)
+        val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US)
+            .apply { timeZone = java.util.TimeZone.getDefault() }
+            .format(java.util.Date())
+        val shareName = "rupee-notif-dumps-${com.zegrt.rupee.BuildConfig.VERSION_NAME}-$device-$stamp.jsonl"
+        val sharedFile = java.io.File(dir, shareName)
+        // Tidy: drop any prior shared copies so the folder doesn't accumulate.
+        dir.listFiles { _, name -> name.startsWith("rupee-notif-dumps-") }
+            ?.forEach { it.delete() }
+        runCatching { source.copyTo(sharedFile, overwrite = true) }
+            .onFailure {
+                _uiState.value = _uiState.value.copy(message = "Couldn't prepare dump for sharing.")
+                return
+            }
+
         val uri = androidx.core.content.FileProvider.getUriForFile(
             context,
             "${context.packageName}.fileprovider",
-            file,
+            sharedFile,
         )
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "application/json"
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, "Rupee notification dump")
+            putExtra(Intent.EXTRA_SUBJECT, "Rupee notification dump — $shareName")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }

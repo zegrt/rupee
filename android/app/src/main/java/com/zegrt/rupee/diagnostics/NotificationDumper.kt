@@ -77,7 +77,8 @@ object NotificationDumper {
         directory(context)?.let { File(it, FILE_NAME) }?.takeIf(File::exists)?.length() ?: 0L
 
     fun clear(context: Context) {
-        directory(context)?.let { File(it, FILE_NAME) }?.takeIf(File::exists)?.delete()
+        // Wipe the live dump plus any shared-copy artefacts (rupee-notif-dumps-*.jsonl).
+        directory(context)?.listFiles()?.forEach { it.delete() }
     }
 
     private fun ensureFile(context: Context): File? {
