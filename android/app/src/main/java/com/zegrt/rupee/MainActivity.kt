@@ -28,6 +28,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -91,6 +94,7 @@ import com.zegrt.rupee.settings.TrustRulesScreen
 import com.zegrt.rupee.settings.SettingsViewModel
 import com.zegrt.rupee.settings.SettingsViewModelFactory
 import com.zegrt.rupee.onboarding.OnboardingUiState
+import com.zegrt.rupee.onboarding.ProfileFormState
 import com.zegrt.rupee.onboarding.OnboardingViewModel
 import com.zegrt.rupee.onboarding.OnboardingViewModelFactory
 import com.zegrt.rupee.onboarding.PermissionCardState
@@ -1563,11 +1567,12 @@ private fun ManualEntrySheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("Add transaction", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                com.zegrt.rupee.home.ManualEntryType.values().forEach { t ->
-                    androidx.compose.material3.FilterChip(
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                com.zegrt.rupee.home.ManualEntryType.entries.forEachIndexed { index, t ->
+                    SegmentedButton(
                         selected = draft.type == t,
                         onClick = { onUpdate { copy(type = t) } },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = com.zegrt.rupee.home.ManualEntryType.entries.size),
                         label = { Text(if (t == com.zegrt.rupee.home.ManualEntryType.INCOME) "Income" else "Expense") },
                     )
                 }
@@ -1742,19 +1747,6 @@ private fun TransactionsTab(
             )
         }
     }
-}
-
-@Composable
-private fun HomeTabChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(label) },
-    )
 }
 
 @Composable
@@ -2139,13 +2131,34 @@ private fun InspectionSection(
 
 @Preview(showBackground = true)
 @Composable
-private fun WelcomeScreenPreview() {
+fun WelcomeScreenPreview() {
     RupeeTheme { WelcomeScreen(onContinue = {}) }
+}
+
+@Preview(showBackground = true, name = "Profile — empty")
+@Preview(showBackground = true, name = "Profile — large font", fontScale = 1.5f)
+@Preview(showBackground = true, name = "Profile — compact width", widthDp = 360)
+@Composable
+fun ProfileScreenPreview() {
+    RupeeTheme {
+        ProfileScreen(
+            uiState = OnboardingUiState(
+                currentStep = OnboardingStep.PROFILE,
+                profileForm = ProfileFormState(
+                    displayName = "",
+                    monthlyBudgetInput = "",
+                ),
+            ),
+            onDisplayNameChange = {},
+            onMonthlyBudgetChange = {},
+            onContinue = {},
+        )
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
-private fun PermissionsScreenPreview() {
+fun PermissionsScreenPreview() {
     RupeeTheme {
         PermissionsScreen(
             uiState = OnboardingUiState(
@@ -2165,7 +2178,7 @@ private fun PermissionsScreenPreview() {
 
 @Preview(showBackground = true)
 @Composable
-private fun SetupScreenPreview() {
+fun SetupScreenPreview() {
     RupeeTheme {
         SetupScreen(
             uiState = OnboardingUiState(currentStep = OnboardingStep.SETUP),
@@ -2182,7 +2195,7 @@ private fun SetupScreenPreview() {
 
 @Preview(showBackground = true)
 @Composable
-private fun HomeScreenPreview() {
+fun HomeScreenPreview() {
     RupeeTheme {
         HomeSummaryTab(
             uiState = HomeUiState(
@@ -2192,6 +2205,23 @@ private fun HomeScreenPreview() {
             budgetsState = BudgetsUiState(),
             onReviewInbox = {},
             onAddTransaction = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun ManualEntrySheetPreview() {
+    RupeeTheme {
+        ManualEntrySheet(
+            draft = ManualEntryDraft(isOpen = true),
+            categories = listOf(
+                com.zegrt.rupee.home.CategoryOption("1", "Food"),
+                com.zegrt.rupee.home.CategoryOption("2", "Transport"),
+            ),
+            onClose = {},
+            onUpdate = {},
+            onSubmit = {},
         )
     }
 }
