@@ -1,0 +1,114 @@
+package com.zegrt.rupee.ingestion
+
+/**
+ * Shared pre-parser filter. Answers a single question before any per-provider
+ * parser runs: "is this notification body actually about a real transaction?"
+ *
+ * Why this lives outside the parser registry: every parser was independently
+ * re-deriving the same gate (some well, some not — see the v0.13.4 Kotak
+ * marketing-push bug). Centralising it means a single fix benefits every
+ * parser, and the per-provider parsers can focus on extracting fields instead
+ * of guarding against ads.
+ *
+ * Algorithm:
+ *  1. Reject if the body contains any promotional keyword (offers, OTPs, CTAs,
+ *     disclosure boilerplate, etc.). Cheap O(n*k) substring scan.
+ *  2. Reject if the body contains zero positive money verbs.
+ *  3. Otherwise accept.
+ *
+ * The gate is intentionally lenient on bill-due / EMI-due flows: "due" is on
+ * the positive list because CRED/ICICI bill-due notifications drive the
+ * upcoming-dues home strip and must reach BILL_DUE parsers. Promo bodies that
+ * say "EMI starting" still get killed by the "EMI starting" negative match.
+ */
+object TransactionalGate {
+
+    sealed class Decision {
+        data object Accept : Decision()
+        data class Reject(val reason: RejectReason, val matched: String) : Decision()
+    }
+
+    enum class RejectReason {
+        /** Body matched a known promotional / non-transactional keyword. */
+        PROMO_KEYWORD,
+
+        /** Body had no money verb (debited/credited/paid/etc.). */
+        NO_TRANSACTIONAL_VERB,
+
+        /** Body was empty or whitespace-only — usually a group summary. */
+        EMPTY_BODY,
+    }
+
+    fun evaluate(body: String): Decision {
+        if (body.isBlank()) return Decision.Reject(RejectReason.EMPTY_BODY, "")
+        val lower = body.lowercase()
+
+        // Order matters: short tokens before longer ones for readable triage,
+        // but we return the first match either way.
+        NEGATIVE_KEYWORDS.firstOrNull { it in lower }?.let { matched ->
+            return Decision.Reject(RejectReason.PROMO_KEYWORD, matched)
+        }
+
+        val verb = POSITIVE_VERBS.firstOrNull { it in lower }
+            ?: return Decision.Reject(RejectReason.NO_TRANSACTIONAL_VERB, "")
+
+        return Decision.Accept
+    }
+
+    /**
+     * Verbs that indicate a real money movement (or a real bill that needs
+     * paying). At least one must be present for the body to clear the gate.
+     * "due" is intentionally included so CRED/ICICI bill-due flows survive —
+     * BILL_DUE parsers downstream depend on it.
+     */
+    private val POSITIVE_VERBS = listOf(
+        // Debit-side
+        "debited", " debit ", "spent ", "spent on", "paid ", "paying ",
+        "sent via", "sent to", "sent rs", "sent inr",
+        "transferred", "withdrawn", "withdraw ", "deducted",
+        "auto-debit", "auto debit", "autodebit", "charged ", "swiped",
+        // Credit-side
+        "credited", " credit ", "received ", "deposited", "refunded",
+        // Bill / EMI reminders we want to keep
+        " due ", "is due", "due on", "due by", "due tomorrow", "payment due",
+    )
+
+    /**
+     * Promotional / non-transactional keywords. Any one present rejects the
+     * body. Listed roughly in order of how often they fire against our real
+     * dump corpus so the matched-keyword telemetry stays readable.
+     *
+     * Curated against `dumps/rupee-notif-dumps-0.13.3-Nothing-A015-*.jsonl`
+     * and the patterns documented in docs/notification-ingestion-deep-dive.md.
+     */
+    private val NEGATIVE_KEYWORDS = listOf(
+        // Marketing CTAs — the most common offenders
+        "apply now", "apply today", "apply here",
+        "pre-approved", "pre approved", "preapproved",
+        "eligible for", "selected for", "you are eligible",
+        "explore", "know more", "click here", "tap here",
+        "register now", "sign up", "download now",
+        "avail offer", "claim now", "unlock ",
+        // Promo / reward framing
+        "cashback offer", " offer ", "limited offer",
+        "congratulations", "you have won", "lucky draw",
+        "rewards await", "earn rewards",
+        // Disclosure / fine-print signals
+        "t&c", "t & c", "tnc apply", "terms apply", "*terms",
+        " p.a.", "% p.a", "per annum",
+        // Aspirational / projection framing (the Kotak RD smoking gun)
+        " → ", " -> ", "becomes ₹", "grows to ₹", "as low as", "starting at",
+        "starting from", "up to ₹", "up to rs",
+        " emi starting ", " emi as low ",
+        "/month → ", "/month -> ",
+        // Time-pressure
+        "limited period", "valid till", "last day", "hurry ",
+        "today only", "ends soon",
+        // OTP / verification (never a transaction)
+        "otp ", " otp.", " otp,", "one time password", "verification code",
+        "verification pin", "do not share",
+        // Payment requests (someone asking US for money — not a debit yet)
+        "has requested", "payment request", "collect request",
+        "requesting payment", "requests rs", "ignore if already paid",
+    )
+}
