@@ -12,7 +12,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -64,6 +63,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.net.toUri
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -73,7 +73,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.zegrt.rupee.BuildConfig
 import com.zegrt.rupee.data.local.entity.Mode
 import com.zegrt.rupee.debug.DebugScreen
 import com.zegrt.rupee.debug.DebugViewModel
@@ -99,8 +98,38 @@ import com.zegrt.rupee.onboarding.OnboardingViewModel
 import com.zegrt.rupee.onboarding.OnboardingViewModelFactory
 import com.zegrt.rupee.onboarding.PermissionCardState
 import com.zegrt.rupee.onboarding.PermissionStateChecker
+import com.zegrt.rupee.budgets.BudgetsScreen
 import com.zegrt.rupee.budgets.BudgetsUiState
+import com.zegrt.rupee.budgets.BudgetsViewModel
+import com.zegrt.rupee.budgets.BudgetsViewModelFactory
 import com.zegrt.rupee.budgets.CategoryBudgetRow
+import com.zegrt.rupee.calendar.CalendarScreen
+import com.zegrt.rupee.calendar.CalendarUiState
+import com.zegrt.rupee.calendar.CalendarViewModel
+import com.zegrt.rupee.calendar.CalendarViewModelFactory
+import com.zegrt.rupee.cards.CardDueDraft
+import com.zegrt.rupee.cards.CardDueDraftSheet
+import com.zegrt.rupee.cards.CardsEmisScreen
+import com.zegrt.rupee.cards.CardsEmisUiState
+import com.zegrt.rupee.cards.CardsEmisViewModel
+import com.zegrt.rupee.cards.CardsEmisViewModelFactory
+import com.zegrt.rupee.cards.EmiDraft
+import com.zegrt.rupee.cards.EmiDraftSheet
+import com.zegrt.rupee.debug.DebugUiState
+import com.zegrt.rupee.debug.SampleNotification
+import com.zegrt.rupee.home.CategoryOption
+import com.zegrt.rupee.home.HomeDueKind
+import com.zegrt.rupee.home.HomeDueRow
+import com.zegrt.rupee.home.ManualEntryType
+import com.zegrt.rupee.recap.RecapScreen
+import com.zegrt.rupee.recap.RecapUiState
+import com.zegrt.rupee.recap.RecapViewModel
+import com.zegrt.rupee.recap.RecapViewModelFactory
+import com.zegrt.rupee.recurring.RecurringScreen
+import com.zegrt.rupee.recurring.RecurringUiState
+import com.zegrt.rupee.recurring.RecurringViewModel
+import com.zegrt.rupee.recurring.RecurringViewModelFactory
+import com.zegrt.rupee.settings.SettingsUiState
 import com.zegrt.rupee.ui.theme.RupeeTheme
 
 private data class NavTab(val tab: HomeTab, val label: String, val icon: ImageVector)
@@ -140,19 +169,19 @@ class MainActivity : ComponentActivity() {
                             repository = app.localFinanceRepository,
                             appVersion = versionLabel,
                         ),
-                        cardsEmisViewModelFactory = com.zegrt.rupee.cards.CardsEmisViewModelFactory(
+                        cardsEmisViewModelFactory = CardsEmisViewModelFactory(
                             app.localFinanceRepository,
                         ),
-                        calendarViewModelFactory = com.zegrt.rupee.calendar.CalendarViewModelFactory(
+                        calendarViewModelFactory = CalendarViewModelFactory(
                             app.localFinanceRepository,
                         ),
-                        budgetsViewModelFactory = com.zegrt.rupee.budgets.BudgetsViewModelFactory(
+                        budgetsViewModelFactory = BudgetsViewModelFactory(
                             app.localFinanceRepository,
                         ),
-                        recurringViewModelFactory = com.zegrt.rupee.recurring.RecurringViewModelFactory(
+                        recurringViewModelFactory = RecurringViewModelFactory(
                             app.localFinanceRepository,
                         ),
-                        recapViewModelFactory = com.zegrt.rupee.recap.RecapViewModelFactory(
+                        recapViewModelFactory = RecapViewModelFactory(
                             app.localFinanceRepository,
                         ),
                         debugViewModelFactory = DebugViewModelFactory(app.localFinanceRepository),
@@ -169,22 +198,22 @@ private fun RupeeApp(
     homeViewModelFactory: HomeViewModelFactory,
     onboardingViewModelFactory: OnboardingViewModelFactory,
     settingsViewModelFactory: SettingsViewModelFactory,
-    cardsEmisViewModelFactory: com.zegrt.rupee.cards.CardsEmisViewModelFactory,
-    calendarViewModelFactory: com.zegrt.rupee.calendar.CalendarViewModelFactory,
-    budgetsViewModelFactory: com.zegrt.rupee.budgets.BudgetsViewModelFactory,
-    recurringViewModelFactory: com.zegrt.rupee.recurring.RecurringViewModelFactory,
-    recapViewModelFactory: com.zegrt.rupee.recap.RecapViewModelFactory,
+    cardsEmisViewModelFactory: CardsEmisViewModelFactory,
+    calendarViewModelFactory: CalendarViewModelFactory,
+    budgetsViewModelFactory: BudgetsViewModelFactory,
+    recurringViewModelFactory: RecurringViewModelFactory,
+    recapViewModelFactory: RecapViewModelFactory,
     debugViewModelFactory: DebugViewModelFactory,
     versionLabel: String,
 ) {
     val homeViewModel: HomeViewModel = viewModel(factory = homeViewModelFactory)
     val onboardingViewModel: OnboardingViewModel = viewModel(factory = onboardingViewModelFactory)
     val settingsViewModel: SettingsViewModel = viewModel(factory = settingsViewModelFactory)
-    val cardsEmisViewModel: com.zegrt.rupee.cards.CardsEmisViewModel = viewModel(factory = cardsEmisViewModelFactory)
-    val calendarViewModel: com.zegrt.rupee.calendar.CalendarViewModel = viewModel(factory = calendarViewModelFactory)
-    val budgetsViewModel: com.zegrt.rupee.budgets.BudgetsViewModel = viewModel(factory = budgetsViewModelFactory)
-    val recurringViewModel: com.zegrt.rupee.recurring.RecurringViewModel = viewModel(factory = recurringViewModelFactory)
-    val recapViewModel: com.zegrt.rupee.recap.RecapViewModel = viewModel(factory = recapViewModelFactory)
+    val cardsEmisViewModel: CardsEmisViewModel = viewModel(factory = cardsEmisViewModelFactory)
+    val calendarViewModel: CalendarViewModel = viewModel(factory = calendarViewModelFactory)
+    val budgetsViewModel: BudgetsViewModel = viewModel(factory = budgetsViewModelFactory)
+    val recurringViewModel: RecurringViewModel = viewModel(factory = recurringViewModelFactory)
+    val recapViewModel: RecapViewModel = viewModel(factory = recapViewModelFactory)
     val debugViewModel: DebugViewModel = viewModel(factory = debugViewModelFactory)
     val homeUiState by homeViewModel.uiState.collectAsState()
     val onboardingUiState by onboardingViewModel.uiState.collectAsState()
@@ -251,17 +280,16 @@ private fun RupeeApp(
     }
 
     val sendFeedback: () -> Unit = {
-        val intent = Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:studioxero.biz@gmail.com")).apply {
+        val intent = Intent(Intent.ACTION_SENDTO, "mailto:studioxero.biz@gmail.com".toUri()).apply {
             putExtra(Intent.EXTRA_SUBJECT, "Rupee feedback (v${BuildConfig.VERSION_NAME})")
             putExtra(
                 Intent.EXTRA_TEXT,
-                "Found a bug or have a suggestion?\n\n— App version: ${BuildConfig.VERSION_NAME}\n— Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}\n— Android: ${android.os.Build.VERSION.RELEASE}\n\n",
+                "Found a bug or have a suggestion?\n\n— App version: ${BuildConfig.VERSION_NAME}\n— Device: ${Build.MANUFACTURER} ${Build.MODEL}\n— Android: ${Build.VERSION.RELEASE}\n\n",
             )
         }
         runCatching {
             context.startActivity(Intent.createChooser(intent, "Send feedback"))
         }
-        Unit
     }
 
     when (onboardingUiState.currentStep) {
@@ -595,8 +623,6 @@ private fun SetupScreen(
         }
         Spacer(modifier = Modifier.height(12.dp))
         SetupToggleCard(
-            title = "Cash on hand",
-            description = "Keep optional manual cash spending and balances.",
             enabled = uiState.setupForm.wantsCashAccount,
             onClick = onToggleCash,
         )
@@ -647,8 +673,6 @@ private fun SetupInputCard(
 
 @Composable
 private fun SetupToggleCard(
-    title: String,
-    description: String,
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
@@ -666,9 +690,9 @@ private fun SetupToggleCard(
         onClick = onClick,
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text("Cash on hand", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             Text(
-                text = description,
+                text = "Keep optional manual cash spending and balances.",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 8.dp),
             )
@@ -684,13 +708,13 @@ private fun SetupToggleCard(
 @Composable
 private fun RupeeHome(
     uiState: HomeUiState,
-    settingsState: com.zegrt.rupee.settings.SettingsUiState,
-    cardsEmisState: com.zegrt.rupee.cards.CardsEmisUiState,
-    calendarState: com.zegrt.rupee.calendar.CalendarUiState,
-    budgetsState: com.zegrt.rupee.budgets.BudgetsUiState,
-    recurringState: com.zegrt.rupee.recurring.RecurringUiState,
-    recapState: com.zegrt.rupee.recap.RecapUiState,
-    debugState: com.zegrt.rupee.debug.DebugUiState,
+    settingsState: SettingsUiState,
+    cardsEmisState: CardsEmisUiState,
+    calendarState: CalendarUiState,
+    budgetsState: BudgetsUiState,
+    recurringState: RecurringUiState,
+    recapState: RecapUiState,
+    debugState: DebugUiState,
     versionLabel: String,
     onSelectTab: (HomeTab) -> Unit,
     onSelectReviewRow: (String) -> Unit,
@@ -715,12 +739,12 @@ private fun RupeeHome(
     onSettingsRemoveTrustRule: (String) -> Unit,
     onOpenEmiDraft: () -> Unit,
     onCloseEmiDraft: () -> Unit,
-    onUpdateEmiDraft: (com.zegrt.rupee.cards.EmiDraft.() -> com.zegrt.rupee.cards.EmiDraft) -> Unit,
+    onUpdateEmiDraft: (EmiDraft.() -> EmiDraft) -> Unit,
     onSubmitEmiDraft: () -> Unit,
     onRemoveEmi: (String) -> Unit,
     onOpenCardDueDraft: (String) -> Unit,
     onCloseCardDueDraft: () -> Unit,
-    onUpdateCardDueDraft: (com.zegrt.rupee.cards.CardDueDraft.() -> com.zegrt.rupee.cards.CardDueDraft) -> Unit,
+    onUpdateCardDueDraft: (CardDueDraft.() -> CardDueDraft) -> Unit,
     onSubmitCardDueDraft: () -> Unit,
     onSetCardExclude: (String, Boolean) -> Unit,
     onCalendarPrev: () -> Unit,
@@ -742,7 +766,7 @@ private fun RupeeHome(
     onRequestPostNotifications: () -> Unit,
     onSendFeedback: () -> Unit,
     onDebugReset: () -> Unit,
-    onDebugSendSample: (com.zegrt.rupee.debug.SampleNotification) -> Unit,
+    onDebugSendSample: (SampleNotification) -> Unit,
     onDebugUpdateParseTitle: (String) -> Unit,
     onDebugUpdateParseBody: (String) -> Unit,
     onDebugRunParseTest: () -> Unit,
@@ -751,7 +775,7 @@ private fun RupeeHome(
     onPostMockNotification: () -> Unit,
     onDebugUpdateMockTitle: (String) -> Unit,
     onDebugUpdateMockBody: (String) -> Unit,
-    onDebugLoadMockSample: (com.zegrt.rupee.debug.SampleNotification) -> Unit,
+    onDebugLoadMockSample: (SampleNotification) -> Unit,
     onDebugWipeRawCapture: () -> Unit,
     onDebugRefreshCrashLog: () -> Unit,
     onDebugShareNotificationDumps: () -> Unit,
@@ -810,7 +834,7 @@ private fun RupeeHome(
                         uiState = uiState,
                         onSelectTransaction = onSelectTransaction,
                     )
-                    HomeTab.CALENDAR -> com.zegrt.rupee.calendar.CalendarScreen(
+                    HomeTab.CALENDAR -> CalendarScreen(
                         state = calendarState,
                         onPrev = onCalendarPrev,
                         onNext = onCalendarNext,
@@ -851,7 +875,7 @@ private fun RupeeHome(
                     shape = RoundedCornerShape(20.dp),
                     color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.85f),
                     modifier = Modifier
-                        .align(androidx.compose.ui.Alignment.BottomEnd)
+                        .align(Alignment.BottomEnd)
                         .padding(20.dp)
                         .clickable {
                             onDebugRefreshNotificationDumpSize()
@@ -897,7 +921,7 @@ private fun RupeeHome(
 
     if (showTrustRules) {
         androidx.compose.ui.window.Dialog(
-            onDismissRequest = { showTrustRules = false },
+            onDismissRequest = { if (showTrustRules) showTrustRules = false },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
         ) {
             Surface(
@@ -916,7 +940,7 @@ private fun RupeeHome(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("Trusted merchants", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                        androidx.compose.material3.TextButton(onClick = { showTrustRules = false }) { Text("Close") }
+                        androidx.compose.material3.TextButton(onClick = { if (showTrustRules) showTrustRules = false }) { Text("Close") }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     TrustRulesScreen(
@@ -930,7 +954,7 @@ private fun RupeeHome(
 
     if (showCardsEmis) {
         androidx.compose.ui.window.Dialog(
-            onDismissRequest = { showCardsEmis = false },
+            onDismissRequest = { if (showCardsEmis) showCardsEmis = false },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
         ) {
             Surface(
@@ -949,10 +973,10 @@ private fun RupeeHome(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("Cards & EMIs", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                        androidx.compose.material3.TextButton(onClick = { showCardsEmis = false }) { Text("Close") }
+                        androidx.compose.material3.TextButton(onClick = { if (showCardsEmis) showCardsEmis = false }) { Text("Close") }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
-                    com.zegrt.rupee.cards.CardsEmisScreen(
+                    CardsEmisScreen(
                         state = cardsEmisState,
                         onAddEmi = onOpenEmiDraft,
                         onRemoveEmi = onRemoveEmi,
@@ -963,7 +987,7 @@ private fun RupeeHome(
             }
         }
         if (cardsEmisState.emiDraft.isOpen) {
-            com.zegrt.rupee.cards.EmiDraftSheet(
+            EmiDraftSheet(
                 draft = cardsEmisState.emiDraft,
                 onClose = onCloseEmiDraft,
                 onUpdate = onUpdateEmiDraft,
@@ -971,7 +995,7 @@ private fun RupeeHome(
             )
         }
         if (cardsEmisState.cardDueDraft.isOpen) {
-            com.zegrt.rupee.cards.CardDueDraftSheet(
+            CardDueDraftSheet(
                 draft = cardsEmisState.cardDueDraft,
                 onClose = onCloseCardDueDraft,
                 onUpdate = onUpdateCardDueDraft,
@@ -982,7 +1006,7 @@ private fun RupeeHome(
 
     if (showRecap) {
         androidx.compose.ui.window.Dialog(
-            onDismissRequest = { showRecap = false },
+            onDismissRequest = { if (showRecap) showRecap = false },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
         ) {
             Surface(
@@ -1001,10 +1025,10 @@ private fun RupeeHome(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("Monthly recap", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                        androidx.compose.material3.TextButton(onClick = { showRecap = false }) { Text("Close") }
+                        androidx.compose.material3.TextButton(onClick = { if (showRecap) showRecap = false }) { Text("Close") }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
-                    com.zegrt.rupee.recap.RecapScreen(
+                    RecapScreen(
                         state = recapState,
                         onPrev = onRecapPrev,
                         onNext = onRecapNext,
@@ -1016,7 +1040,7 @@ private fun RupeeHome(
 
     if (showRecurring) {
         androidx.compose.ui.window.Dialog(
-            onDismissRequest = { showRecurring = false },
+            onDismissRequest = { if (showRecurring) showRecurring = false },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
         ) {
             Surface(
@@ -1035,10 +1059,10 @@ private fun RupeeHome(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("Recurring", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                        androidx.compose.material3.TextButton(onClick = { showRecurring = false }) { Text("Close") }
+                        androidx.compose.material3.TextButton(onClick = { if (showRecurring) showRecurring = false }) { Text("Close") }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
-                    com.zegrt.rupee.recurring.RecurringScreen(
+                    RecurringScreen(
                         state = recurringState,
                         onConfirm = onRecurringConfirm,
                         onDismiss = onRecurringDismiss,
@@ -1052,7 +1076,7 @@ private fun RupeeHome(
 
     if (showBudgets) {
         androidx.compose.ui.window.Dialog(
-            onDismissRequest = { showBudgets = false },
+            onDismissRequest = { if (showBudgets) showBudgets = false },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
         ) {
             Surface(
@@ -1071,10 +1095,10 @@ private fun RupeeHome(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("Budgets", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                        androidx.compose.material3.TextButton(onClick = { showBudgets = false }) { Text("Close") }
+                        androidx.compose.material3.TextButton(onClick = { if (showBudgets) showBudgets = false }) { Text("Close") }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
-                    com.zegrt.rupee.budgets.BudgetsScreen(
+                    BudgetsScreen(
                         state = budgetsState,
                         onMonthlyDraftChange = onBudgetsMonthlyDraftChange,
                         onSaveMonthly = onBudgetsSaveMonthly,
@@ -1088,7 +1112,7 @@ private fun RupeeHome(
 
     if (showDebug) {
         androidx.compose.ui.window.Dialog(
-            onDismissRequest = { showDebug = false },
+            onDismissRequest = { if (showDebug) showDebug = false },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
         ) {
             Surface(
@@ -1107,7 +1131,7 @@ private fun RupeeHome(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("Debug", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                        androidx.compose.material3.TextButton(onClick = { showDebug = false }) { Text("Close") }
+                        androidx.compose.material3.TextButton(onClick = { if (showDebug) showDebug = false }) { Text("Close") }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     DebugScreen(
@@ -1169,7 +1193,7 @@ private fun HomeSummaryTab(
 }
 
 @Composable
-private fun UpcomingDuesCard(dues: List<com.zegrt.rupee.home.HomeDueRow>) {
+private fun UpcomingDuesCard(dues: List<HomeDueRow>) {
     if (dues.isEmpty()) return
     Card(
         shape = RoundedCornerShape(24.dp),
@@ -1192,9 +1216,9 @@ private fun UpcomingDuesCard(dues: List<com.zegrt.rupee.home.HomeDueRow>) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "${when (due.kind) {
-                                com.zegrt.rupee.home.HomeDueKind.CARD -> "Card • "
-                                com.zegrt.rupee.home.HomeDueKind.EMI -> "EMI • "
-                                com.zegrt.rupee.home.HomeDueKind.RECURRING -> "Recurring • "
+                                HomeDueKind.CARD -> "Card • "
+                                HomeDueKind.EMI -> "EMI • "
+                                HomeDueKind.RECURRING -> "Recurring • "
                             }}${due.title}",
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.SemiBold,
@@ -1552,7 +1576,7 @@ private fun RecentRow(row: HomeRecentRow) {
 @Composable
 private fun ManualEntrySheet(
     draft: ManualEntryDraft,
-    categories: List<com.zegrt.rupee.home.CategoryOption>,
+    categories: List<CategoryOption>,
     onClose: () -> Unit,
     onUpdate: (ManualEntryDraft.() -> ManualEntryDraft) -> Unit,
     onSubmit: () -> Unit,
@@ -1568,12 +1592,12 @@ private fun ManualEntrySheet(
         ) {
             Text("Add transaction", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                com.zegrt.rupee.home.ManualEntryType.entries.forEachIndexed { index, t ->
+                ManualEntryType.entries.forEachIndexed { index, t ->
                     SegmentedButton(
                         selected = draft.type == t,
                         onClick = { onUpdate { copy(type = t) } },
-                        shape = SegmentedButtonDefaults.itemShape(index = index, count = com.zegrt.rupee.home.ManualEntryType.entries.size),
-                        label = { Text(if (t == com.zegrt.rupee.home.ManualEntryType.INCOME) "Income" else "Expense") },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = ManualEntryType.entries.size),
+                        label = { Text(if (t == ManualEntryType.INCOME) "Income" else "Expense") },
                     )
                 }
             }
@@ -1581,7 +1605,7 @@ private fun ManualEntrySheet(
                 value = draft.merchant,
                 onValueChange = { v -> onUpdate { copy(merchant = v) } },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text(if (draft.type == com.zegrt.rupee.home.ManualEntryType.INCOME) "Source / payer" else "Merchant / payee") },
+                label = { Text(if (draft.type == ManualEntryType.INCOME) "Source / payer" else "Merchant / payee") },
                 singleLine = true,
             )
             OutlinedTextField(
@@ -1595,7 +1619,7 @@ private fun ManualEntrySheet(
             Text("Mode", style = MaterialTheme.typography.labelMedium)
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(Mode.UPI, Mode.CREDIT_CARD, Mode.DEBIT_CARD, Mode.CASH, Mode.BANK_TRANSFER, Mode.OTHER).forEach { m ->
-                    androidx.compose.material3.FilterChip(
+                    FilterChip(
                         selected = draft.mode == m,
                         onClick = { onUpdate { copy(mode = m) } },
                         label = { Text(m.name.replace('_', ' ')) },
@@ -1725,7 +1749,7 @@ private fun ReviewTab(
                 onSelectMergeTarget(mergePickerForId!!, txn.id)
                 mergePickerForId = null
             },
-            onDismiss = { mergePickerForId = null },
+            onDismiss = { if (mergePickerForId != null) mergePickerForId = null },
         )
     }
 }
@@ -1753,7 +1777,7 @@ private fun TransactionsTab(
 private fun ReviewRowCard(
     row: HomeReviewRow,
     selected: Boolean,
-    categories: List<com.zegrt.rupee.home.CategoryOption>,
+    categories: List<CategoryOption>,
     onSelect: () -> Unit,
     onMerchantChange: (String) -> Unit,
     onAmountChange: (String) -> Unit,
@@ -1894,7 +1918,7 @@ private fun ReviewRowCard(
 @Composable
 private fun CategoryDropdown(
     selectedId: String?,
-    categories: List<com.zegrt.rupee.home.CategoryOption>,
+    categories: List<CategoryOption>,
     onSelect: (String?) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -1939,10 +1963,11 @@ private fun CategoryDropdown(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun CategoryChipRow(
     selectedId: String?,
-    categories: List<com.zegrt.rupee.home.CategoryOption>,
+    categories: List<CategoryOption>,
     onSelect: (String?) -> Unit,
 ) {
     if (categories.isEmpty()) return
@@ -1953,13 +1978,13 @@ private fun CategoryChipRow(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            androidx.compose.material3.FilterChip(
+            FilterChip(
                 selected = selectedId == null,
                 onClick = { onSelect(null) },
                 label = { Text("None") },
             )
             categories.forEach { option ->
-                androidx.compose.material3.FilterChip(
+                FilterChip(
                     selected = selectedId == option.id,
                     onClick = { onSelect(option.id) },
                     label = { Text(option.name) },
@@ -2015,7 +2040,7 @@ private fun TransactionRow(
 @Composable
 private fun TransactionDetailSheet(
     row: HomeTransactionRow,
-    categories: List<com.zegrt.rupee.home.CategoryOption>,
+    categories: List<CategoryOption>,
     onClose: () -> Unit,
     onMerchantChange: (String) -> Unit,
     onNotesChange: (String) -> Unit,
@@ -2090,17 +2115,17 @@ private fun TransactionDetailSheet(
     }
     if (confirmDelete) {
         androidx.compose.material3.AlertDialog(
-            onDismissRequest = { confirmDelete = false },
+            onDismissRequest = { if (confirmDelete) confirmDelete = false },
             title = { Text("Delete this transaction?") },
             text = { Text("It will be hidden from the dashboard and totals. There is no undo from the UI.") },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
-                    confirmDelete = false
+                    if (confirmDelete) confirmDelete = false
                     onDelete()
                 }) { Text("Delete") }
             },
             dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
+                androidx.compose.material3.TextButton(onClick = { if (confirmDelete) confirmDelete = false }) { Text("Cancel") }
             },
         )
     }
@@ -2216,8 +2241,8 @@ fun ManualEntrySheetPreview() {
         ManualEntrySheet(
             draft = ManualEntryDraft(isOpen = true),
             categories = listOf(
-                com.zegrt.rupee.home.CategoryOption("1", "Food"),
-                com.zegrt.rupee.home.CategoryOption("2", "Transport"),
+                CategoryOption("1", "Food"),
+                CategoryOption("2", "Transport"),
             ),
             onClose = {},
             onUpdate = {},
