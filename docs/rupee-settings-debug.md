@@ -1,7 +1,19 @@
 # Rupee Settings & Debug
 
 Date: May 8, 2026
-Status: Reflects v0.7.0
+Status: Last full rewrite was at v0.7.0. Status line updated through v0.13.3 but the body below has drifted. **Read this doc for product intent; read code for the current Debug section.**
+
+Not currently documented in this doc but present in the app as of v0.13.3:
+- Debug → **Crash log** card (view / email / clear; backed by `CrashReporter` in `diagnostics/`)
+- Debug → **Wipe raw capture** card (clears `raw_capture_events` only — preserves derived transactions)
+- Debug → **Notification dumps** card (debug-only JSONL capture of every incoming notification's extras; share-export with versioned filename; FileProvider wired in manifest)
+- Reset app data is now type-`WIPE` gated, not single-tap confirm
+- Debug pill is now gated on `BuildConfig.DEBUG` (release builds reach Debug only via Settings → About → "Open debug tools")
+- Settings shows **Notification permission re-check** with system-toggle-aware text (correctly re-emits on grant/revoke since v0.10.2)
+- Settings → **Supported notifications** card lists the active parsers (GPay/CRED/ICICI/Kotak/PhonePe/Paytm/EMI/GenericUPI)
+- Settings → **Privacy & data** card (no cloud sync yet)
+- Settings → **Feedback** card (mailto with version + device prefilled to studioxero.biz@gmail.com)
+- Light/dark theme follows the Android system preference (no in-app override; v0.13.3)
 
 ## 1. Purpose
 
