@@ -91,6 +91,7 @@ import com.zegrt.rupee.settings.TrustRulesScreen
 import com.zegrt.rupee.settings.SettingsViewModel
 import com.zegrt.rupee.settings.SettingsViewModelFactory
 import com.zegrt.rupee.onboarding.OnboardingUiState
+import com.zegrt.rupee.onboarding.ProfileFormState
 import com.zegrt.rupee.onboarding.OnboardingViewModel
 import com.zegrt.rupee.onboarding.OnboardingViewModelFactory
 import com.zegrt.rupee.onboarding.PermissionCardState
@@ -2139,13 +2140,34 @@ private fun InspectionSection(
 
 @Preview(showBackground = true)
 @Composable
-private fun WelcomeScreenPreview() {
+fun WelcomeScreenPreview() {
     RupeeTheme { WelcomeScreen(onContinue = {}) }
+}
+
+@Preview(showBackground = true, name = "Profile — empty")
+@Preview(showBackground = true, name = "Profile — large font", fontScale = 1.5f)
+@Preview(showBackground = true, name = "Profile — compact width", widthDp = 360)
+@Composable
+fun ProfileScreenPreview() {
+    RupeeTheme {
+        ProfileScreen(
+            uiState = OnboardingUiState(
+                currentStep = OnboardingStep.PROFILE,
+                profileForm = ProfileFormState(
+                    displayName = "",
+                    monthlyBudgetInput = "",
+                ),
+            ),
+            onDisplayNameChange = {},
+            onMonthlyBudgetChange = {},
+            onContinue = {},
+        )
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
-private fun PermissionsScreenPreview() {
+fun PermissionsScreenPreview() {
     RupeeTheme {
         PermissionsScreen(
             uiState = OnboardingUiState(
@@ -2165,7 +2187,7 @@ private fun PermissionsScreenPreview() {
 
 @Preview(showBackground = true)
 @Composable
-private fun SetupScreenPreview() {
+fun SetupScreenPreview() {
     RupeeTheme {
         SetupScreen(
             uiState = OnboardingUiState(currentStep = OnboardingStep.SETUP),
@@ -2182,7 +2204,7 @@ private fun SetupScreenPreview() {
 
 @Preview(showBackground = true)
 @Composable
-private fun HomeScreenPreview() {
+fun HomeScreenPreview() {
     RupeeTheme {
         HomeSummaryTab(
             uiState = HomeUiState(
