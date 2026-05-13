@@ -95,8 +95,8 @@ The current preview build:
 
 APK output:
 
-- [rupee-0.13.3-release.apk](./android/app/build/outputs/apk/release/rupee-0.13.3-release.apk) (signed; for friends/family)
-- [rupee-0.13.3-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.13.3-debug.apk) (for personal dogfooding — includes the notification-dump tool that bootstraps the parser corpus)
+- [rupee-0.13.4-release.apk](./android/app/build/outputs/apk/release/rupee-0.13.4-release.apk) (signed; for friends/family)
+- [rupee-0.13.4-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.13.4-debug.apk) (for personal dogfooding — includes the notification-dump tool that bootstraps the parser corpus)
 
 ## Main Docs
 

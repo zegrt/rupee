@@ -273,6 +273,27 @@ class NotificationParserParseTest {
         org.junit.Assert.assertFalse(kotak.canParse(event))
     }
 
+    @Test
+    fun `kotak canParse rejects marketing push from Kotak811 with no transactional verb`() {
+        // Real body captured in the v0.13.3 dump — a Recurring Deposit promo.
+        // Without a transactional-verb gate this routed to Inbox as Unnamed
+        // (since Kotak parser intentionally emits merchantRaw = null).
+        val event = event(
+            pkg = "com.kotak811mobilebankingapp.instantsavingsupiscanandpayrecharge",
+            body = "That's all it takes? 👀\nJust ₹2,500/month → ₹64,415 with Kotak Recurring Deposit. T&C",
+        )
+        org.junit.Assert.assertFalse(kotak.canParse(event))
+    }
+
+    @Test
+    fun `kotak canParse rejects FD promo with no transactional verb`() {
+        val event = event(
+            pkg = "com.kotak811mobilebankingapp.instantsavingsupiscanandpayrecharge",
+            body = "Is your ₹5,000 earning enough? 🤔\nPut it in a Kotak FD for assured 6.8% p.a. returns. T&C",
+        )
+        org.junit.Assert.assertFalse(kotak.canParse(event))
+    }
+
     private fun event(
         pkg: String = "com.example.test",
         title: String? = null,

@@ -29,10 +29,29 @@ class KotakNotificationParser : NotificationParser {
 
     override fun canParse(rawEvent: RawCaptureEventEntity): Boolean {
         val pkg = rawEvent.sourceAppPackage.orEmpty().lowercase()
-        // Known Kotak packages — the substring catches Kotak811 ("kotak811..."),
-        // the explicit prefixes catch the main Kotak Bank app (com.msf.kbank).
-        // Add more variants here as they're observed in real dumps.
-        return "kotak" in pkg || pkg.startsWith("com.msf.kbank")
+        val isKotakPkg = "kotak" in pkg || pkg.startsWith("com.msf.kbank")
+        if (!isKotakPkg) return false
+        // Kotak's app sends both real txn alerts AND marketing pushes (e.g.
+        // "Just ₹2,500/month → ₹64,415 with Kotak Recurring Deposit. T&C").
+        // Since we always emit merchantRaw=null, a marketing match becomes a
+        // null-merchant MEDIUM-confidence candidate → "Unnamed" Inbox row.
+        // Require at least one transactional verb in the combined body to fire.
+        val body = rawEvent.body.lowercase()
+        return TRANSACTIONAL_VERBS.any { it in body }
+    }
+
+    private companion object {
+        private val TRANSACTIONAL_VERBS = listOf(
+            "sent via",
+            "debited",
+            "credited",
+            "paid",
+            "received",
+            "deducted",
+            "auto-debit",
+            "withdrawn",
+            "spent",
+        )
     }
 
     override fun parse(rawEvent: RawCaptureEventEntity): NotificationParseResult {
