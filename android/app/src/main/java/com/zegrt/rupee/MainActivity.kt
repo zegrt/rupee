@@ -345,6 +345,7 @@ private fun RupeeApp(
             onTransactionMerchantDraftChange = homeViewModel::updateTransactionMerchantDraft,
             onTransactionNotesDraftChange = homeViewModel::updateTransactionNotesDraft,
             onTransactionCategoryDraftChange = homeViewModel::updateTransactionCategoryDraft,
+            onTransactionTypeDraftChange = homeViewModel::updateTransactionTypeDraft,
             onSaveTransaction = homeViewModel::saveTransactionEdits,
             onOpenManualEntry = homeViewModel::openManualEntry,
             onCloseManualEntry = homeViewModel::closeManualEntry,
@@ -729,6 +730,7 @@ private fun RupeeHome(
     onTransactionMerchantDraftChange: (String, String) -> Unit,
     onTransactionNotesDraftChange: (String, String) -> Unit,
     onTransactionCategoryDraftChange: (String, String?) -> Unit,
+    onTransactionTypeDraftChange: (String, com.zegrt.rupee.data.local.entity.CanonicalTransactionType) -> Unit,
     onSaveTransaction: (String) -> Unit,
     onOpenManualEntry: () -> Unit,
     onCloseManualEntry: () -> Unit,
@@ -914,6 +916,7 @@ private fun RupeeHome(
             onMerchantChange = { onTransactionMerchantDraftChange(selectedTxn.id, it) },
             onNotesChange = { onTransactionNotesDraftChange(selectedTxn.id, it) },
             onCategoryChange = { onTransactionCategoryDraftChange(selectedTxn.id, it) },
+            onTypeChange = { onTransactionTypeDraftChange(selectedTxn.id, it) },
             onSave = { onSaveTransaction(selectedTxn.id) },
             onDelete = { onDeleteTransaction(selectedTxn.id) },
         )
@@ -2045,6 +2048,7 @@ private fun TransactionDetailSheet(
     onMerchantChange: (String) -> Unit,
     onNotesChange: (String) -> Unit,
     onCategoryChange: (String?) -> Unit,
+    onTypeChange: (com.zegrt.rupee.data.local.entity.CanonicalTransactionType) -> Unit,
     onSave: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -2083,11 +2087,34 @@ private fun TransactionDetailSheet(
                     }
                 }
             } else {
+                // Type toggle first — flipping a mis-classified P2P inflow from
+                // Expense → Income is the most common edit motion, and the choice
+                // affects how the merchant field reads ("source / payer" vs
+                // "merchant"). Mirror the manual-entry sheet's pattern.
+                val isIncome = row.typeDraft == com.zegrt.rupee.data.local.entity.CanonicalTransactionType.INCOME
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    SegmentedButton(
+                        selected = !isIncome,
+                        onClick = {
+                            onTypeChange(com.zegrt.rupee.data.local.entity.CanonicalTransactionType.EXPENSE)
+                        },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                        label = { Text("Expense") },
+                    )
+                    SegmentedButton(
+                        selected = isIncome,
+                        onClick = {
+                            onTypeChange(com.zegrt.rupee.data.local.entity.CanonicalTransactionType.INCOME)
+                        },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                        label = { Text("Income") },
+                    )
+                }
                 OutlinedTextField(
                     value = row.merchantDraft,
                     onValueChange = onMerchantChange,
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Merchant") },
+                    label = { Text(if (isIncome) "Source / payer" else "Merchant") },
                     singleLine = true,
                 )
                 OutlinedTextField(

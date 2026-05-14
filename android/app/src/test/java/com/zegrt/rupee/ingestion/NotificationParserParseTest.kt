@@ -324,6 +324,96 @@ class NotificationParserParseTest {
         assertEquals(ParsedTransactionKind.SPEND, result.transactionKind)
     }
 
+    // ── INCOME paths ──────────────────────────────────────────────────────────
+
+    @Test
+    fun `icici credit-to-account body classifies as INCOME`() {
+        val result = icici.parse(
+            event(
+                pkg = "com.csam.icici.bank.imobile",
+                body = "Rs.500 credited to A/c XX1234 on 12-May-26",
+            )
+        )
+        assertEquals(ParsedTransactionKind.INCOME, result.transactionKind)
+        assertEquals(TransactionCandidateType.INCOME, result.candidateType)
+        assertEquals(50000L, result.amountMinor)
+    }
+
+    @Test
+    fun `icici receive-from-sender body classifies as INCOME`() {
+        val result = icici.parse(
+            event(
+                pkg = "com.csam.icici.bank.imobile",
+                body = "Rs.250 received from John Doe via UPI on your ICICI A/c XX1234",
+            )
+        )
+        assertEquals(ParsedTransactionKind.INCOME, result.transactionKind)
+    }
+
+    @Test
+    fun `icici spend body still routes to SPEND when no credit verb`() {
+        // Regression: adding INCOME path must not break existing SPEND routing.
+        val result = icici.parse(
+            event(body = "Rs.3800.00 has been spent at BIGBASKET on ICICI Credit Card xx5678 on 07-MAY-26")
+        )
+        assertEquals(ParsedTransactionKind.SPEND, result.transactionKind)
+    }
+
+    @Test
+    fun `cred pay UPI receipt classifies as INCOME`() {
+        // CRED Pay is not just credit cards — UPI receipts via CRED are real
+        // income flows that previously fell to UNKNOWN.
+        val result = cred.parse(
+            event(
+                pkg = "com.dreamplug.androidapp",
+                body = "Rs 200 received from Cyril via UPI on CRED Pay",
+            )
+        )
+        assertEquals(ParsedTransactionKind.INCOME, result.transactionKind)
+        assertEquals(TransactionCandidateType.INCOME, result.candidateType)
+        assertEquals(com.zegrt.rupee.data.local.entity.Mode.UPI, result.mode)
+    }
+
+    @Test
+    fun `cred mint interest credit classifies as INCOME`() {
+        val result = cred.parse(
+            event(
+                pkg = "com.dreamplug.androidapp",
+                body = "Rs 12 credited to your CRED Mint account as monthly interest",
+            )
+        )
+        assertEquals(ParsedTransactionKind.INCOME, result.transactionKind)
+        assertEquals(com.zegrt.rupee.data.local.entity.Mode.BANK_TRANSFER, result.mode)
+    }
+
+    @Test
+    fun `cred card spend still routes to SPEND despite broader INCOME path`() {
+        // Regression: card-flow phrasing should still win the kind dispatch.
+        val result = cred.parse(
+            event(
+                pkg = "com.dreamplug.androidapp",
+                body = "₹1,499 spent on HDFC Credit Card xx1234 at Zomato via CRED on 06 May",
+            )
+        )
+        assertEquals(ParsedTransactionKind.SPEND, result.transactionKind)
+        assertEquals(com.zegrt.rupee.data.local.entity.Mode.CREDIT_CARD, result.mode)
+    }
+
+    @Test
+    fun `gpay receiver 'sent you' body classifies as INCOME end to end`() {
+        // The exact bug from the field: friend sends money, friend's GPay
+        // notification reads "<sender> sent you ₹10", parser used to route as
+        // SPEND. Pinning end-to-end at the parser level.
+        val result = gpay.parse(
+            event(
+                pkg = "com.google.android.apps.nbu.paisa.user",
+                body = "Cyril sent you ₹10 via Google Pay",
+            )
+        )
+        assertEquals(ParsedTransactionKind.INCOME, result.transactionKind)
+        assertEquals(TransactionCandidateType.INCOME, result.candidateType)
+    }
+
     private fun event(
         pkg: String = "com.example.test",
         title: String? = null,

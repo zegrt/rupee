@@ -25,11 +25,21 @@ class CredNotificationParser : NotificationParser {
         val amountMinor = NotificationParsingUtils.extractAmountMinor(body)
         val merchant = NotificationParsingUtils.extractMerchant(body, merchantRegexes)
         val maskedDigits = NotificationParsingUtils.extractMaskedDigits(body)
+        val direction = NotificationParsingUtils.classifyDirection(body)
+        // CRED is broader than credit cards now: CRED Pay (UPI), Mint (interest
+        // credits), Cash (loan disbursals), cashback to bank account. All of those
+        // are real inflows. Lean on classifyDirection so they route to INCOME, but
+        // keep the card-specific kinds (BILL_DUE, PAYMENT-of-bill) ordered first
+        // since their phrasing is specific and shouldn't be overridden by a stray
+        // "credited" keyword.
+        val isIncome = amountMinor != null &&
+            direction == NotificationParsingUtils.MoneyDirection.IN
 
         val transactionKind = when {
             isCardDue(lower) -> ParsedTransactionKind.BILL_DUE
             isCardPayment(lower) -> ParsedTransactionKind.PAYMENT
             isCardSpend(lower, amountMinor) -> ParsedTransactionKind.SPEND
+            isIncome -> ParsedTransactionKind.INCOME
             else -> ParsedTransactionKind.UNKNOWN
         }
 
@@ -37,12 +47,25 @@ class CredNotificationParser : NotificationParser {
             ParsedTransactionKind.SPEND -> TransactionCandidateType.SPEND
             ParsedTransactionKind.BILL_DUE -> TransactionCandidateType.CARD_DUE
             ParsedTransactionKind.PAYMENT -> TransactionCandidateType.TRANSFER
+            ParsedTransactionKind.INCOME -> TransactionCandidateType.INCOME
             else -> TransactionCandidateType.UNKNOWN
+        }
+
+        // Mode depends on the flow, not the parser. CRED Pay UPI receipts and CRED
+        // Pay UPI spends both say "via UPI" in the body — honour that. Card-specific
+        // kinds (BILL_DUE, PAYMENT-of-bill, SPEND-on-card) stay CREDIT_CARD.
+        val mode = when {
+            "upi" in lower -> Mode.UPI
+            transactionKind == ParsedTransactionKind.BILL_DUE ||
+                transactionKind == ParsedTransactionKind.PAYMENT ||
+                transactionKind == ParsedTransactionKind.SPEND -> Mode.CREDIT_CARD
+            transactionKind == ParsedTransactionKind.INCOME -> Mode.BANK_TRANSFER
+            else -> Mode.CREDIT_CARD
         }
 
         return NotificationParseResult(
             parserKey = "notification_cred",
-            parserVersion = "v1",
+            parserVersion = "v2",
             providerHint = "cred",
             transactionKind = transactionKind,
             candidateType = candidateType,
@@ -56,7 +79,7 @@ class CredNotificationParser : NotificationParser {
                 else -> "cred_card"
             },
             maskedDigits = maskedDigits,
-            mode = Mode.CREDIT_CARD,
+            mode = mode,
             parseConfidence = confidenceFor(transactionKind, amountMinor, maskedDigits, merchant),
             fromEntityHint = "cred",
             toEntityName = MerchantNameUtils.cleanForEntity(merchant),
@@ -117,6 +140,7 @@ class CredNotificationParser : NotificationParser {
             transactionKind == ParsedTransactionKind.SPEND && amountMinor != null && merchant != null -> 0.88
             transactionKind == ParsedTransactionKind.BILL_DUE && amountMinor != null && maskedDigits != null -> 0.91
             transactionKind == ParsedTransactionKind.PAYMENT && amountMinor != null && maskedDigits != null -> 0.86
+            transactionKind == ParsedTransactionKind.INCOME && amountMinor != null -> 0.82
             transactionKind != ParsedTransactionKind.UNKNOWN && amountMinor != null -> 0.76
             else -> 0.35
         }

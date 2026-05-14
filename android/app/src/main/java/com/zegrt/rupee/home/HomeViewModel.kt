@@ -77,6 +77,9 @@ data class HomeTransactionRow(
     val categoryIdDraft: String?,
     val categoryLabel: String?,
     val isIncome: Boolean = false,
+    // Draft of the type for the edit form's segmented toggle. Equal to the
+    // persisted type unless the user has changed it in the current edit session.
+    val typeDraft: CanonicalTransactionType = CanonicalTransactionType.EXPENSE,
 )
 
 data class HomeRecentRow(
@@ -189,6 +192,7 @@ private data class ViewSelection(
     val transactionMerchantDrafts: Map<String, String>,
     val transactionNotesDrafts: Map<String, String>,
     val transactionCategoryDrafts: Map<String, String?>,
+    val transactionTypeDrafts: Map<String, CanonicalTransactionType>,
     val manualEntry: ManualEntryDraft,
     val reviewMergeTargets: Map<String, String>,
 )
@@ -216,6 +220,7 @@ class HomeViewModel(
     private val transactionMerchantDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
     private val transactionNotesDrafts = MutableStateFlow<Map<String, String>>(emptyMap())
     private val transactionCategoryDrafts = MutableStateFlow<Map<String, String?>>(emptyMap())
+    private val transactionTypeDrafts = MutableStateFlow<Map<String, CanonicalTransactionType>>(emptyMap())
     private val manualEntry = MutableStateFlow(ManualEntryDraft())
     private val reviewMergeTargets = MutableStateFlow<Map<String, String>>(emptyMap())
 
@@ -311,8 +316,9 @@ class HomeViewModel(
             transactionMerchantDrafts,
             transactionNotesDrafts,
             transactionCategoryDrafts,
-        ) { review, tm, tn, tc ->
-            arrayOf<Any?>(review, tm, tn, tc)
+            transactionTypeDrafts,
+        ) { review, tm, tn, tc, tt ->
+            arrayOf<Any?>(review, tm, tn, tc, tt)
         },
         reviewMergeTargets,
     ) { selection, drafts, merges ->
@@ -332,6 +338,7 @@ class HomeViewModel(
             transactionMerchantDrafts = drafts[1] as Map<String, String>,
             transactionNotesDrafts = drafts[2] as Map<String, String>,
             transactionCategoryDrafts = drafts[3] as Map<String, String?>,
+            transactionTypeDrafts = drafts[4] as Map<String, CanonicalTransactionType>,
             reviewMergeTargets = merges,
         )
     }
@@ -456,9 +463,14 @@ class HomeViewModel(
         transactionCategoryDrafts.value = transactionCategoryDrafts.value + (id to categoryId)
     }
 
+    fun updateTransactionTypeDraft(id: String, type: CanonicalTransactionType) {
+        transactionTypeDrafts.value = transactionTypeDrafts.value + (id to type)
+    }
+
     fun saveTransactionEdits(id: String) {
         val categoryDirty = transactionCategoryDrafts.value.containsKey(id)
         val categoryId = transactionCategoryDrafts.value[id]
+        val typeOverride = transactionTypeDrafts.value[id]
         viewModelScope.launch {
             repository.updateTransactionDetails(
                 transactionId = id,
@@ -466,7 +478,11 @@ class HomeViewModel(
                 notes = transactionNotesDrafts.value[id].orEmpty(),
                 categoryId = categoryId,
                 applyCategory = categoryDirty,
+                type = typeOverride,
             )
+            // Clear the type draft after persisting so a future open of the same
+            // row reads the new persisted type rather than the stale draft.
+            transactionTypeDrafts.value = transactionTypeDrafts.value - id
         }
     }
 
@@ -571,6 +587,7 @@ class HomeViewModel(
                     categoryIdDraft = draftCategory,
                     categoryLabel = transaction.categoryId?.let { categoryLabelById[it] },
                     isIncome = income,
+                    typeDraft = selection.transactionTypeDrafts[transaction.id] ?: transaction.type,
                 )
             }
 

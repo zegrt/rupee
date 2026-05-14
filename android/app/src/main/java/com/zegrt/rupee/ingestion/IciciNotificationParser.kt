@@ -26,19 +26,27 @@ class IciciNotificationParser : NotificationParser {
             text = lower,
             needles = listOf("payment due", "total due", "minimum due", "statement due", "due amount"),
         )
-        val isSpend = amountMinor != null && NotificationParsingUtils.containsAny(
+        // ICICI is a bank — accounts receive money too. Lean on the central direction
+        // classifier so credits ("Rs.10 credited to A/c XX1234", "received from …")
+        // route to INCOME instead of falling to UNKNOWN/SPEND. Any future bank parser
+        // (SBI, HDFC, Axis, …) should do the same — see NotificationParsingUtils.classifyDirection.
+        val direction = NotificationParsingUtils.classifyDirection(body)
+        val isIncome = amountMinor != null && direction == NotificationParsingUtils.MoneyDirection.IN
+        val isSpend = amountMinor != null && !isIncome && NotificationParsingUtils.containsAny(
             text = lower,
             needles = listOf("spent", "purchase", "debited", "used at", "transaction"),
         )
 
         val transactionKind = when {
             isDue -> ParsedTransactionKind.BILL_DUE
+            isIncome -> ParsedTransactionKind.INCOME
             isSpend -> ParsedTransactionKind.SPEND
             else -> ParsedTransactionKind.UNKNOWN
         }
 
         val candidateType = when (transactionKind) {
             ParsedTransactionKind.BILL_DUE -> TransactionCandidateType.CARD_DUE
+            ParsedTransactionKind.INCOME -> TransactionCandidateType.INCOME
             ParsedTransactionKind.SPEND -> TransactionCandidateType.SPEND
             else -> TransactionCandidateType.UNKNOWN
         }
@@ -77,6 +85,7 @@ class IciciNotificationParser : NotificationParser {
         return when {
             transactionKind == ParsedTransactionKind.BILL_DUE && amountMinor != null && maskedDigits != null -> 0.9
             transactionKind == ParsedTransactionKind.SPEND && amountMinor != null && merchant != null -> 0.79
+            transactionKind == ParsedTransactionKind.INCOME && amountMinor != null && maskedDigits != null -> 0.82
             transactionKind != ParsedTransactionKind.UNKNOWN && amountMinor != null -> 0.68
             else -> 0.28
         }

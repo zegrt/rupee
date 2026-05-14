@@ -99,6 +99,13 @@ internal object NotificationParsingUtils {
      */
     fun classifyDirection(text: String): MoneyDirection {
         val lower = text.lowercase()
+        // Receiver-shape phrases short-circuit: "Alice paid you ₹250" matches both
+        // "paid you" (credit) AND bare "paid" (debit); we want IN. Same for
+        // "John sent you ₹10" vs the bare "sent" sub-tokens and "₹1000 transferred
+        // to you" vs bare "transferred". Strong receiver phrases are unambiguous
+        // — when present, they win.
+        if (STRONG_CREDIT_PHRASES.any { it in lower }) return MoneyDirection.IN
+
         val hasCredit = CREDIT_VERBS.any { it in lower }
         val hasDebit = DEBIT_VERBS.any { it in lower }
         return when {
@@ -121,6 +128,20 @@ internal object NotificationParsingUtils {
         "received ₹",
         "deposited",
         "salary credit",
+    )
+
+    // Unambiguous P2P receiver shapes. Live separately because their substrings
+    // ("paid you" contains "paid"; "transferred to you" contains "transferred")
+    // also match generic debit verbs, which would otherwise cancel them out into
+    // an UNKNOWN result. classifyDirection short-circuits to IN when any of
+    // these match.
+    private val STRONG_CREDIT_PHRASES = listOf(
+        "sent you",
+        "paid you",
+        "transferred to you",
+        "you have received",
+        "you've received",
+        "you received",
     )
 
     private val DEBIT_VERBS = listOf(

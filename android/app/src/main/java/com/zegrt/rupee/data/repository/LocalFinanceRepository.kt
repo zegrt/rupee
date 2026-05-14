@@ -649,6 +649,10 @@ class LocalFinanceRepository(
         notes: String,
         categoryId: String? = null,
         applyCategory: Boolean = false,
+        // When non-null, flip EXPENSE ↔ INCOME. Used by the Transactions tab edit
+        // form to correct mis-classified P2P inflows ("John sent you ₹10" landing
+        // as EXPENSE) without forcing the user to delete + re-create manually.
+        type: CanonicalTransactionType? = null,
     ) {
         val now = Instant.now().toString()
         val transaction = database.canonicalTransactionDao().getTransactionById(transactionId) ?: return
@@ -658,6 +662,7 @@ class LocalFinanceRepository(
                     merchantName = merchantName.trim().ifBlank { null },
                     notes = notes.trim().ifBlank { null },
                     categoryId = if (applyCategory) categoryId else transaction.categoryId,
+                    type = type ?: transaction.type,
                     updatedAt = now,
                 ),
             ),
