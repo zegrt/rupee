@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.content.Context
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.edit
 import com.zegrt.rupee.data.repository.LocalFinanceRepository
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -33,6 +34,11 @@ class DuesAlertManager(private val context: Context) {
     ) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val nm = NotificationManagerCompat.from(context)
+        // Gate the whole sweep on the user's notification permission. If they've
+        // denied POST_NOTIFICATIONS we skip everything — and importantly skip
+        // the dedupe pref writes too so they get the alert the next time
+        // permission is restored.
+        if (!nm.areNotificationsEnabled()) return
 
         // Credit card statements: fire 2 days out, then on the due date itself.
         repository.getCreditCardsSnapshot().forEach { card ->
@@ -42,7 +48,7 @@ class DuesAlertManager(private val context: Context) {
             if (days !in 0..LEAD_DAYS_CARD) return@forEach
             val key = "card_${card.id}_${card.statementDueDate}"
             if (prefs.getBoolean(key, false)) return@forEach
-            prefs.edit().putBoolean(key, true).apply()
+            prefs.edit { putBoolean(key, true) }
             nm.notifyIfAllowed(
                 id = NOTIF_BASE_CARD + card.id.hashCode(),
                 title = "${card.displayName} bill due ${dueLabel(days, due)}",
@@ -57,7 +63,7 @@ class DuesAlertManager(private val context: Context) {
             if (days !in 0..LEAD_DAYS_EMI) return@forEach
             val key = "emi_${plan.id}_${plan.nextDueAt}"
             if (prefs.getBoolean(key, false)) return@forEach
-            prefs.edit().putBoolean(key, true).apply()
+            prefs.edit { putBoolean(key, true) }
             nm.notifyIfAllowed(
                 id = NOTIF_BASE_EMI + plan.id.hashCode(),
                 title = "${plan.name} EMI due ${dueLabel(days, due)}",
@@ -74,7 +80,7 @@ class DuesAlertManager(private val context: Context) {
                 if (days !in 0..LEAD_DAYS_RECURRING) return@forEach
                 val key = "rec_${pattern.id}_${pattern.nextExpectedAt}"
                 if (prefs.getBoolean(key, false)) return@forEach
-                prefs.edit().putBoolean(key, true).apply()
+                prefs.edit { putBoolean(key, true) }
                 nm.notifyIfAllowed(
                     id = NOTIF_BASE_RECURRING + pattern.id.hashCode(),
                     title = "${pattern.merchantPattern} ${dueLabel(days, due)}",

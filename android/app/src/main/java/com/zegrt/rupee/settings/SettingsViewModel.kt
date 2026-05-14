@@ -1,5 +1,6 @@
 package com.zegrt.rupee.settings
 
+import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -106,8 +107,8 @@ class SettingsViewModel(
             trustRules = trustRules,
             notificationGranted = granted,
             postNotificationsGranted = postGranted,
-            needsPostNotificationsPrompt = android.os.Build.VERSION.SDK_INT >=
-                android.os.Build.VERSION_CODES.TIRAMISU && !postGranted,
+            needsPostNotificationsPrompt = Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.TIRAMISU && !postGranted,
             appVersion = appVersion,
             savingName = savingNameValue,
             message = messageValue,

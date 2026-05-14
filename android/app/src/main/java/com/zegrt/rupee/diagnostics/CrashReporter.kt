@@ -1,6 +1,7 @@
 package com.zegrt.rupee.diagnostics
 
 import android.content.Context
+import android.os.Build
 import com.zegrt.rupee.BuildConfig
 import java.io.File
 import java.io.PrintWriter
@@ -61,8 +62,8 @@ object CrashReporter {
             appendLine("app: ${BuildConfig.VERSION_NAME} (code ${BuildConfig.VERSION_CODE})")
             appendLine("debug: ${BuildConfig.DEBUG}")
             appendLine("thread: ${thread.name}")
-            appendLine("device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
-            appendLine("android: ${android.os.Build.VERSION.RELEASE} (sdk ${android.os.Build.VERSION.SDK_INT})")
+            appendLine("device: ${Build.MANUFACTURER} ${Build.MODEL}")
+            appendLine("android: ${Build.VERSION.RELEASE} (sdk ${Build.VERSION.SDK_INT})")
             append(sw.toString())
         }
         file.appendText(entry)

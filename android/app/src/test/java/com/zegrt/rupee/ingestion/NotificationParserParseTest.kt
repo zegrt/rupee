@@ -1,6 +1,7 @@
 package com.zegrt.rupee.ingestion
 
 import com.zegrt.rupee.data.local.entity.Mode
+import com.zegrt.rupee.data.local.entity.ParsedTransactionKind
 import com.zegrt.rupee.data.local.entity.RawCaptureEventEntity
 import com.zegrt.rupee.data.local.entity.RawCaptureIngestionStatus
 import com.zegrt.rupee.data.local.entity.RawCaptureSourceType
@@ -248,7 +249,7 @@ class NotificationParserParseTest {
         )
         assertEquals(1000L, result.amountMinor)
         assertEquals("4129", result.maskedDigits)
-        assertEquals(com.zegrt.rupee.data.local.entity.Mode.UPI, result.mode)
+        assertEquals(Mode.UPI, result.mode)
         assertEquals("kotak", result.providerHint)
         assertEquals(null, result.merchantRaw)
         // 0.75 → MEDIUM tier → routes to INBOX_PENDING, not silently dropped.
@@ -305,9 +306,9 @@ class NotificationParserParseTest {
             )
         )
         assertEquals(5_000_000L, result.amountMinor)
-        assertEquals(com.zegrt.rupee.data.local.entity.ParsedTransactionKind.INCOME, result.transactionKind)
+        assertEquals(ParsedTransactionKind.INCOME, result.transactionKind)
         assertEquals(
-            com.zegrt.rupee.data.local.entity.TransactionCandidateType.INCOME,
+            TransactionCandidateType.INCOME,
             result.candidateType,
         )
     }
@@ -320,7 +321,7 @@ class NotificationParserParseTest {
                 body = "₹10.00 sent via UPI\nAmount debited from XX4129. Check out details.",
             )
         )
-        assertEquals(com.zegrt.rupee.data.local.entity.ParsedTransactionKind.SPEND, result.transactionKind)
+        assertEquals(ParsedTransactionKind.SPEND, result.transactionKind)
     }
 
     private fun event(

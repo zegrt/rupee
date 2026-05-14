@@ -19,6 +19,7 @@ import com.zegrt.rupee.data.local.entity.RawCaptureIngestionStatus
 import com.zegrt.rupee.data.local.entity.RawCaptureSourceType
 import com.zegrt.rupee.data.local.entity.SyncStatus
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
+import com.zegrt.rupee.data.local.entity.TransactionCandidateType
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
@@ -294,7 +295,7 @@ class NotificationSignalNormalizer(
                 id = UUID.randomUUID().toString(),
                 userId = rawEvent.userId,
                 parsedSignalId = parsedSignalId,
-                candidateType = com.zegrt.rupee.data.local.entity.TransactionCandidateType.UNKNOWN,
+                candidateType = TransactionCandidateType.UNKNOWN,
                 amountMinor = null,
                 currencyCode = null,
                 fromEntityType = null,
