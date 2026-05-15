@@ -35,26 +35,28 @@ class RupeeNotificationListenerService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         super.onNotificationPosted(sbn)
 
-        // Debug-only: capture every incoming notification's extras for the
-        // real-world corpus we'll replay against parser v2.
-        NotificationDumper.dump(this, sbn)
-
         val isDebugMock = sbn.notification.extras
             ?.getBoolean(RupeeApplication.DEBUG_MOCK_EXTRA, false) == true
 
-        // Group summaries duplicate content from their children — Android posts
-        // both. Skip the summary explicitly so we don't double-count once the
-        // extractor starts pulling EXTRA_TEXT_LINES (which can carry per-child
-        // snippets and would trigger false-positive parses).
+        // Listener-level filters first. Each one short-circuits to a single
+        // dump-write with the filter reason so the dump file still captures
+        // the raw extras (useful for inspecting what marketing notifs etc.
+        // actually look like) but records that no DB writes happened.
         if ((sbn.notification.flags and ExtractedNotification.FLAG_GROUP_SUMMARY) != 0) {
-            if (BuildConfig.DEBUG) {
-                Log.d(TAG, "Skipped: group summary pkg=${sbn.packageName}")
-            }
+            if (BuildConfig.DEBUG) Log.d(TAG, "Skipped: group summary pkg=${sbn.packageName}")
+            NotificationDumper.dump(
+                this, sbn,
+                IngestionResult.Filtered(IngestionResult.FilterReason.GROUP_SUMMARY),
+            )
             return
         }
 
         if (sbn.packageName == packageName && !isDebugMock) {
             Log.d(TAG, "Skipped: self-package without mock extra")
+            NotificationDumper.dump(
+                this, sbn,
+                IngestionResult.Filtered(IngestionResult.FilterReason.SELF_PACKAGE),
+            )
             return
         }
 
@@ -71,31 +73,55 @@ class RupeeNotificationListenerService : NotificationListenerService() {
 
         if (extracted.combinedBody.isBlank()) {
             Log.d(TAG, "Skipped: empty body after extraction (pkg=${sbn.packageName})")
+            NotificationDumper.dump(
+                this, sbn,
+                IngestionResult.Filtered(IngestionResult.FilterReason.EMPTY_BODY),
+            )
             return
         }
 
         val normalizer = this.normalizer ?: run {
             Log.w(TAG, "Skipped: normalizer not initialized")
+            NotificationDumper.dump(
+                this, sbn,
+                IngestionResult.Filtered(IngestionResult.FilterReason.NORMALIZER_UNAVAILABLE),
+            )
             return
         }
 
         serviceScope.launch {
-            try {
-                val rawEventId = normalizer.ingestNotification(
+            val outcome = runCatching {
+                normalizer.ingestNotification(
                     userId = "local-user",
                     packageName = sbn.packageName,
                     title = extracted.title,
                     body = extracted.combinedBody,
                     postedAtMillis = sbn.postTime,
                 )
-                if (rawEventId == null) {
-                    Log.d(TAG, "Skipped: duplicate fingerprint already stored")
-                } else {
-                    Log.i(TAG, "Ingested raw event $rawEventId (pkg=${sbn.packageName})")
-                }
-            } catch (t: Throwable) {
+            }.getOrElse { t ->
                 Log.e(TAG, "Failed to ingest notification from ${sbn.packageName}", t)
+                IngestionResult.Filtered(IngestionResult.FilterReason.INGEST_FAILED)
             }
+
+            // Log a brief outcome line for ad-hoc logcat debugging. The full
+            // detail goes to the dump file below.
+            when (outcome) {
+                is IngestionResult.Filtered ->
+                    Log.d(TAG, "Filtered (${outcome.reason})")
+                is IngestionResult.GateRejected ->
+                    Log.d(TAG, "Gate-rejected: ${outcome.gateReason} matched=${outcome.matched}")
+                is IngestionResult.Ingested ->
+                    Log.i(
+                        TAG,
+                        "Ingested ${outcome.rawEventId} parser=${outcome.parserKey} " +
+                            "decision=${outcome.decisionState} candidate=${outcome.candidateId}",
+                    )
+            }
+
+            // Dump-write happens AFTER the ingest transaction commits (or fails).
+            // Keeps the DB write-lock hold time short and ensures the dump line
+            // only reflects state that actually persisted.
+            NotificationDumper.dump(this@RupeeNotificationListenerService, sbn, outcome)
         }
     }
 

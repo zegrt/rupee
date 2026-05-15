@@ -46,7 +46,7 @@ class NotificationSignalNormalizer(
         title: String?,
         body: String,
         postedAtMillis: Long?,
-    ): String? {
+    ): IngestionResult {
         return database.withTransaction {
             val now = Instant.now().toString()
             val fingerprint = sha256(
@@ -74,14 +74,16 @@ class NotificationSignalNormalizer(
                 syncStatus = SyncStatus.LOCAL_ONLY,
             )
             val inserted = database.rawCaptureEventDao().insertRawCaptureEvent(rawEvent)
-            if (inserted == -1L) return@withTransaction null
-            normalizeLocked(rawEvent)
+            if (inserted == -1L) {
+                return@withTransaction IngestionResult.Filtered(IngestionResult.FilterReason.RAW_DUPLICATE)
+            }
+            val outcome: IngestionResult = normalizeLocked(rawEvent)
             database.rawCaptureEventDao().updateIngestionStatus(
                 id = rawEvent.id,
                 status = RawCaptureIngestionStatus.PARSED.name,
                 updatedAt = Instant.now().toString(),
             )
-            rawEvent.id
+            outcome
         }
     }
 
@@ -90,24 +92,27 @@ class NotificationSignalNormalizer(
         return bytes.joinToString("") { byte -> "%02x".format(byte) }
     }
 
-    suspend fun normalize(rawEvent: RawCaptureEventEntity) {
-        database.withTransaction {
+    suspend fun normalize(rawEvent: RawCaptureEventEntity): IngestionResult {
+        return database.withTransaction {
             normalizeLocked(rawEvent)
         }
     }
 
-    private suspend fun normalizeLocked(rawEvent: RawCaptureEventEntity) {
-        run {
-            val now = Instant.now().toString()
-            // Stage 1: transactional gate. Rejects promo pushes (Kotak RD ads,
-            // ICICI upgrade offers, OTPs, payment-requests) before any parser
-            // gets a chance to extract bogus fields from them. See
-            // TransactionalGate.kt for the keyword sets.
-            val gateDecision = TransactionalGate.evaluate(rawEvent.body)
-            if (gateDecision is TransactionalGate.Decision.Reject) {
-                writeGateRejectedSignal(rawEvent, gateDecision, now)
-                return@run
-            }
+    private suspend fun normalizeLocked(rawEvent: RawCaptureEventEntity): IngestionResult {
+        val now = Instant.now().toString()
+        // Stage 1: transactional gate. Rejects promo pushes (Kotak RD ads,
+        // ICICI upgrade offers, OTPs, payment-requests) before any parser
+        // gets a chance to extract bogus fields from them. See
+        // TransactionalGate.kt for the keyword sets.
+        val gateDecision = TransactionalGate.evaluate(rawEvent.body)
+        if (gateDecision is TransactionalGate.Decision.Reject) {
+            writeGateRejectedSignal(rawEvent, gateDecision, now)
+            return IngestionResult.GateRejected(
+                rawEventId = rawEvent.id,
+                gateReason = gateDecision.reason.name,
+                matched = gateDecision.matched,
+            )
+        }
             // Enrich the parser's result with a network reference if the body
             // had one. Done here instead of in each parser so all 8 parsers
             // get this for free and the upcoming JSON rule engine inherits it.
@@ -237,14 +242,44 @@ class NotificationSignalNormalizer(
             // credit_card row so DuesAlertManager and the Home dashboard have data
             // to surface. Only fires for high-confidence card-due candidates with
             // an extractable due date.
-            if (parseResult.transactionKind == ParsedTransactionKind.BILL_DUE &&
-                decision.confidenceTier == ConfidenceTier.HIGH &&
-                parseResult.amountMinor != null &&
-                parseResult.dueDateIso != null
-            ) {
-                applyBillDueToCard(rawEvent.userId, parseResult, now)
-            }
-        }
+            val billDueAppliedToCardId =
+                if (parseResult.transactionKind == ParsedTransactionKind.BILL_DUE &&
+                    decision.confidenceTier == ConfidenceTier.HIGH &&
+                    parseResult.amountMinor != null &&
+                    parseResult.dueDateIso != null
+                ) {
+                    applyBillDueToCard(rawEvent.userId, parseResult, now)
+                } else null
+
+        return IngestionResult.Ingested(
+            rawEventId = rawEvent.id,
+            parsedSignalId = parsedSignalId,
+            candidateId = candidateId,
+            parserKey = parseResult.parserKey,
+            parserVersion = parseResult.parserVersion,
+            providerHint = parseResult.providerHint,
+            transactionKind = parseResult.transactionKind,
+            candidateType = parseResult.candidateType,
+            amountMinor = parseResult.amountMinor,
+            currencyCode = parseResult.currencyCode,
+            merchantRaw = parseResult.merchantRaw,
+            toEntityName = parseResult.toEntityName,
+            mode = parseResult.mode,
+            maskedDigits = parseResult.maskedDigits,
+            parseConfidence = parseResult.parseConfidence,
+            networkReferenceId = parseResult.networkReferenceId,
+            networkReferenceType = parseResult.networkReferenceType,
+            dueDateIso = parseResult.dueDateIso,
+            confidenceTier = decision.confidenceTier,
+            decisionState = decision.decisionState,
+            decisionReason = decision.decisionReason,
+            trustRuleMatched = trustRule != null,
+            dedupedAgainstCandidateId = dedupeResult.duplicateCandidate?.id,
+            dedupedAgainstCanonicalTxnId = dedupeResult.duplicateCanonicalTransaction?.id,
+            inboxItemId = inboxItemId,
+            canonicalTransactionId = canonicalTransactionId,
+            billDueAppliedToCardId = billDueAppliedToCardId,
+        )
     }
 
     /**
@@ -322,10 +357,10 @@ class NotificationSignalNormalizer(
         userId: String,
         parseResult: NotificationParseResult,
         now: String,
-    ) {
+    ): String? {
         val cards = database.creditCardDao().getActiveCards(userId)
-        if (cards.isEmpty()) return
-        val match = findMatchingCard(cards, parseResult) ?: return
+        if (cards.isEmpty()) return null
+        val match = findMatchingCard(cards, parseResult) ?: return null
         database.creditCardDao().upsertCards(
             listOf(
                 match.copy(
@@ -335,6 +370,7 @@ class NotificationSignalNormalizer(
                 ),
             ),
         )
+        return match.id
     }
 
     private fun findMatchingCard(
