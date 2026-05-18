@@ -358,3 +358,50 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
         db.execSQL("PRAGMA foreign_keys = ON")
     }
 }
+
+/**
+ * v10 — explicit `mergedFromExistingCanonicalId` column on inbox_items.
+ *
+ * Replaces the brittle DumpOutcomeDao CASE expression that derived the merge
+ * state by comparing `linkedCanonicalTransactionId` against a synthesised
+ * `'txn-' || tc.id` string. Now `confirmInboxItemMergedWith` writes the
+ * existing canonical id into this column directly, and the DAO selects it.
+ *
+ * Pre-v10 rows get NULL (the column is nullable with no default backfill —
+ * we don't know which historical confirms were merges without re-running
+ * the heuristic, and the dump-outcome snapshot is for current-state
+ * triage, not historical analysis).
+ */
+val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `inbox_items` ADD COLUMN `mergedFromExistingCanonicalId` TEXT DEFAULT NULL"
+        )
+    }
+}
+
+/**
+ * v11 — `app_state` key/value table for persistent debounce timestamps.
+ *
+ * Backing for the debounce timestamps that used to live in process-local
+ * AtomicLongs (lastRecurringRefreshMs, lastIngestionPruneMs). Without
+ * persistence, every cold start reset them to 0 and the next foreground
+ * tick re-ran the expensive scans/deletes inside the supposed debounce
+ * window. M4 in the gravedigging audit.
+ *
+ * Single CREATE TABLE; no data to migrate.
+ */
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `app_state` (
+                `key` TEXT NOT NULL,
+                `value` TEXT NOT NULL,
+                `updatedAt` TEXT NOT NULL,
+                PRIMARY KEY(`key`)
+            )
+            """.trimIndent()
+        )
+    }
+}

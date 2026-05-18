@@ -4,6 +4,7 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.zegrt.rupee.data.local.dao.AccountDao
+import com.zegrt.rupee.data.local.dao.AppStateDao
 import com.zegrt.rupee.data.local.dao.BucketDao
 import com.zegrt.rupee.data.local.dao.CanonicalTransactionDao
 import com.zegrt.rupee.data.local.dao.CategoryDao
@@ -19,6 +20,7 @@ import com.zegrt.rupee.data.local.dao.RecurringPatternDao
 import com.zegrt.rupee.data.local.dao.TransactionCandidateDao
 import com.zegrt.rupee.data.local.dao.UserDao
 import com.zegrt.rupee.data.local.entity.AccountEntity
+import com.zegrt.rupee.data.local.entity.AppStateEntity
 import com.zegrt.rupee.data.local.entity.BucketEntity
 import com.zegrt.rupee.data.local.entity.BudgetEntity
 import com.zegrt.rupee.data.local.entity.CanonicalTransactionEntity
@@ -51,8 +53,9 @@ import com.zegrt.rupee.data.local.entity.UserEntity
         TransactionCandidateEntity::class,
         MerchantTrustRuleEntity::class,
         RecurringPatternEntity::class,
+        AppStateEntity::class,
     ],
-    version = 9,
+    version = 11,
     exportSchema = true,
 )
 @TypeConverters(RupeeTypeConverters::class)
@@ -72,4 +75,5 @@ abstract class RupeeDatabase : RoomDatabase() {
     abstract fun emiPlanDao(): EmiPlanDao
     abstract fun recurringPatternDao(): RecurringPatternDao
     abstract fun dumpOutcomeDao(): DumpOutcomeDao
+    abstract fun appStateDao(): AppStateDao
 }

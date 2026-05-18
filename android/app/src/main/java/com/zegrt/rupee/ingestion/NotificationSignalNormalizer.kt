@@ -383,8 +383,20 @@ class NotificationSignalNormalizer(
             }
             if (matches.size == 1) return matches.single()
         }
-        // 3. Fall back to the single active card if there's exactly one — common
-        // in current builds where users typically add one card during onboarding.
+        // 3. Fall back to the single active card if there's exactly one AND
+        // the parser captured nothing identifying. The old single-card
+        // fallback fired even when the parser had captured digits/provider
+        // that didn't match — silently attributing an unrelated bill-due
+        // to the only card on file and overwriting its real statement date.
+        // Defensive guard: a non-matching positive signal should fail closed
+        // (return null), not fall back. Empty signal → fall back is still
+        // safe and matches the common onboarding flow of "one card, no
+        // last-4 in the body."
+        val hasNonMatchingDigits = !parseResult.maskedDigits.isNullOrBlank()
+        val hasNonMatchingHint = !hint.isNullOrBlank() && hint != "cred_card"
+        if (hasNonMatchingDigits || hasNonMatchingHint) {
+            return null
+        }
         return cards.singleOrNull()
     }
 

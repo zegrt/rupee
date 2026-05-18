@@ -35,9 +35,12 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class OnboardingSetupInput(
@@ -52,7 +55,19 @@ data class OnboardingSetupInput(
 class LocalFinanceRepository(
     private val database: RupeeDatabase,
     private val recurringDetector: RecurringDetectionEngine = RecurringDetectionEngine(),
+    // Fire-and-forget coroutine scope for background persistence writes
+    // (debounce timestamps and similar). RupeeApplication passes its
+    // app-lifetime SupervisorJob; tests / debug callers that construct
+    // the repository directly get an isolated SupervisorJob default
+    // that won't leak across test runs. Avoids the GlobalScope opt-in
+    // that an earlier draft of M4 used.
+    private val persistScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
+    // Hydrated from `app_state` at startup via [hydrateDebounceState]; written
+    // back to `app_state` on every set via [persistDebounceTimestamp]. Without
+    // the persistence layer these reset to 0 on every cold start, forcing
+    // a 120-day scan / 90-day prune to fire on the next foreground tick
+    // even when one ran an hour ago.
     private val lastRecurringRefreshMs = AtomicLong(0L)
     private val lastIngestionPruneMs = AtomicLong(0L)
 
@@ -60,6 +75,11 @@ class LocalFinanceRepository(
         private const val USER_ID = "local-user"
         private const val DEFAULT_MONTHLY_BUDGET_MINOR = 4_000_000L
         private const val RECURRING_REFRESH_DEBOUNCE_MS = 30 * 60 * 1000L
+
+        // Keys for the app_state K/V table. Stored as decimal-string-encoded
+        // epoch-millis longs.
+        private const val KEY_LAST_RECURRING_REFRESH_MS = "last_recurring_refresh_ms"
+        private const val KEY_LAST_INGESTION_PRUNE_MS = "last_ingestion_prune_ms"
 
         // Pruning runs at most once per 24 hours. Cheap-enough to call on
         // every cold start without nagging the disk; spaced enough that a
@@ -140,6 +160,7 @@ class LocalFinanceRepository(
         val currentMs = System.currentTimeMillis()
         if (!force && currentMs - lastRecurringRefreshMs.get() < RECURRING_REFRESH_DEBOUNCE_MS) return
         lastRecurringRefreshMs.set(currentMs)
+        persistDebounceTimestamp(KEY_LAST_RECURRING_REFRESH_MS, currentMs)
 
         val lookbackStart = today.minusDays(120).toString()
         val nowIso = today.plusDays(1).toString()
@@ -545,10 +566,12 @@ class LocalFinanceRepository(
                 database.canonicalTransactionDao().getTransactionById(linkedCanonicalId)
             }
 
-            // "txn-<candidateId>" naming is load-bearing: DumpOutcomeDao's
-            // mergedIntoExistingTxnId CASE expression compares against this
-            // prefix to distinguish confirm-fresh from merge-into-existing.
-            // Rename in lockstep if you change it.
+            // "txn-<candidateId>" is just a deterministic id derived from the
+            // candidate so a confirm-then-edit-then-re-confirm flow lands on
+            // the same canonical row instead of creating duplicates. Used to
+            // be load-bearing for DumpOutcomeDao's merge detection, but that
+            // dependency moved to an explicit inbox_items column in v10 —
+            // see InboxItemEntity.mergedFromExistingCanonicalId.
             val canonicalId = existingCanonical?.id ?: "txn-${candidate.id}"
             val resolvedMerchant = merchantNameOverride?.trim()?.ifBlank { null }
                 ?: existingCanonical?.merchantName ?: candidate.toEntityName
@@ -623,6 +646,10 @@ class LocalFinanceRepository(
                 inboxItem.copy(
                     decisionState = InboxDecisionState.CONFIRMED,
                     linkedCanonicalTransactionId = existingTransactionId,
+                    // Distinguishes a merge from a fresh confirm.
+                    // DumpOutcomeDao surfaces this directly instead of
+                    // reverse-engineering the merge state from id naming.
+                    mergedFromExistingCanonicalId = existingTransactionId,
                     resolvedAt = now,
                     updatedAt = now,
                 ),
@@ -869,6 +896,46 @@ class LocalFinanceRepository(
     }
 
     /**
+     * Read the persisted debounce timestamps from `app_state` and seed the
+     * in-memory AtomicLongs. RupeeApplication calls this once on cold start
+     * before anything that could trigger a refresh/prune fires. If the
+     * persisted values are absent (fresh install, pre-v11 user), the
+     * AtomicLongs stay at 0 and the next refresh/prune runs immediately —
+     * desired behaviour, just no debounce on first ever run.
+     */
+    suspend fun hydrateDebounceState() = withContext(Dispatchers.IO) {
+        val dao = database.appStateDao()
+        dao.get(KEY_LAST_RECURRING_REFRESH_MS)?.toLongOrNull()?.let(lastRecurringRefreshMs::set)
+        dao.get(KEY_LAST_INGESTION_PRUNE_MS)?.toLongOrNull()?.let(lastIngestionPruneMs::set)
+    }
+
+    /**
+     * Write a debounce timestamp through to `app_state`. Fire-and-forget on
+     * a separate coroutine so the caller (refreshRecurringPatterns,
+     * pruneStaleIngestionRows) doesn't have to wait for the disk write.
+     * The in-memory AtomicLong is the source of truth during the process
+     * lifetime; the DB write is the cold-start hand-off.
+     */
+    private fun persistDebounceTimestamp(key: String, valueMs: Long) {
+        val nowIso = Instant.now().toString()
+        // Fire-and-forget write — caller doesn't wait on it. Failure to
+        // persist costs at most one extra refresh/prune next cold start.
+        // Dispatched on persistScope (app-lifetime SupervisorJob in
+        // production; an isolated SupervisorJob in tests / debug callers).
+        persistScope.launch {
+            runCatching {
+                database.appStateDao().upsert(
+                    com.zegrt.rupee.data.local.entity.AppStateEntity(
+                        key = key,
+                        value = valueMs.toString(),
+                        updatedAt = nowIso,
+                    ),
+                )
+            }
+        }
+    }
+
+    /**
      * Delete raw_capture_events older than [retentionDays] days. FK cascade
      * sweeps up parsed_signals → transaction_candidates → inbox_items;
      * canonical_transactions are preserved by the SET NULL FKs added in H4.
@@ -888,6 +955,7 @@ class LocalFinanceRepository(
             return 0
         }
         lastIngestionPruneMs.set(currentMs)
+        persistDebounceTimestamp(KEY_LAST_INGESTION_PRUNE_MS, currentMs)
 
         val cutoffIso = now.minusSeconds(retentionDays * 24 * 60 * 60).toString()
         return withContext(Dispatchers.IO) {

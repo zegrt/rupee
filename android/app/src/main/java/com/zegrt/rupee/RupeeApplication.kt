@@ -11,6 +11,8 @@ import com.zegrt.rupee.data.local.MIGRATION_5_6
 import com.zegrt.rupee.data.local.MIGRATION_6_7
 import com.zegrt.rupee.data.local.MIGRATION_7_8
 import com.zegrt.rupee.data.local.MIGRATION_8_9
+import com.zegrt.rupee.data.local.MIGRATION_9_10
+import com.zegrt.rupee.data.local.MIGRATION_10_11
 import com.zegrt.rupee.data.local.RupeeDatabase
 import com.zegrt.rupee.diagnostics.CrashReporter
 import com.zegrt.rupee.data.repository.LocalFinanceRepository
@@ -21,19 +23,34 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 class RupeeApplication : Application() {
+    // App-lifetime coroutine scope for fire-and-forget background work
+    // (debounce-timestamp persistence, ingestion-row pruning, anything else
+    // that should outlive a viewModelScope but die with the process).
+    // Declared before localFinanceRepository so the lazy block below
+    // references an already-initialized field — Kotlin initialises class
+    // fields in declaration order.
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     val database: RupeeDatabase by lazy {
         Room.databaseBuilder(
             applicationContext,
             RupeeDatabase::class.java,
             "rupee.db",
         )
-            .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+            .addMigrations(
+                MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
+                MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11,
+            )
             .fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4)
             .build()
     }
 
     val localFinanceRepository: LocalFinanceRepository by lazy {
-        LocalFinanceRepository(database)
+        // appScope is the app-lifetime SupervisorJob declared below; pass it
+        // through so the repository's fire-and-forget persistence writes
+        // ride structured concurrency tied to process lifetime instead of
+        // falling back to its constructor-default SupervisorJob.
+        LocalFinanceRepository(database, persistScope = appScope)
     }
 
     val onboardingPreferences: OnboardingPreferences by lazy {
@@ -47,8 +64,6 @@ class RupeeApplication : Application() {
     val duesAlertManager: DuesAlertManager by lazy {
         DuesAlertManager(applicationContext)
     }
-
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
@@ -64,12 +79,15 @@ class RupeeApplication : Application() {
         budgetAlertManager.registerChannel()
         duesAlertManager.registerChannel()
 
-        // Ingestion-table prune. Debounced inside the repository to once per
-        // 24h, so cheap to fire on every cold start. Launched fire-and-forget
-        // on an app-scoped SupervisorJob so a failure doesn't take down the
-        // app; logged on success so the count shows up in logcat for
-        // diagnostics.
+        // Hydrate debounce timestamps from app_state BEFORE the prune
+        // launches — otherwise the in-memory AtomicLongs are still 0 and
+        // the prune runs even if one fired half an hour ago. Sequential
+        // launch (hydrate finishes, then prune fires) is the simplest
+        // guarantee; both are I/O work and run off-main so the few-ms
+        // delay doesn't matter for app startup.
         appScope.launch {
+            runCatching { localFinanceRepository.hydrateDebounceState() }
+                .onFailure { Log.w("RupeeApp", "Hydrating debounce state failed; debounces start at 0", it) }
             runCatching { localFinanceRepository.pruneStaleIngestionRows() }
                 .onSuccess { deleted ->
                     if (deleted > 0) Log.i("RupeeApp", "Pruned $deleted stale raw events (+ FK-cascaded children)")

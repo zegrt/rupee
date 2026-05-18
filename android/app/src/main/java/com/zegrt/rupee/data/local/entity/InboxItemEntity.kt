@@ -60,6 +60,17 @@ data class InboxItemEntity(
     val reasonCode: InboxReasonCode,
     val decisionState: InboxDecisionState,
     val linkedCanonicalTransactionId: String? = null,
+    // Non-null when the user picked "merge with existing" in Inbox — set to
+    // the id of the pre-existing canonical txn we merged into. Distinct from
+    // linkedCanonicalTransactionId (which is set on every CONFIRMED inbox
+    // row, fresh-confirm OR merge). DumpOutcomeDao reads this column
+    // directly now; the previous version of that DAO reverse-engineered
+    // the merge state by comparing linkedCanonicalTransactionId against
+    // the synthetic "txn-<candidateId>" id used by confirmInboxItem —
+    // brittle, hence this explicit column. Pre-v10 rows have null here
+    // even if they were merges; acceptable since the snapshot is
+    // "current state for active investigations," not historical analysis.
+    val mergedFromExistingCanonicalId: String? = null,
     val createdAt: String,
     val resolvedAt: String? = null,
     val updatedAt: String,

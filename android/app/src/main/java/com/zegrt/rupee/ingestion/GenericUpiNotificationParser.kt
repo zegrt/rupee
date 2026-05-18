@@ -43,16 +43,33 @@ class GenericUpiNotificationParser : NotificationParser {
         val direction = NotificationParsingUtils.classifyDirection(rawEvent.body)
         val isIncome = direction == NotificationParsingUtils.MoneyDirection.IN
 
-        // Confidence ladder:
-        //  - merchant resolved → high enough for AUTO_CREATED (0.7 is medium tier today,
-        //    decision engine routes it to Inbox; raising to 0.85+ would auto-create
-        //    on stranger bodies — keep at 0.7 for now)
-        //  - merchant null but amount + masked digits both present → still a real
-        //    transaction signal, just missing the payee. 0.62 puts it in MEDIUM
-        //    so Inbox shows it instead of silently ignoring.
-        //  - everything else → 0.5 LOW, gets dropped (correct — not enough signal).
+        // Confidence ladder is tiered by how many independent corroborating
+        // signals the parser extracted. Three signals matter:
+        //   - amountMinor    (the money — required for any non-LOW tier)
+        //   - merchant       (the payee — distinguishes a real UPI receipt
+        //                     from a balance / status push)
+        //   - maskedDigits   (the source account — confirms the body actually
+        //                     names a specific account, not a generic "sent
+        //                     ₹X via UPI" balance push)
+        //
+        // Two corroborating signals + amount → HIGH (auto-create at 0.85+).
+        // One corroborating signal → MEDIUM (Inbox review).
+        // Amount only → LOW (ignore — could be anything).
+        //
+        // The previous static 0.7 cap pinned every fully-extracted UPI debit
+        // to MEDIUM, meaning the user got an Inbox review for every routine
+        // UPI spend even when merchant + amount + account were all extracted
+        // cleanly. Review fatigue → mass-confirms → defeats the Inbox. With
+        // the HIGH tier reachable here, routine UPI debits to a known payee
+        // from a recognised account auto-create as SUGGESTED on the Home
+        // screen.
+        //
+        // Mode is intentionally NOT a tier discriminator — every body that
+        // reaches this parser is Mode.UPI by construction, so it's not
+        // additive evidence.
         val confidence = when {
-            amountMinor != null && merchant != null -> 0.7
+            amountMinor != null && merchant != null && maskedDigits != null -> 0.85
+            amountMinor != null && merchant != null -> 0.78
             amountMinor != null && maskedDigits != null -> 0.62
             else -> 0.5
         }
@@ -70,7 +87,7 @@ class GenericUpiNotificationParser : NotificationParser {
 
         return NotificationParseResult(
             parserKey = "notification_upi_generic",
-            parserVersion = "v3",
+            parserVersion = "v4",
             providerHint = "upi",
             transactionKind = kind,
             candidateType = candidateType,

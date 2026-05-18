@@ -72,8 +72,23 @@ object TransactionalGate {
         // v0.13.3 dump that would otherwise have been false-rejected on
         // "no verb".
         "transaction of", "used for a transaction", "purchase of",
+        // Recurring-debit instruments common in Indian banking. SIP / mutual
+        // fund / standing-instruction debits often arrive with these phrases
+        // and no other money verb — without them the gate false-rejects real
+        // outflows. NACH = National Automated Clearing House (auto-debit
+        // mandate); ECS = Electronic Clearing Service; "standing instruction"
+        // is the user-facing label most banks use for recurring auto-pay.
+        "sip installment", "sip debit", "sip of ",
+        "nach mandate", "nach debit",
+        "ecs debit", "ecs mandate",
+        "standing instruction",
         // Credit-side
         "credited", " credit ", "received ", "deposited", "refunded",
+        // Variants of "refund" that the bare "refunded" verb above misses:
+        // "Refund of ₹X processed", "Chargeback of ₹X credited", "Reversed
+        // ₹X to your account" all represent real money flowing back to the
+        // user. Without these phrases the gate would drop them as no-verb.
+        "refund of", "reversed", "reversal", "chargeback",
         // Bill / EMI reminders we want to keep
         " due ", "is due", "due on", "due by", "due tomorrow", "payment due",
     )

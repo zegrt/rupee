@@ -37,8 +37,30 @@ object CrashReporter {
 
     fun logFile(context: Context): File = File(context.applicationContext.filesDir, FILE)
 
-    fun readLog(context: Context): String = runCatching { logFile(context).readText() }
-        .getOrDefault("")
+    /**
+     * Read the crash log. Returns:
+     *   - `Result.success("")` if the file doesn't exist (no crashes yet)
+     *   - `Result.success(content)` if the file exists and reads cleanly
+     *   - `Result.failure(throwable)` if the file exists but can't be read
+     *
+     * The old API returned `""` for both "no crashes" and "read failed",
+     * which meant the debug screen couldn't tell a user with no log apart
+     * from one whose file is permission-denied or corrupted. Callers that
+     * don't care about the distinction can fall back via [readLogOrEmpty].
+     */
+    fun readLog(context: Context): Result<String> {
+        val file = logFile(context)
+        if (!file.exists()) return Result.success("")
+        return runCatching { file.readText() }
+    }
+
+    /**
+     * Convenience for call sites that genuinely don't care which kind of
+     * empty they got. Preserves the pre-L3 API shape for anything that
+     * isn't ready to handle the Result.
+     */
+    fun readLogOrEmpty(context: Context): String =
+        readLog(context).getOrDefault("")
 
     fun clearLog(context: Context) {
         runCatching { logFile(context).delete() }

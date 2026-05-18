@@ -45,13 +45,12 @@ data class DumpOutcomeSnapshot(
     val canonicalMerchantName: String?,
     val canonicalCategoryId: String?,
     val canonicalNotes: String?,
-    // Non-null when the inbox row resolved to a canonical txn that wasn't
-    // freshly created from this candidate — i.e. the user picked "merge with
-    // existing". Detected by comparing inbox.linkedCanonicalTransactionId
-    // against the synthetic "txn-<candidateId>" id used by
-    // confirmInboxItem (LocalFinanceRepository.confirmInboxItem). If those
-    // diverge, it was a merge. If that naming convention ever changes,
-    // update the CASE expression below in lockstep — KSP won't catch it.
+    // Non-null when the user picked "merge with existing" in Inbox. As of
+    // v10 this column maps directly to inbox_items.mergedFromExistingCanonicalId,
+    // which `confirmInboxItemMergedWith` writes at merge time. The old
+    // reverse-engineered CASE expression (comparing
+    // linkedCanonicalTransactionId against a synthetic "txn-<candidateId>")
+    // is gone — no more silent breakage if the candidate-id format changes.
     val mergedIntoExistingTxnId: String?,
 )
 
@@ -65,9 +64,8 @@ interface DumpOutcomeDao {
      *
      * Column aliases are explicit because Room maps result columns by name
      * onto the POJO constructor parameter names. Don't rename the data
-     * class fields without updating the SELECT list — KSP catches mismatches
-     * at build time, but only for column names, not the CASE-expression
-     * semantics of `mergedIntoExistingTxnId` (see note on that field).
+     * class fields without updating the SELECT list — KSP catches column
+     * mismatches at build time.
      */
     @Query(
         """
@@ -90,12 +88,7 @@ interface DumpOutcomeDao {
             ct.merchantName              AS canonicalMerchantName,
             ct.categoryId                AS canonicalCategoryId,
             ct.notes                     AS canonicalNotes,
-            CASE
-                WHEN ii.linkedCanonicalTransactionId IS NOT NULL
-                 AND ii.linkedCanonicalTransactionId <> ('txn-' || tc.id)
-                THEN ii.linkedCanonicalTransactionId
-                ELSE NULL
-            END                          AS mergedIntoExistingTxnId
+            ii.mergedFromExistingCanonicalId AS mergedIntoExistingTxnId
         FROM parsed_signals AS ps
         LEFT JOIN transaction_candidates AS tc
             ON tc.parsedSignalId = ps.id
