@@ -12,6 +12,7 @@ import com.zegrt.rupee.data.local.MIGRATION_6_7
 import com.zegrt.rupee.data.local.MIGRATION_7_8
 import com.zegrt.rupee.data.local.MIGRATION_8_9
 import com.zegrt.rupee.data.local.MIGRATION_9_10
+import com.zegrt.rupee.data.local.MIGRATION_10_11
 import com.zegrt.rupee.data.local.RupeeDatabase
 import com.zegrt.rupee.diagnostics.CrashReporter
 import com.zegrt.rupee.data.repository.LocalFinanceRepository
@@ -28,7 +29,10 @@ class RupeeApplication : Application() {
             RupeeDatabase::class.java,
             "rupee.db",
         )
-            .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+            .addMigrations(
+                MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
+                MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11,
+            )
             .fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4)
             .build()
     }
@@ -65,12 +69,15 @@ class RupeeApplication : Application() {
         budgetAlertManager.registerChannel()
         duesAlertManager.registerChannel()
 
-        // Ingestion-table prune. Debounced inside the repository to once per
-        // 24h, so cheap to fire on every cold start. Launched fire-and-forget
-        // on an app-scoped SupervisorJob so a failure doesn't take down the
-        // app; logged on success so the count shows up in logcat for
-        // diagnostics.
+        // Hydrate debounce timestamps from app_state BEFORE the prune
+        // launches — otherwise the in-memory AtomicLongs are still 0 and
+        // the prune runs even if one fired half an hour ago. Sequential
+        // launch (hydrate finishes, then prune fires) is the simplest
+        // guarantee; both are I/O work and run off-main so the few-ms
+        // delay doesn't matter for app startup.
         appScope.launch {
+            runCatching { localFinanceRepository.hydrateDebounceState() }
+                .onFailure { Log.w("RupeeApp", "Hydrating debounce state failed; debounces start at 0", it) }
             runCatching { localFinanceRepository.pruneStaleIngestionRows() }
                 .onSuccess { deleted ->
                     if (deleted > 0) Log.i("RupeeApp", "Pruned $deleted stale raw events (+ FK-cascaded children)")

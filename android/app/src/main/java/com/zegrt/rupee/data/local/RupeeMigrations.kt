@@ -379,3 +379,29 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
         )
     }
 }
+
+/**
+ * v11 — `app_state` key/value table for persistent debounce timestamps.
+ *
+ * Backing for the debounce timestamps that used to live in process-local
+ * AtomicLongs (lastRecurringRefreshMs, lastIngestionPruneMs). Without
+ * persistence, every cold start reset them to 0 and the next foreground
+ * tick re-ran the expensive scans/deletes inside the supposed debounce
+ * window. M4 in the gravedigging audit.
+ *
+ * Single CREATE TABLE; no data to migrate.
+ */
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `app_state` (
+                `key` TEXT NOT NULL,
+                `value` TEXT NOT NULL,
+                `updatedAt` TEXT NOT NULL,
+                PRIMARY KEY(`key`)
+            )
+            """.trimIndent()
+        )
+    }
+}
