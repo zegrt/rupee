@@ -32,13 +32,17 @@ class PhonePeNotificationParser : NotificationParser {
         }
         val candidateType = when (transactionKind) {
             ParsedTransactionKind.SPEND -> TransactionCandidateType.SPEND
-            ParsedTransactionKind.INCOME -> TransactionCandidateType.INCOME
+            // REFUND is real money back in the user's account — route it like
+            // INCOME end-to-end. Without this branch the kind drops to UNKNOWN
+            // and the canonical-txn writer defaults to EXPENSE, double-counting
+            // the original spend instead of cancelling it.
+            ParsedTransactionKind.INCOME, ParsedTransactionKind.REFUND -> TransactionCandidateType.INCOME
             else -> TransactionCandidateType.UNKNOWN
         }
 
         return NotificationParseResult(
             parserKey = "notification_phonepe",
-            parserVersion = "v1",
+            parserVersion = "v2",
             providerHint = "phonepe",
             transactionKind = transactionKind,
             candidateType = candidateType,

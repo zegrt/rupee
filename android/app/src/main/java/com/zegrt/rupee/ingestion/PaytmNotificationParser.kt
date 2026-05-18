@@ -33,7 +33,12 @@ class PaytmNotificationParser : NotificationParser {
         }
         val candidateType = when (transactionKind) {
             ParsedTransactionKind.SPEND -> TransactionCandidateType.SPEND
-            ParsedTransactionKind.INCOME -> TransactionCandidateType.INCOME
+            // REFUND and cashback are real money back in the user's account —
+            // route them like INCOME end-to-end. Without this branch the kind
+            // drops to UNKNOWN and the canonical-txn writer defaults to
+            // EXPENSE, double-counting the original spend instead of
+            // cancelling it.
+            ParsedTransactionKind.INCOME, ParsedTransactionKind.REFUND -> TransactionCandidateType.INCOME
             else -> TransactionCandidateType.UNKNOWN
         }
         val mode = when {
@@ -44,7 +49,7 @@ class PaytmNotificationParser : NotificationParser {
 
         return NotificationParseResult(
             parserKey = "notification_paytm",
-            parserVersion = "v1",
+            parserVersion = "v2",
             providerHint = "paytm",
             transactionKind = transactionKind,
             candidateType = candidateType,

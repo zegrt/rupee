@@ -414,6 +414,64 @@ class NotificationParserParseTest {
         assertEquals(TransactionCandidateType.INCOME, result.candidateType)
     }
 
+    // ── REFUND routing ────────────────────────────────────────────────────────
+    //
+    // Pre-fix: PhonePe and Paytm parsers correctly tagged refund bodies with
+    // ParsedTransactionKind.REFUND, but the candidateType `when` block had no
+    // REFUND branch — it fell through to UNKNOWN. The normalizer's
+    // canonical-type writer then defaulted everything-not-INCOME to EXPENSE,
+    // so refunds inflated monthly spend instead of cancelling the original
+    // outflow. These pin the routing end-to-end at the parser layer.
+
+    @Test
+    fun `phonepe refund body routes to INCOME candidate type`() {
+        val result = phonepe.parse(
+            event(
+                pkg = "com.phonepe.app",
+                body = "Refund of ₹500.00 from Swiggy credited to your PhonePe wallet",
+            )
+        )
+        assertEquals(ParsedTransactionKind.REFUND, result.transactionKind)
+        assertEquals(TransactionCandidateType.INCOME, result.candidateType)
+        assertEquals(50000L, result.amountMinor)
+    }
+
+    @Test
+    fun `paytm refund body routes to INCOME candidate type`() {
+        val result = paytm.parse(
+            event(
+                pkg = "net.one97.paytm",
+                body = "₹250 refund from Zomato credited to Paytm wallet",
+            )
+        )
+        assertEquals(ParsedTransactionKind.REFUND, result.transactionKind)
+        assertEquals(TransactionCandidateType.INCOME, result.candidateType)
+    }
+
+    @Test
+    fun `paytm cashback body routes to INCOME candidate type`() {
+        // Cashback shares the REFUND classifier branch in the Paytm parser —
+        // money back to the user even though it isn't a refund of a prior
+        // identifiable spend. Pin so the routing stays consistent.
+        val result = paytm.parse(
+            event(
+                pkg = "net.one97.paytm",
+                body = "₹50 cashback credited to your Paytm wallet for order #1234",
+            )
+        )
+        assertEquals(ParsedTransactionKind.REFUND, result.transactionKind)
+        assertEquals(TransactionCandidateType.INCOME, result.candidateType)
+    }
+
+    @Test
+    fun `phonepe regular spend still routes to SPEND`() {
+        // Regression: REFUND short-circuit must not catch the regular spend
+        // path. Body has no refund/cashback token and direction is OUT.
+        val result = phonepe.parse(event(body = "₹500.00 sent to Swiggy via PhonePe"))
+        assertEquals(ParsedTransactionKind.SPEND, result.transactionKind)
+        assertEquals(TransactionCandidateType.SPEND, result.candidateType)
+    }
+
     private fun event(
         pkg: String = "com.example.test",
         title: String? = null,
