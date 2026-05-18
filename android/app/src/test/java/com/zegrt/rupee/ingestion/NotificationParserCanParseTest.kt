@@ -15,6 +15,7 @@ class NotificationParserCanParseTest {
     private val paytm = PaytmNotificationParser()
     private val genericUpi = GenericUpiNotificationParser()
     private val emi = EmiNotificationParser()
+    private val atm = AtmNotificationParser()
     private val registry = NotificationParserRegistry.default()
 
     @Test
@@ -207,6 +208,51 @@ class NotificationParserCanParseTest {
         // "remind" / "demi" etc. used to fire the old loose check; word-boundary covers it.
         val event = event(body = "Reminder to update your KYC by Friday")
         assertEquals(false, emi.canParse(event))
+    }
+
+    // ── ATM (M3a) precedence ─────────────────────────────────────────────────
+    //
+    // The bug we're solving: ATM bodies posted by the ICICI iMobile app
+    // (or any bank app) used to route through the bank's parser as
+    // SPEND, inflating monthly spend totals by the withdrawn amount.
+    // After M3a the ATM parser claims the body first and routes it as
+    // CASH_WITHDRAWAL → CASH_ADJUSTMENT canonical type, excluded from
+    // spend.
+
+    @Test
+    fun `atm parser claims hdfc cash wdl body`() {
+        val event = event(body = "ATM Cash Wdl Rs.5,000 from A/c XX1234 at HDFC Bank ATM Delhi")
+        assertEquals(true, atm.canParse(event))
+    }
+
+    @Test
+    fun `atm parser claims icici cash withdrawal body`() {
+        val event = event(
+            pkg = "com.csam.icici.bank.imobile",
+            body = "Cash withdrawal of Rs.10,000 from your ICICI Bank A/c XX5678 via ATM",
+        )
+        assertEquals(true, atm.canParse(event))
+    }
+
+    @Test
+    fun `atm parser rejects non-ATM bodies`() {
+        val event = event(body = "Rs.500 spent at Swiggy via UPI")
+        assertEquals(false, atm.canParse(event))
+    }
+
+    @Test
+    fun `registry routes ATM body to ATM parser even when posted by a bank app`() {
+        // Load-bearing for the M3a registry-order guarantee. If anyone
+        // ever shuffles the registry so AtmNotificationParser sits after
+        // a bank parser, the result will be SPEND from that bank parser
+        // instead of CASH_WITHDRAWAL — this test catches it.
+        val result = registry.parse(
+            event(
+                pkg = "com.csam.icici.bank.imobile",
+                body = "ATM Cash Wdl Rs.5,000 from A/c XX1234 on 12-May-26",
+            )
+        )
+        assertEquals("notification_atm", result.parserKey)
     }
 
     private fun event(

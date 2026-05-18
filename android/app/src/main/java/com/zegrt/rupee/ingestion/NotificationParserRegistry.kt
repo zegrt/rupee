@@ -12,8 +12,14 @@ class NotificationParserRegistry(
 
     companion object {
         fun default(): NotificationParserRegistry {
+            // Order matters — first canParse() wins. The ATM parser sits
+            // ahead of the bank-specific parsers so ATM withdrawal bodies
+            // route as CASH_WITHDRAWAL (which flattens to CASH_ADJUSTMENT
+            // canonical type, kept out of monthly spend totals) instead
+            // of as SPEND through IciciNotificationParser etc.
             return NotificationParserRegistry(
                 parsers = listOf(
+                    AtmNotificationParser(),
                     CredNotificationParser(),
                     IciciNotificationParser(),
                     KotakNotificationParser(),
