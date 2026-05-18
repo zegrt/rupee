@@ -283,12 +283,24 @@ class NotificationSignalNormalizer(
     }
 
     /**
-     * Writes auditable trail rows for a notification the transactional gate
-     * rejected. We could just drop these silently, but persisting them lets us
-     * (a) see why a body was dropped when debugging from dumps, (b) compute a
-     * "notifs received vs notifs accepted" health metric later. The candidate
-     * is written with decisionState = IGNORED so it never reaches Inbox or any
-     * auto-create path.
+     * Writes a parsed_signal row for a notification the transactional gate
+     * rejected. The structuredJson field carries the reject reason +
+     * matched keyword so dump-replay can reconstruct what the gate did
+     * without re-running it.
+     *
+     * Historically (pre-H3-phase-1) this also wrote an IGNORED
+     * transaction_candidates row. That doubled storage cost per rejected
+     * notification AND was the biggest contributor to the recent-candidates
+     * window rotating past real inbox-referenced rows — the structural
+     * cause of the Inbox husk bug compounding on notification-heavy
+     * phones. The candidate row was never read by any UI surface
+     * (decisionState=IGNORED filters in DAOs, no inbox/canonical path
+     * pointed at gate-rejected candidates), so dropping the write is
+     * lossless from the user's POV.
+     *
+     * The parsed_signal row alone provides enough audit detail for the
+     * dump-replay and gate-tuning loops; phase 2's time-based pruning
+     * keeps it bounded.
      */
     private suspend fun writeGateRejectedSignal(
         rawEvent: RawCaptureEventEntity,
@@ -325,32 +337,9 @@ class NotificationSignalNormalizer(
                 syncStatus = SyncStatus.LOCAL_ONLY,
             ),
         )
-        database.transactionCandidateDao().upsertTransactionCandidate(
-            TransactionCandidateEntity(
-                id = UUID.randomUUID().toString(),
-                userId = rawEvent.userId,
-                parsedSignalId = parsedSignalId,
-                candidateType = TransactionCandidateType.UNKNOWN,
-                amountMinor = null,
-                currencyCode = null,
-                fromEntityType = null,
-                fromEntityHint = rawEvent.sourceAppPackage,
-                toEntityName = null,
-                mode = null,
-                occurredAt = rawEvent.deviceEventTime ?: rawEvent.receivedAt,
-                candidateFingerprint = null,
-                confidenceTier = null,
-                decisionState = CandidateDecisionState.IGNORED,
-                decisionReason = CandidateDecisionReason.NOT_TRANSACTIONAL,
-                duplicateOfCandidateId = null,
-                linkedInboxItemId = null,
-                linkedCanonicalTransactionId = null,
-                normalizationVersion = "v1",
-                createdAt = now,
-                updatedAt = now,
-                syncStatus = SyncStatus.LOCAL_ONLY,
-            ),
-        )
+        // Intentionally NOT writing a transaction_candidates row here — see
+        // function doc above. The parsed_signal row's structuredJson is the
+        // audit trail.
     }
 
     private suspend fun applyBillDueToCard(
