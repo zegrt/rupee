@@ -100,12 +100,24 @@ class DebugViewModel(
     }
 
     fun refreshCrashLog(context: Context) {
-        val log = CrashReporter.readLog(context)
-        val preview = if (log.length > 1500) "…${log.takeLast(1500)}" else log
-        _uiState.value = _uiState.value.copy(
-            crashLogPreview = preview.ifBlank { "" },
-            message = if (log.isBlank()) "No crashes logged." else null,
-        )
+        CrashReporter.readLog(context)
+            .onSuccess { log ->
+                val preview = if (log.length > 1500) "…${log.takeLast(1500)}" else log
+                _uiState.value = _uiState.value.copy(
+                    crashLogPreview = preview.ifBlank { "" },
+                    message = if (log.isBlank()) "No crashes logged." else null,
+                )
+            }
+            .onFailure { t ->
+                // Distinct message from the empty case so the user can tell
+                // "no crashes" apart from "couldn't read the file" — which
+                // is usually a permissions/storage issue worth fixing.
+                Log.w("RupeeApp", "Crash log read failed", t)
+                _uiState.value = _uiState.value.copy(
+                    crashLogPreview = "",
+                    message = "Couldn't read crash log (${t.javaClass.simpleName}).",
+                )
+            }
     }
 
     fun clearCrashLog(context: Context) {
@@ -243,7 +255,13 @@ class DebugViewModel(
     }
 
     fun emailCrashLog(context: Context) {
-        val log = CrashReporter.readLog(context)
+        val log = CrashReporter.readLog(context).getOrElse { t ->
+            Log.w("RupeeApp", "Crash log read failed before email", t)
+            _uiState.value = _uiState.value.copy(
+                message = "Couldn't read crash log (${t.javaClass.simpleName}).",
+            )
+            return
+        }
         if (log.isBlank()) {
             _uiState.value = _uiState.value.copy(message = "No crashes to email.")
             return
