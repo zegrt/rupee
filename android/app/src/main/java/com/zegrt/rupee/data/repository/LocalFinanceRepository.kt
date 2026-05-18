@@ -3,6 +3,7 @@ package com.zegrt.rupee.data.repository
 import com.zegrt.rupee.data.local.RupeeDatabase
 import com.zegrt.rupee.data.local.dao.CategorySpend
 import com.zegrt.rupee.data.local.dao.DumpOutcomeSnapshot
+import com.zegrt.rupee.data.local.dao.InboxItemWithCandidate
 import com.zegrt.rupee.data.local.entity.TransactionCandidateType
 import com.zegrt.rupee.data.local.entity.AccountEntity
 import com.zegrt.rupee.data.local.entity.AccountType
@@ -53,11 +54,27 @@ class LocalFinanceRepository(
     private val recurringDetector: RecurringDetectionEngine = RecurringDetectionEngine(),
 ) {
     private val lastRecurringRefreshMs = AtomicLong(0L)
+    private val lastIngestionPruneMs = AtomicLong(0L)
 
     companion object {
         private const val USER_ID = "local-user"
         private const val DEFAULT_MONTHLY_BUDGET_MINOR = 4_000_000L
         private const val RECURRING_REFRESH_DEBOUNCE_MS = 30 * 60 * 1000L
+
+        // Pruning runs at most once per 24 hours. Cheap-enough to call on
+        // every cold start without nagging the disk; spaced enough that a
+        // user bouncing the app several times in a session doesn't trigger
+        // it.
+        private const val INGESTION_PRUNE_DEBOUNCE_MS = 24 * 60 * 60 * 1000L
+
+        // Default retention window for raw_capture_events. Beyond 90 days
+        // the gate-rejected telemetry has diminishing value (parsers evolve
+        // faster than that) and dump-replay against ancient bodies is
+        // rarely useful. User-confirmed canonical transactions are NOT
+        // affected by this prune — H4's FK cascade clears the pipeline rows
+        // but SET NULL preserves the canonical txn with its dangling
+        // pointer cleared.
+        private const val DEFAULT_RAW_EVENT_RETENTION_DAYS = 90L
     }
 
     fun observeUser(): Flow<UserEntity?> = database.userDao().observeUser()
@@ -230,14 +247,47 @@ class LocalFinanceRepository(
 
     fun observeBuckets(): Flow<List<BucketEntity>> = database.bucketDao().observeBuckets()
 
-    fun observeRecentTransactions(limit: Int = 20): Flow<List<CanonicalTransactionEntity>> =
-        database.canonicalTransactionDao().observeRecentTransactions(USER_ID, limit)
+    /**
+     * Recent canonical transactions for the Home screen. Date-windowed
+     * (default 30 days back from [now]) rather than row-windowed because a
+     * row cap silently hides any back-dated manual entry or any
+     * notification with an old `deviceEventTime`. See gravedigging audit
+     * H2 and PR 7.
+     *
+     * [limit] caps memory inside the window — generous default (200) since
+     * the Home UI takes only 20 from the head. If the window has more rows
+     * than [limit], the oldest get dropped, but at least the user sees a
+     * coherent "last 30 days" slice rather than an arbitrary truncation.
+     */
+    fun observeRecentTransactions(
+        now: java.time.LocalDate = java.time.LocalDate.now(),
+        windowDays: Long = 30,
+        limit: Int = 200,
+    ): Flow<List<CanonicalTransactionEntity>> =
+        database.canonicalTransactionDao().observeRecentTransactionsSince(
+            userId = USER_ID,
+            fromIso = now.minusDays(windowDays).toString(),
+            limit = limit,
+        )
 
     fun observeRecentTransactionCandidates(limit: Int = 20): Flow<List<TransactionCandidateEntity>> =
         database.transactionCandidateDao().observeRecentTransactionCandidates(limit)
 
     fun observePendingInboxItems(limit: Int = 20): Flow<List<InboxItemEntity>> =
         database.inboxItemDao().observeInboxItems(
+            userId = USER_ID,
+            state = InboxDecisionState.PENDING,
+            limit = limit,
+        )
+
+    // Preferred entry point for the Home dashboard's inbox rendering. Joins
+    // each pending inbox row to its candidate at the DB so the UI never has
+    // to do an in-memory lookup against a separate, windowed candidate flow
+    // (which was the source of the "husk row" bug — pending inbox items
+    // rendered with no merchant / amount once the candidate window had
+    // rotated past them). See docs/gravedigging-2026-05-18.md.
+    fun observePendingInboxItemsWithCandidates(limit: Int = 20): Flow<List<InboxItemWithCandidate>> =
+        database.inboxItemDao().observeInboxItemsWithCandidates(
             userId = USER_ID,
             state = InboxDecisionState.PENDING,
             limit = limit,
@@ -815,6 +865,33 @@ class LocalFinanceRepository(
         if (rawEventIds.isEmpty()) return@withContext emptyList()
         rawEventIds.chunked(500).flatMap { chunk ->
             database.dumpOutcomeDao().getDumpOutcomeSnapshot(chunk)
+        }
+    }
+
+    /**
+     * Delete raw_capture_events older than [retentionDays] days. FK cascade
+     * sweeps up parsed_signals → transaction_candidates → inbox_items;
+     * canonical_transactions are preserved by the SET NULL FKs added in H4.
+     *
+     * Debounced to once per 24 hours so a user bouncing the app doesn't
+     * thrash the disk. Pass [force] = true to bypass the debounce (used by
+     * tests and explicit debug actions). Returns the count of raw events
+     * deleted, useful for diagnostics.
+     */
+    suspend fun pruneStaleIngestionRows(
+        now: Instant = Instant.now(),
+        retentionDays: Long = DEFAULT_RAW_EVENT_RETENTION_DAYS,
+        force: Boolean = false,
+    ): Int {
+        val currentMs = now.toEpochMilli()
+        if (!force && currentMs - lastIngestionPruneMs.get() < INGESTION_PRUNE_DEBOUNCE_MS) {
+            return 0
+        }
+        lastIngestionPruneMs.set(currentMs)
+
+        val cutoffIso = now.minusSeconds(retentionDays * 24 * 60 * 60).toString()
+        return withContext(Dispatchers.IO) {
+            database.rawCaptureEventDao().deleteOlderThan(cutoffIso)
         }
     }
 

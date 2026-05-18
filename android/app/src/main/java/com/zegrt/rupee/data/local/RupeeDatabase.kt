@@ -52,7 +52,7 @@ import com.zegrt.rupee.data.local.entity.UserEntity
         MerchantTrustRuleEntity::class,
         RecurringPatternEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 @TypeConverters(RupeeTypeConverters::class)

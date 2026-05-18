@@ -283,12 +283,24 @@ class NotificationSignalNormalizer(
     }
 
     /**
-     * Writes auditable trail rows for a notification the transactional gate
-     * rejected. We could just drop these silently, but persisting them lets us
-     * (a) see why a body was dropped when debugging from dumps, (b) compute a
-     * "notifs received vs notifs accepted" health metric later. The candidate
-     * is written with decisionState = IGNORED so it never reaches Inbox or any
-     * auto-create path.
+     * Writes a parsed_signal row for a notification the transactional gate
+     * rejected. The structuredJson field carries the reject reason +
+     * matched keyword so dump-replay can reconstruct what the gate did
+     * without re-running it.
+     *
+     * Historically (pre-H3-phase-1) this also wrote an IGNORED
+     * transaction_candidates row. That doubled storage cost per rejected
+     * notification AND was the biggest contributor to the recent-candidates
+     * window rotating past real inbox-referenced rows — the structural
+     * cause of the Inbox husk bug compounding on notification-heavy
+     * phones. The candidate row was never read by any UI surface
+     * (decisionState=IGNORED filters in DAOs, no inbox/canonical path
+     * pointed at gate-rejected candidates), so dropping the write is
+     * lossless from the user's POV.
+     *
+     * The parsed_signal row alone provides enough audit detail for the
+     * dump-replay and gate-tuning loops; phase 2's time-based pruning
+     * keeps it bounded.
      */
     private suspend fun writeGateRejectedSignal(
         rawEvent: RawCaptureEventEntity,
@@ -325,32 +337,9 @@ class NotificationSignalNormalizer(
                 syncStatus = SyncStatus.LOCAL_ONLY,
             ),
         )
-        database.transactionCandidateDao().upsertTransactionCandidate(
-            TransactionCandidateEntity(
-                id = UUID.randomUUID().toString(),
-                userId = rawEvent.userId,
-                parsedSignalId = parsedSignalId,
-                candidateType = TransactionCandidateType.UNKNOWN,
-                amountMinor = null,
-                currencyCode = null,
-                fromEntityType = null,
-                fromEntityHint = rawEvent.sourceAppPackage,
-                toEntityName = null,
-                mode = null,
-                occurredAt = rawEvent.deviceEventTime ?: rawEvent.receivedAt,
-                candidateFingerprint = null,
-                confidenceTier = null,
-                decisionState = CandidateDecisionState.IGNORED,
-                decisionReason = CandidateDecisionReason.NOT_TRANSACTIONAL,
-                duplicateOfCandidateId = null,
-                linkedInboxItemId = null,
-                linkedCanonicalTransactionId = null,
-                normalizationVersion = "v1",
-                createdAt = now,
-                updatedAt = now,
-                syncStatus = SyncStatus.LOCAL_ONLY,
-            ),
-        )
+        // Intentionally NOT writing a transaction_candidates row here — see
+        // function doc above. The parsed_signal row's structuredJson is the
+        // audit trail.
     }
 
     private suspend fun applyBillDueToCard(
@@ -428,9 +417,7 @@ class NotificationSignalNormalizer(
         status: CanonicalTransactionStatus = CanonicalTransactionStatus.SUGGESTED,
         overrideCategoryId: String? = null,
     ): String {
-        val canonicalType = if (parseResult.transactionKind == ParsedTransactionKind.INCOME)
-            CanonicalTransactionType.INCOME
-        else CanonicalTransactionType.EXPENSE
+        val canonicalType = canonicalTypeFor(parseResult.transactionKind)
         val canonicalTransaction = CanonicalTransactionEntity(
             id = UUID.randomUUID().toString(),
             userId = rawEvent.userId,
@@ -477,5 +464,64 @@ class NotificationSignalNormalizer(
             CandidateDecisionReason.NOT_TRANSACTIONAL ->
                 InboxReasonCode.AMBIGUOUS_KIND
         }
+    }
+
+    companion object {
+        /**
+         * Map a parser-layer [ParsedTransactionKind] to the user-facing
+         * [CanonicalTransactionType] used by the ledger.
+         *
+         * The parser layer has more granularity than the ledger needs —
+         * REFUND, BILL_DUE, STATEMENT, PAYMENT, EMI, RECURRING_CANDIDATE
+         * all show up there but the ledger only has EXPENSE / INCOME /
+         * TRANSFER / CASH_ADJUSTMENT at the top level. This function is
+         * the single source of truth for that flattening.
+         *
+         * Exhaustive `when` over the enum is deliberate — adding a new
+         * [ParsedTransactionKind] without updating this function will
+         * fail compilation, which is exactly the safety net we want.
+         * Kotlin doesn't require exhaustiveness on enum-typed `when`
+         * expressions in statement position, but we use it in expression
+         * position so the compiler enforces it.
+         *
+         * Visibility: companion-internal so tests can call it without
+         * spinning up a Room database. The mapping is pure — no
+         * dependencies on the enclosing class's state.
+         */
+        internal fun canonicalTypeFor(kind: ParsedTransactionKind): CanonicalTransactionType =
+            when (kind) {
+                // Money into the user: explicit income and refunds/cashback.
+                // Pinning REFUND alongside INCOME here means a future kind-
+                // rename will surface as a compile error rather than a silent
+                // rerouting (the bug that motivated this whole helper).
+                ParsedTransactionKind.INCOME,
+                ParsedTransactionKind.REFUND -> CanonicalTransactionType.INCOME
+
+                // Money out (or about to be):
+                //  - SPEND: standard debit.
+                //  - BILL_DUE: doesn't currently write a canonical txn —
+                //    applyBillDueToCard handles the side-effect on
+                //    credit_cards — but mapped conservatively here so any
+                //    future path that does write one gets the right type.
+                //  - PAYMENT: e.g. CRED "card bill paid via CRED" — flattened
+                //    here as EXPENSE since cash leaves the user's bank
+                //    account. The parser tags the candidate as
+                //    TransactionCandidateType.TRANSFER (cash → card is a
+                //    transfer between user-owned accounts), so this
+                //    flattening is a known-lossy step; see gravedigging
+                //    audit M-followup for restoring TRANSFER fidelity.
+                //  - EMI / STATEMENT / RECURRING_CANDIDATE: future-debit
+                //    semantics; same treatment as BILL_DUE.
+                //  - UNKNOWN: conservative default so a body that somehow
+                //    bypassed parsing still surfaces in monthly spend rather
+                //    than masking the failure.
+                ParsedTransactionKind.SPEND,
+                ParsedTransactionKind.BILL_DUE,
+                ParsedTransactionKind.EMI,
+                ParsedTransactionKind.PAYMENT,
+                ParsedTransactionKind.STATEMENT,
+                ParsedTransactionKind.RECURRING_CANDIDATE,
+                ParsedTransactionKind.UNKNOWN -> CanonicalTransactionType.EXPENSE
+            }
     }
 }
