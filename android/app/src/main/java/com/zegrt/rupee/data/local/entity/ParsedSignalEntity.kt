@@ -1,6 +1,7 @@
 package com.zegrt.rupee.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
@@ -24,6 +25,18 @@ enum class ParsedTransactionKind {
         Index("providerHint"),
         Index("transactionKind"),
         Index("eventOccurredAt"),
+    ],
+    // CASCADE: a parsed_signal has no meaning without its raw_capture_event.
+    // Deleting a raw row should sweep up its downstream signals (and via the
+    // chain below, candidates + inbox items). This is what makes time-based
+    // pruning (gravedigging H3) safe to implement without leaking orphans.
+    foreignKeys = [
+        ForeignKey(
+            entity = RawCaptureEventEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["rawCaptureEventId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
     ],
 )
 data class ParsedSignalEntity(
