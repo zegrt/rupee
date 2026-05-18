@@ -5,17 +5,33 @@ Local drop-folder for notification dumps shared off the device.
 ## How to use it
 
 1. In a debug build of Rupee, open Debug → Notification dumps → Share dump file.
-2. Save the shared `rupee-notif-dumps-{version}-{device}-{stamp}.jsonl` somewhere
-   you can reach from this laptop (Drive, AirDrop, email, etc.).
-3. Drop the file into this folder.
-4. Point Claude at it ("look at the latest dump in `dumps/`" works) and we can
-   triage parser misses, see which bodies produced surprising Inbox rows, etc.
+2. The share intent now attaches **two files** (same `{version}-{device}-{stamp}`
+   suffix so they pair by name):
+   - `rupee-notif-dumps-…jsonl` — raw notification text + ingest-time outcome.
+   - `rupee-notif-outcomes-…jsonl` — joined DB snapshot keyed by `rawEventId`:
+     current candidate / inbox / canonical state, plus `mergedIntoExistingTxnId`
+     when the user merged into a pre-existing row.
+3. Save both somewhere you can reach from this laptop (Drive, AirDrop, email, etc.).
+4. Drop both files into this folder.
+5. Point Claude at it ("look at the latest dump in `dumps/`" works) and we can
+   triage parser misses, see which bodies produced surprising Inbox rows, and
+   join against `outcomes.jsonl` to see what the user did with each.
+
+The dump captures **decision at ingest time**; the outcomes file captures
+**state at export time**. Different snapshots, complementary purposes — see
+`docs/dump-enrichment-followups.md` for the full schema.
 
 ## Privacy
 
 Every file in this folder is gitignored by `dumps/.gitignore` except this README
 and the gitignore itself. Notification bodies typically contain account numbers,
 merchant names, amounts — nothing in here will ever land in the repo by accident.
+
+The outcomes file goes further: it includes the user's **post-edit** merchant
+names and notes from `canonical_transactions`. That's deliberate — replay tooling
+needs to see the user's renames to learn what categorization signals the parser
+missed — but it means PII the bank's body didn't contain can still appear here.
+Treat outcomes files with the same care as raw dumps.
 
 ## Don't commit
 

@@ -21,10 +21,12 @@ import com.zegrt.rupee.diagnostics.CrashReporter
 import com.zegrt.rupee.diagnostics.NotificationDumper
 import com.zegrt.rupee.ingestion.NotificationParserRegistry
 import java.time.Instant
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class SampleNotification(
     val label: String,
@@ -134,43 +136,97 @@ class DebugViewModel(
             return
         }
 
-        // Copy to a uniquely-named file before sharing so multiple shares don't
-        // overwrite each other in the recipient's downloads folder, and the
-        // file is self-describing: app version + device + ISO-ish timestamp.
-        // Example: rupee-notif-dumps-0.13.1-Pixel-7-20260513-104215.jsonl
+        // Uniquely-named copies so multiple shares don't overwrite each other
+        // in the recipient's downloads folder. Both files share a stamp so
+        // dumps + outcomes can be paired by name.
+        // Examples:
+        //   rupee-notif-dumps-0.13.1-Pixel-7-20260513-104215.jsonl
+        //   rupee-notif-outcomes-0.13.1-Pixel-7-20260513-104215.jsonl
         val device = "${Build.MANUFACTURER}-${Build.MODEL}"
             .replace(Regex("[^A-Za-z0-9-]"), "")
             .take(24)
         val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US)
             .apply { timeZone = java.util.TimeZone.getDefault() }
             .format(java.util.Date())
-        val shareName = "rupee-notif-dumps-${BuildConfig.VERSION_NAME}-$device-$stamp.jsonl"
-        val sharedFile = java.io.File(dir, shareName)
-        // Tidy: drop any prior shared copies so the folder doesn't accumulate.
-        dir.listFiles { _, name -> name.startsWith("rupee-notif-dumps-") }
-            ?.forEach { it.delete() }
-        runCatching { source.copyTo(sharedFile, overwrite = true) }
-            .onFailure {
+        val baseStem = "${BuildConfig.VERSION_NAME}-$device-$stamp"
+        val dumpShareName = "rupee-notif-dumps-$baseStem.jsonl"
+        val outcomesShareName = "rupee-notif-outcomes-$baseStem.jsonl"
+        val sharedDumpFile = java.io.File(dir, dumpShareName)
+        val sharedOutcomesFile = java.io.File(dir, outcomesShareName)
+        // Phase 2a: do the file copy, snapshot build, and outcomes write off
+        // the main thread. viewModelScope dispatches on Main.immediate so the
+        // share intent at the end still fires on the UI thread as required.
+        viewModelScope.launch {
+            val copyOk = withContext(Dispatchers.IO) {
+                // Tidy stale shared copies first so the folder doesn't accumulate.
+                dir.listFiles { _, name ->
+                    name.startsWith("rupee-notif-dumps-") || name.startsWith("rupee-notif-outcomes-")
+                }?.forEach { it.delete() }
+                runCatching { source.copyTo(sharedDumpFile, overwrite = true) }.isSuccess
+            }
+            if (!copyOk) {
                 _uiState.value = _uiState.value.copy(message = "Couldn't prepare dump for sharing.")
-                return
+                return@launch
+            }
+            // Read ids from the snapshotted copy, not the live dump, so any
+            // notification that lands between the copy above and this parse
+            // can't appear in outcomes-but-not-in-dump.
+            val rawEventIds = withContext(Dispatchers.IO) {
+                NotificationDumper.parseRawEventIdsFromDump(sharedDumpFile)
+            }
+            val outcomesUri: android.net.Uri? = if (rawEventIds.isNotEmpty()) {
+                runCatching {
+                    val snapshots = repository.getDumpOutcomeSnapshot(rawEventIds)
+                    withContext(Dispatchers.IO) {
+                        NotificationDumper.writeOutcomesFile(sharedOutcomesFile, snapshots)
+                    }
+                    androidx.core.content.FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        sharedOutcomesFile,
+                    )
+                }.getOrNull()
+            } else {
+                null
             }
 
-        val uri = androidx.core.content.FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            sharedFile,
-        )
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "application/json"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, "Rupee notification dump — $shareName")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        runCatching {
-            context.startActivity(Intent.createChooser(intent, "Share dumps").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }.onFailure {
-            _uiState.value = _uiState.value.copy(message = "No share target available.")
+            val dumpUri = androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                sharedDumpFile,
+            )
+
+            // ACTION_SEND_MULTIPLE so the user sees both files in the chooser.
+            // Falls back to ACTION_SEND for dump-only when outcomes failed to
+            // build — a share that loses the dump because the snapshot blew up
+            // would be a regression.
+            val intent = if (outcomesUri != null) {
+                Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                    type = "application/json"
+                    putParcelableArrayListExtra(
+                        Intent.EXTRA_STREAM,
+                        arrayListOf(dumpUri, outcomesUri),
+                    )
+                    putExtra(Intent.EXTRA_SUBJECT, "Rupee notification dump + outcomes — $baseStem")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            } else {
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "application/json"
+                    putExtra(Intent.EXTRA_STREAM, dumpUri)
+                    putExtra(Intent.EXTRA_SUBJECT, "Rupee notification dump — $dumpShareName")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            }
+            runCatching {
+                context.startActivity(
+                    Intent.createChooser(intent, "Share dumps").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }.onFailure {
+                _uiState.value = _uiState.value.copy(message = "No share target available.")
+            }
         }
     }
 

@@ -9,6 +9,7 @@ import com.zegrt.rupee.data.local.dao.CanonicalTransactionDao
 import com.zegrt.rupee.data.local.dao.CategoryDao
 import com.zegrt.rupee.data.local.dao.CreditCardDao
 import com.zegrt.rupee.data.local.dao.BudgetDao
+import com.zegrt.rupee.data.local.dao.DumpOutcomeDao
 import com.zegrt.rupee.data.local.dao.EmiPlanDao
 import com.zegrt.rupee.data.local.dao.InboxItemDao
 import com.zegrt.rupee.data.local.dao.MerchantTrustRuleDao
@@ -70,4 +71,5 @@ abstract class RupeeDatabase : RoomDatabase() {
     abstract fun merchantTrustRuleDao(): MerchantTrustRuleDao
     abstract fun emiPlanDao(): EmiPlanDao
     abstract fun recurringPatternDao(): RecurringPatternDao
+    abstract fun dumpOutcomeDao(): DumpOutcomeDao
 }
