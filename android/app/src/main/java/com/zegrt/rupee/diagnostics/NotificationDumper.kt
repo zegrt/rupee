@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Bundle
 import android.service.notification.StatusBarNotification
 import com.zegrt.rupee.BuildConfig
+import com.zegrt.rupee.data.local.dao.DumpOutcomeSnapshot
 import com.zegrt.rupee.ingestion.IngestionResult
 import java.io.File
 import java.time.Instant
@@ -73,8 +74,80 @@ object NotificationDumper {
         directory(context)?.let { File(it, FILE_NAME) }?.takeIf(File::exists)?.length() ?: 0L
 
     fun clear(context: Context) {
-        // Wipe the live dump plus any shared-copy artefacts (rupee-notif-dumps-*.jsonl).
+        // Wipe the live dump plus any shared-copy artefacts (rupee-notif-dumps-*.jsonl,
+        // rupee-notif-outcomes-*.jsonl).
         directory(context)?.listFiles()?.forEach { it.delete() }
+    }
+
+    /**
+     * Pulls every `outcome.rawEventId` out of the live dump file. Phase 2a's
+     * share path uses this to build the id list for the joined snapshot query.
+     *
+     * Regex over a full JSON parse — at 4 MB / ~2.5k lines this runs in tens
+     * of milliseconds, vs the JSON parser's hundreds. Filtered outcomes have
+     * no rawEventId; they're skipped automatically (the regex matches the
+     * literal field, which they don't emit).
+     *
+     * Returned ids preserve dump order and are de-duplicated — a rawEventId
+     * shows up at most once per ingest, but defensive dedupe protects against
+     * future format changes (e.g. multi-pass re-ingest writing twice).
+     */
+    fun parseRawEventIdsFromDump(file: File): List<String> {
+        if (!file.exists()) return emptyList()
+        val seen = LinkedHashSet<String>()
+        val pattern = Regex("\"rawEventId\":\"([^\"]+)\"")
+        file.bufferedReader().useLines { lines ->
+            for (line in lines) {
+                pattern.find(line)?.groupValues?.getOrNull(1)?.let(seen::add)
+            }
+        }
+        return seen.toList()
+    }
+
+    /**
+     * Emit one JSON line per [DumpOutcomeSnapshot] to [outFile]. Format mirrors
+     * the main dump's per-field encoding so the same downstream tooling can
+     * parse both. Returns the file for share-intent wiring.
+     *
+     * Schema is keyed by `rawEventId` — pair with `dumps.jsonl` via that
+     * field. Every line carries the same `dumpFormatVersion` / `appVersion`
+     * pair as the main dump so replay scripts can pin schemas in lockstep.
+     */
+    fun writeOutcomesFile(outFile: File, snapshots: List<DumpOutcomeSnapshot>): File {
+        outFile.parentFile?.mkdirs()
+        outFile.bufferedWriter().use { writer ->
+            for (snapshot in snapshots) {
+                writer.write(snapshotJson(snapshot))
+                writer.newLine()
+            }
+        }
+        return outFile
+    }
+
+    private fun snapshotJson(snapshot: DumpOutcomeSnapshot): String = buildString {
+        append('{')
+        appendField("dumpFormatVersion", DUMP_FORMAT_VERSION.toString(), quote = false); append(',')
+        appendField("appVersion", BuildConfig.VERSION_NAME); append(',')
+        appendField("rawEventId", snapshot.rawEventId); append(',')
+        appendField("parserKey", snapshot.parserKey); append(',')
+        appendField("parserVersion", snapshot.parserVersion); append(',')
+        appendField("transactionKind", snapshot.transactionKind); append(',')
+        appendField("candidateId", snapshot.candidateId); append(',')
+        appendField("candidateDecisionState", snapshot.candidateDecisionState); append(',')
+        appendField("candidateDecisionReason", snapshot.candidateDecisionReason); append(',')
+        appendField("inboxItemId", snapshot.inboxItemId); append(',')
+        appendField("inboxDecisionState", snapshot.inboxDecisionState); append(',')
+        appendField("inboxResolvedAt", snapshot.inboxResolvedAt); append(',')
+        appendField("inboxLinkedCanonicalTxnId", snapshot.inboxLinkedCanonicalTxnId); append(',')
+        appendField("canonicalTxnId", snapshot.canonicalTxnId); append(',')
+        appendField("canonicalStatus", snapshot.canonicalStatus); append(',')
+        appendField("canonicalType", snapshot.canonicalType); append(',')
+        appendField("canonicalAmountMinor", snapshot.canonicalAmountMinor?.toString(), quote = false); append(',')
+        appendField("canonicalMerchantName", snapshot.canonicalMerchantName); append(',')
+        appendField("canonicalCategoryId", snapshot.canonicalCategoryId); append(',')
+        appendField("canonicalNotes", snapshot.canonicalNotes); append(',')
+        appendField("mergedIntoExistingTxnId", snapshot.mergedIntoExistingTxnId)
+        append('}')
     }
 
     private fun ensureFile(context: Context): File? {

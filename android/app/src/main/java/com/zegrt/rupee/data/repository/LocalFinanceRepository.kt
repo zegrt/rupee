@@ -798,6 +798,21 @@ class LocalFinanceRepository(
         database.recurringPatternDao().observePatterns(USER_ID).first()
     }
 
+    // Phase 2a of dump enrichment. Caller (DebugViewModel) passes the
+    // rawEventId list parsed out of the live dump file; we join across
+    // parsed_signals → transaction_candidates → inbox_items → canonical_transactions
+    // to produce a "current state at export time" snapshot per id.
+    // Chunked because SQLite's older parameter cap is 999 — dumps top out at
+    // ~2.5k entries today; 500 leaves headroom for the rest of the WHERE clause.
+    suspend fun getDumpOutcomeSnapshot(
+        rawEventIds: List<String>,
+    ): List<com.zegrt.rupee.data.local.dao.DumpOutcomeSnapshot> = withContext(Dispatchers.IO) {
+        if (rawEventIds.isEmpty()) return@withContext emptyList()
+        rawEventIds.chunked(500).flatMap { chunk ->
+            database.dumpOutcomeDao().getDumpOutcomeSnapshot(chunk)
+        }
+    }
+
     suspend fun wipeRawCaptureData() {
         // Drop only the raw notification bodies, not the derived transactions / candidates.
         // Future ingestion will rebuild fingerprints from new events.

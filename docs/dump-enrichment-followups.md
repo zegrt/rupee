@@ -1,10 +1,10 @@
 # Dump enrichment — followups
 
-Phase 1 shipped on branch `dump-enrichment` (commit `ce86869`). Each dump line now
-carries an `outcome{}` block describing what the ingestion pipeline did with the
-notification. Two phases remain — Phase 2a is planned, Phase 2b is optional.
+Phase 1 shipped on branch `dump-enrichment` (commit `ce86869`). Phase 2a shipped on the
+same branch — the share button now emits a sibling `outcomes.jsonl` alongside the raw
+`dumps.jsonl`. Phase 2b remains optional (not shipped).
 
-## Phase 2a — DB-snapshot at export time
+## Phase 2a — DB-snapshot at export time  *(shipped)*
 
 **Goal:** when the user shares a dump, also emit a sibling `outcomes.jsonl`
 file that joins each `rawEventId` (from Phase 1 dump lines) to the **current**
@@ -96,19 +96,42 @@ complementary purposes:
 - Tests for the joined query (in-memory Room) and for the dump → id-list
   parser
 
-### Risks
+### What shipped
 
-- **In-memory Room test setup** — the project doesn't currently have one. The
-  joined query is the first thing that genuinely needs it. Adds
-  `androidx.room:room-testing` to `androidTestImplementation` OR write the
-  test as a JVM unit test backed by `Room.inMemoryDatabaseBuilder` (works on
-  JDK with `useLightweight` builder; Robolectric is overkill).
-- **Schema drift** — if `inbox_items` or `transaction_candidates` columns
-  rename, the query and POJO need updating in two places. Mitigation: a
-  single test fixture that exercises the full join.
-- **Dump-line parsing for raw event ids** — full JSON parse per line is
-  overkill. A regex on `"rawEventId":"<uuid>"` is sufficient and ~10× faster
-  on a 4 MB file.
+- `data/local/dao/DumpOutcomeDao.kt` — single `@Query` joining
+  `parsed_signals → transaction_candidates → inbox_items → canonical_transactions`,
+  returning `List<DumpOutcomeSnapshot>` by `rawEventId IN (:ids)`.
+- `LocalFinanceRepository.getDumpOutcomeSnapshot(rawEventIds)` — chunks at 500
+  ids to stay under SQLite's older 999-parameter cap.
+- `NotificationDumper.parseRawEventIdsFromDump(file)` — regex over the live
+  dump (`"rawEventId":"..."`), order-preserving + deduping. `Filtered` lines
+  are skipped automatically since they don't emit the field.
+- `NotificationDumper.writeOutcomesFile(outFile, snapshots)` — JSONL emitter
+  pinned by `DumpOutcomeExporterTest` (5 cases: id parser order/dedupe,
+  missing-file, null-field encoding, confirm-fresh, merge-into-existing).
+- `DebugViewModel.shareNotificationDumps` — now uses `ACTION_SEND_MULTIPLE`
+  with paired stamps (`rupee-notif-dumps-…` + `rupee-notif-outcomes-…`).
+  Falls back to single-file `ACTION_SEND` if the snapshot build fails so a
+  share never loses the dump.
+
+### Followup: in-memory Room coverage
+
+The joined query is validated at compile time by Room/KSP, and the JSONL
+emitter has unit-test coverage. We deliberately did **not** add the in-memory
+Room test infrastructure described in the original plan — adding the first
+instrumented test of its kind is its own piece of work, and KSP catches column
+renames at build time. When we do add it, the fixture should exercise:
+
+- Filtered raw event → row with `rawEventId` only, everything else null
+- Gate-rejected raw event → same shape (still no candidate / inbox / canonical)
+- Auto-created candidate → candidate + canonical populated, no inbox row
+- Inbox confirm-fresh → candidate, inbox, canonical all populated;
+  `mergedIntoExistingTxnId` is null
+- Inbox confirm-merged-with-existing → `mergedIntoExistingTxnId` matches
+  `inboxLinkedCanonicalTxnId` and both differ from `txn-<candidateId>`
+- Inbox dismissed → `inboxDecisionState = DISMISSED`, no canonical row
+- Canonical edited post-confirm → `canonicalMerchantName/categoryId/notes`
+  reflect the latest edit (snapshot is "current state at export time")
 
 ## Phase 2b — Inline action log (OPTIONAL — can do if needed)
 
@@ -144,8 +167,6 @@ mistake?"), which isn't a question we're asking yet.
 
 ## Doc-touch followups (small)
 
-- `dumps/README.md` should be updated post-Phase-2a to mention the sibling
-  `outcomes.jsonl` and how to use it. Current README only covers the raw
-  dump.
-- `docs/notification-ingestion-deep-dive.md` (if it covers the dump) needs
-  a "what's in the outcome block" section pointing at `IngestionResult.kt`.
+- `dumps/README.md` updated with the sibling `outcomes.jsonl`.
+- `docs/notification-ingestion-deep-dive.md` (if it covers the dump) still
+  needs a "what's in the outcome block" section pointing at `IngestionResult.kt`.
