@@ -22,6 +22,7 @@ class NotificationParserParseTest {
     private val genericUpi = GenericUpiNotificationParser()
     private val emi = EmiNotificationParser()
     private val kotak = KotakNotificationParser()
+    private val atm = AtmNotificationParser()
 
     // ── GPay ──────────────────────────────────────────────────────────────────
 
@@ -508,6 +509,77 @@ class NotificationParserParseTest {
         val result = phonepe.parse(event(body = "₹500.00 sent to Swiggy via PhonePe"))
         assertEquals(ParsedTransactionKind.SPEND, result.transactionKind)
         assertEquals(TransactionCandidateType.SPEND, result.candidateType)
+    }
+
+    // ── ATM (M3a) ─────────────────────────────────────────────────────────────
+    //
+    // ATM withdrawals route to CASH_WITHDRAWAL → CASH_ADJUSTMENT canonical
+    // type, which is excluded from monthly spend totals. The parser must
+    // claim ATM bodies AHEAD of the bank-specific parsers (which would
+    // otherwise treat the same body as SPEND and inflate the user's spend
+    // numbers). Registry order is pinned in NotificationParserRegistry.
+
+    @Test
+    fun `atm hdfc cash wdl body routes to CASH_WITHDRAWAL`() {
+        val result = atm.parse(
+            event(body = "ATM Cash Wdl Rs.5,000 from A/c XX1234 on 12-May-26 at HDFC Bank ATM Delhi")
+        )
+        assertEquals(500000L, result.amountMinor)
+        assertEquals("1234", result.maskedDigits)
+        assertEquals(Mode.ATM, result.mode)
+        assertEquals("notification_atm", result.parserKey)
+        assertEquals(ParsedTransactionKind.SPEND, result.transactionKind)
+        assertEquals(TransactionCandidateType.CASH_WITHDRAWAL, result.candidateType)
+        // amount + maskedDigits both present → HIGH tier (0.85)
+        assertEquals(0.85, result.parseConfidence, 0.0001)
+    }
+
+    @Test
+    fun `atm icici cash withdrawal body routes to CASH_WITHDRAWAL`() {
+        val result = atm.parse(
+            event(body = "Cash withdrawal of Rs.10,000 from your ICICI Bank A/c XX5678 via ATM on 12-May-26")
+        )
+        assertEquals(1000000L, result.amountMinor)
+        assertEquals("5678", result.maskedDigits)
+        assertEquals(TransactionCandidateType.CASH_WITHDRAWAL, result.candidateType)
+    }
+
+    @Test
+    fun `atm withdrawn-from body routes to CASH_WITHDRAWAL`() {
+        // Most generic body shape — verb "withdrawn" + "ATM" anywhere
+        // in the body. Covers SBI/Axis variants.
+        val result = atm.parse(
+            event(body = "Rs.2,000 has been withdrawn from XX9999 at ATM/POS on 12-May-26")
+        )
+        assertEquals(200000L, result.amountMinor)
+        assertEquals("9999", result.maskedDigits)
+        assertEquals(TransactionCandidateType.CASH_WITHDRAWAL, result.candidateType)
+    }
+
+    @Test
+    fun `atm canParse rejects bodies with no money signal`() {
+        // Sanity: "atm" alone (without an amount / verb) shouldn't claim
+        // the body. Defensive — the gate would also reject this — but
+        // belt-and-braces.
+        val rawEvent = event(body = "Your new ATM card has been dispatched. Track at ...")
+        // amount = null and no "withdrawn"/"wdl"/etc. → canParse should
+        // return false so the body falls through to other parsers.
+        // (TransactionalGate would reject this body before it reaches a
+        // parser in production, but canParse defines the contract.)
+        assert(!atm.canParse(rawEvent)) {
+            "ATM parser should not claim bodies without a money signal"
+        }
+    }
+
+    @Test
+    fun `atm merchant surfaces with location when present`() {
+        val result = atm.parse(
+            event(body = "ATM Cash Wdl Rs.5,000 from A/c XX1234 at HDFC Bank ATM Andheri East")
+        )
+        // Location is decorative — the assertion is loose (contains the
+        // brand) to allow the location regex to evolve without churning
+        // the test. The "ATM Cash · " prefix is the contract.
+        assertEquals(true, result.toEntityName?.startsWith("ATM Cash"))
     }
 
     private fun event(
