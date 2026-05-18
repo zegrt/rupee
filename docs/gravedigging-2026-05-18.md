@@ -42,7 +42,7 @@ remediations" section at the end groups them into one structural pass.
 | M6  | Silent error swallowing on share / snapshot paths              | Medium   | ~20 LOC      |
 | M7  | `findMatchingCard` falls back to the only active card          | Medium   | ~5 LOC       |
 | L1  | "Coming soon" half-features still wired into UI                | Low      | N/A          |
-| L2  | No tests on `TransactionalGate` or `NotificationSignalNormalizer` | Low   | ~200 LOC     |
+| L2  | Sparse tests on `NotificationSignalNormalizer` (ledger-type mapping) | Low   | ~50 LOC     |
 | L3  | `CrashReporter` returns empty string indistinguishably from no-log | Low | ~5 LOC      |
 | L4  | `fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4)` data-loss risk | Low | N/A      |
 | L5  | `MainActivity.kt` is 2279 lines — single-file UI                | Low      | Refactor     |
@@ -351,7 +351,8 @@ analogous "negative-side missing vocabulary" pattern.
 **Proposed fix.**
 1. Add the missing phrases to `POSITIVE_VERBS` (or split into a dedicated
    `STRONG_TRANSACTIONAL_PHRASES` if any overlap with the spam side).
-2. **Add tests** for each (currently zero coverage on this file — see L2).
+2. **Add tests** for each — `TransactionalGateTest` has a real-dump
+   corpus pattern that's easy to extend; drop one fixture per phrase.
 3. Make a habit of dump-replay: every release, pull the latest production
    dumps, filter for `outcome.kind = gate_rejected` lines, eyeball the
    reasons. Anything that *should* have been transactional becomes a
@@ -523,14 +524,23 @@ return cards.singleOrNull()
 Track each as a real ticket or remove the placeholder. Comment debt
 accumulates fast in personal projects.
 
-## L2. Missing tests on critical ingestion components
+## L2. Sparse tests on critical ingestion components
 
-- `TransactionalGate` — zero test coverage. H1 (refund routing) and M2
-  (gate vocab) would have been caught with even smoke tests.
-- `NotificationSignalNormalizer` — zero unit/integration tests. The
-  whole ingest pipeline is exercised only end-to-end via
-  `NotificationParserParseTest`, which doesn't cover the normalizer's
-  decision branches.
+> **Correction (post-audit).** The audit agent's grep missed
+> `TransactionalGateTest.kt`. That file actually has 20+ accept/
+> reject cases drawn from real production dumps and the v0.13.4
+> Kotak marketing-push regression — coverage there is fine. The
+> remaining gaps are below.
+
+- `NotificationSignalNormalizer` — historically zero direct
+  unit/integration tests; the whole ingest pipeline was exercised
+  only end-to-end via `NotificationParserParseTest`. The phase-1
+  test-net commit on this branch carves the canonical-type slice
+  out into a pure `canonicalTypeFor` helper and pins it with
+  `CanonicalTypeMappingTest` (one case per `ParsedTransactionKind`
+  enum value). Other decision branches inside `normalizeLocked`
+  (dedupe / trustRule / baseDecision merging) remain untested at
+  the unit level and need an in-memory Room fixture to cover.
 - DAO tests — none. PR #37's followup (in-memory Room fixture) blocks
   on this.
 
@@ -564,14 +574,14 @@ H2's time-based queries), every screen needs to become Lazy.
 
 ## Suggested remediation roadmap
 
-A structural pass that lands these in dependency order. Each step is
-its own PR; merge before the next starts. Estimated cumulative effort:
-~1 week of focused work; longer with thorough testing.
+A structural pass that lands these in dependency order. Estimated
+cumulative effort: ~1 week of focused work; longer with thorough
+testing.
 
-### Week 1 — kill the bugs
-1. **Inbox husk fix** (the bug user verbally reported; diagnosis is in
-   chat history). New `InboxItemWithCandidate` POJO with `@Embedded`
-   + `@Relation`. Single-PR fix.
+### Week 1 — kill the bugs *(shipped on this branch)*
+1. **Inbox husk fix** — new `InboxItemWithCandidate` POJO with
+   `@Embedded` + `@Relation`. Joined at the DB so husks become
+   structurally impossible.
 2. **H1 — refund classification** (~30 LOC + tests). Highest user-visible
    correctness win.
 3. **L2 — minimum viable tests** for `TransactionalGate` and
