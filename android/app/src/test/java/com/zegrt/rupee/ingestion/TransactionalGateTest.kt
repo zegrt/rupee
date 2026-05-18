@@ -167,6 +167,74 @@ class TransactionalGateTest {
         assertAccept(body)
     }
 
+    // ── M2 vocabulary gaps closed in phase 3a ──────────────────────────────────
+    //
+    // Each block below corresponds to a phrase added to POSITIVE_VERBS.
+    // Before the fix, the gate false-rejected these as NO_TRANSACTIONAL_VERB
+    // even though they describe real money movements.
+
+    @Test
+    fun `accept SIP installment debit`() {
+        val body = "SIP of Rs.5,000 has been debited from your account towards HDFC Mutual Fund."
+        assertAccept(body)
+    }
+
+    @Test
+    fun `accept SIP installment without explicit debit verb`() {
+        // The "debited" above would already pass — pin the no-other-verb shape
+        // too, since some bank apps phrase it as just "SIP installment of …"
+        val body = "SIP installment of Rs.5,000 processed for HDFC Top 100 Fund."
+        assertAccept(body)
+    }
+
+    @Test
+    fun `accept NACH mandate debit`() {
+        val body = "Rs.12,500 has been processed via NACH mandate for LIC Premium."
+        assertAccept(body)
+    }
+
+    @Test
+    fun `accept ECS debit`() {
+        val body = "ECS debit of Rs.3,200 has been processed from your account for HDFC home loan."
+        assertAccept(body)
+    }
+
+    @Test
+    fun `accept standing instruction executed`() {
+        // "standing instruction" without any other verb still describes a
+        // money movement — auto-pay execution alert.
+        val body = "Standing instruction of Rs.999 has been executed for Netflix subscription."
+        assertAccept(body)
+    }
+
+    @Test
+    fun `accept refund of body`() {
+        // "Refunded" is in POSITIVE_VERBS but the slight variant "Refund of"
+        // would slip through without the dedicated phrase.
+        val body = "Refund of Rs.499 from Swiggy has been processed to your account."
+        assertAccept(body)
+    }
+
+    @Test
+    fun `accept chargeback body`() {
+        val body = "Chargeback of Rs.1,200 for transaction #ABC123 has been issued to your card."
+        assertAccept(body)
+    }
+
+    @Test
+    fun `accept reversal body`() {
+        val body = "Reversal of Rs.500 has been initiated for your failed transaction."
+        assertAccept(body)
+    }
+
+    @Test
+    fun `accept reversed body`() {
+        // Past-tense variant. Auto-debit failures often phrase it as "Rs.X
+        // reversed to A/c YY1234".
+        val body = "Rs.500 reversed to A/c XX1234 — original transaction declined."
+        assertAccept(body)
+    }
+
     // ── Bodies with neither verbs nor promo keywords ───────────────────────────
 
     @Test
