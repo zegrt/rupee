@@ -3,6 +3,7 @@ package com.zegrt.rupee
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.util.Log
 import androidx.room.Room
 import com.zegrt.rupee.budget.BudgetAlertManager
 import com.zegrt.rupee.budget.DuesAlertManager
@@ -14,6 +15,10 @@ import com.zegrt.rupee.data.local.RupeeDatabase
 import com.zegrt.rupee.diagnostics.CrashReporter
 import com.zegrt.rupee.data.repository.LocalFinanceRepository
 import com.zegrt.rupee.onboarding.OnboardingPreferences
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class RupeeApplication : Application() {
     val database: RupeeDatabase by lazy {
@@ -43,6 +48,8 @@ class RupeeApplication : Application() {
         DuesAlertManager(applicationContext)
     }
 
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override fun onCreate() {
         super.onCreate()
         CrashReporter.install(this)
@@ -56,6 +63,19 @@ class RupeeApplication : Application() {
         )
         budgetAlertManager.registerChannel()
         duesAlertManager.registerChannel()
+
+        // Ingestion-table prune. Debounced inside the repository to once per
+        // 24h, so cheap to fire on every cold start. Launched fire-and-forget
+        // on an app-scoped SupervisorJob so a failure doesn't take down the
+        // app; logged on success so the count shows up in logcat for
+        // diagnostics.
+        appScope.launch {
+            runCatching { localFinanceRepository.pruneStaleIngestionRows() }
+                .onSuccess { deleted ->
+                    if (deleted > 0) Log.i("RupeeApp", "Pruned $deleted stale raw events (+ FK-cascaded children)")
+                }
+                .onFailure { Log.w("RupeeApp", "Pruning stale ingestion rows failed", it) }
+        }
     }
 
     companion object {

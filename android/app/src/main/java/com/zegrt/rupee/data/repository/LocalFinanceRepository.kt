@@ -54,11 +54,27 @@ class LocalFinanceRepository(
     private val recurringDetector: RecurringDetectionEngine = RecurringDetectionEngine(),
 ) {
     private val lastRecurringRefreshMs = AtomicLong(0L)
+    private val lastIngestionPruneMs = AtomicLong(0L)
 
     companion object {
         private const val USER_ID = "local-user"
         private const val DEFAULT_MONTHLY_BUDGET_MINOR = 4_000_000L
         private const val RECURRING_REFRESH_DEBOUNCE_MS = 30 * 60 * 1000L
+
+        // Pruning runs at most once per 24 hours. Cheap-enough to call on
+        // every cold start without nagging the disk; spaced enough that a
+        // user bouncing the app several times in a session doesn't trigger
+        // it.
+        private const val INGESTION_PRUNE_DEBOUNCE_MS = 24 * 60 * 60 * 1000L
+
+        // Default retention window for raw_capture_events. Beyond 90 days
+        // the gate-rejected telemetry has diminishing value (parsers evolve
+        // faster than that) and dump-replay against ancient bodies is
+        // rarely useful. User-confirmed canonical transactions are NOT
+        // affected by this prune — H4's FK cascade clears the pipeline rows
+        // but SET NULL preserves the canonical txn with its dangling
+        // pointer cleared.
+        private const val DEFAULT_RAW_EVENT_RETENTION_DAYS = 90L
     }
 
     fun observeUser(): Flow<UserEntity?> = database.userDao().observeUser()
@@ -829,6 +845,33 @@ class LocalFinanceRepository(
         if (rawEventIds.isEmpty()) return@withContext emptyList()
         rawEventIds.chunked(500).flatMap { chunk ->
             database.dumpOutcomeDao().getDumpOutcomeSnapshot(chunk)
+        }
+    }
+
+    /**
+     * Delete raw_capture_events older than [retentionDays] days. FK cascade
+     * sweeps up parsed_signals → transaction_candidates → inbox_items;
+     * canonical_transactions are preserved by the SET NULL FKs added in H4.
+     *
+     * Debounced to once per 24 hours so a user bouncing the app doesn't
+     * thrash the disk. Pass [force] = true to bypass the debounce (used by
+     * tests and explicit debug actions). Returns the count of raw events
+     * deleted, useful for diagnostics.
+     */
+    suspend fun pruneStaleIngestionRows(
+        now: Instant = Instant.now(),
+        retentionDays: Long = DEFAULT_RAW_EVENT_RETENTION_DAYS,
+        force: Boolean = false,
+    ): Int {
+        val currentMs = now.toEpochMilli()
+        if (!force && currentMs - lastIngestionPruneMs.get() < INGESTION_PRUNE_DEBOUNCE_MS) {
+            return 0
+        }
+        lastIngestionPruneMs.set(currentMs)
+
+        val cutoffIso = now.minusSeconds(retentionDays * 24 * 60 * 60).toString()
+        return withContext(Dispatchers.IO) {
+            database.rawCaptureEventDao().deleteOlderThan(cutoffIso)
         }
     }
 

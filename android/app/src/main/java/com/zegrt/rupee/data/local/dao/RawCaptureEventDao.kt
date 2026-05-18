@@ -20,5 +20,17 @@ interface RawCaptureEventDao {
 
     @Query("DELETE FROM raw_capture_events")
     suspend fun deleteAll()
+
+    /**
+     * Time-based prune. Deletes raw events older than [cutoffIso] (ISO-8601
+     * timestamp). H4's FK cascades sweep up the downstream parsed_signals →
+     * transaction_candidates → inbox_items chain automatically, but the
+     * SET_NULL clauses on `linkedCanonicalTransactionId` mean any
+     * user-confirmed canonical transaction survives — just with the dangling
+     * pointer cleared. Returns the row count deleted (useful for telemetry
+     * and tests).
+     */
+    @Query("DELETE FROM raw_capture_events WHERE receivedAt < :cutoffIso")
+    suspend fun deleteOlderThan(cutoffIso: String): Int
 }
 
