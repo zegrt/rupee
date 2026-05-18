@@ -428,9 +428,16 @@ class NotificationSignalNormalizer(
         status: CanonicalTransactionStatus = CanonicalTransactionStatus.SUGGESTED,
         overrideCategoryId: String? = null,
     ): String {
-        val canonicalType = if (parseResult.transactionKind == ParsedTransactionKind.INCOME)
-            CanonicalTransactionType.INCOME
-        else CanonicalTransactionType.EXPENSE
+        // INCOME and REFUND both represent money flowing into the user — treat
+        // them as canonical INCOME. The parser layer keeps them as distinct
+        // kinds (REFUND is informational; analytics may want to distinguish
+        // "refund of a prior spend" from "fresh income") but the user-facing
+        // ledger only has expense / income / transfer / cash-adjustment as
+        // top-level types, so REFUND folds into INCOME at this boundary.
+        val canonicalType = when (parseResult.transactionKind) {
+            ParsedTransactionKind.INCOME, ParsedTransactionKind.REFUND -> CanonicalTransactionType.INCOME
+            else -> CanonicalTransactionType.EXPENSE
+        }
         val canonicalTransaction = CanonicalTransactionEntity(
             id = UUID.randomUUID().toString(),
             userId = rawEvent.userId,
