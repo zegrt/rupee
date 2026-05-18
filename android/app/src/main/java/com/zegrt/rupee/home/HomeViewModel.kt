@@ -12,9 +12,8 @@ import com.zegrt.rupee.data.local.entity.CategoryEntity
 import com.zegrt.rupee.data.local.entity.CreditCardEntity
 import com.zegrt.rupee.data.local.entity.EmiPlanEntity
 import com.zegrt.rupee.data.local.entity.RecurringPatternEntity
-import com.zegrt.rupee.data.local.entity.InboxItemEntity
 import com.zegrt.rupee.data.local.entity.Mode
-import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
+import com.zegrt.rupee.data.local.dao.InboxItemWithCandidate
 import com.zegrt.rupee.data.local.entity.UserEntity
 import com.zegrt.rupee.budget.BudgetAlertManager
 import com.zegrt.rupee.data.repository.LocalFinanceRepository
@@ -161,8 +160,10 @@ private data class DashboardData(
     val user: UserEntity?,
     val categories: List<CategoryEntity>,
     val transactions: List<CanonicalTransactionEntity>,
-    val candidates: List<TransactionCandidateEntity>,
-    val inboxItems: List<InboxItemEntity>,
+    // Joined at the DB via @Relation — see InboxItemWithCandidate. Replaces
+    // the previous parallel-flow setup (inbox + recent-candidates) which
+    // husked when the candidate window rotated past an inbox row.
+    val inboxItems: List<InboxItemWithCandidate>,
     val suggestedTxns: List<CanonicalTransactionEntity>,
     val budget: BudgetEntity?,
     val monthlySpent: Long,
@@ -260,10 +261,9 @@ class HomeViewModel(
             repository.observeUser(),
             repository.observeCategories(),
             repository.observeRecentTransactions(),
-            repository.observeRecentTransactionCandidates(),
-            repository.observePendingInboxItems(),
-        ) { user, cats, txns, cands, inbox ->
-            arrayOf<Any?>(user, cats, txns, cands, inbox)
+            repository.observePendingInboxItemsWithCandidates(),
+        ) { user, cats, txns, inbox ->
+            arrayOf<Any?>(user, cats, txns, inbox)
         },
         combine(
             repository.observeSuggestedTransactions(),
@@ -281,8 +281,7 @@ class HomeViewModel(
             user = entities[0] as UserEntity?,
             categories = entities[1] as List<CategoryEntity>,
             transactions = entities[2] as List<CanonicalTransactionEntity>,
-            candidates = entities[3] as List<TransactionCandidateEntity>,
-            inboxItems = entities[4] as List<InboxItemEntity>,
+            inboxItems = entities[3] as List<InboxItemWithCandidate>,
             suggestedTxns = periods[0] as List<CanonicalTransactionEntity>,
             budget = periods[1] as BudgetEntity?,
             monthlySpent = periods[2] as Long,
@@ -555,9 +554,8 @@ class HomeViewModel(
         selection: ViewSelection,
         date: LocalDate,
     ): HomeUiState {
-        val candidatesById = data.candidates.associateBy { it.id }
         val categoryOptions = data.categories.map { CategoryOption(it.id, it.name) }
-        val reviewRows = buildReviewRows(data, candidatesById, selection)
+        val reviewRows = buildReviewRows(data, selection)
 
         val categoryLabelById = data.categories.associate { it.id to it.name }
         val transactionRows = data.transactions
@@ -608,11 +606,11 @@ class HomeViewModel(
 
     private fun buildReviewRows(
         data: DashboardData,
-        candidatesById: Map<String, TransactionCandidateEntity>,
         selection: ViewSelection,
     ): List<HomeReviewRow> {
-        val inboxRows = data.inboxItems.map { inboxItem ->
-            val candidate = candidatesById[inboxItem.transactionCandidateId]
+        val inboxRows = data.inboxItems.map { inboxWithCandidate ->
+            val inboxItem = inboxWithCandidate.inbox
+            val candidate = inboxWithCandidate.candidate
             val rawAmount = candidate?.amountMinor
             val merchantClean = cleanMerchant(candidate?.toEntityName)
             HomeReviewRow(

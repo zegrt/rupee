@@ -3,6 +3,7 @@ package com.zegrt.rupee.data.repository
 import com.zegrt.rupee.data.local.RupeeDatabase
 import com.zegrt.rupee.data.local.dao.CategorySpend
 import com.zegrt.rupee.data.local.dao.DumpOutcomeSnapshot
+import com.zegrt.rupee.data.local.dao.InboxItemWithCandidate
 import com.zegrt.rupee.data.local.entity.TransactionCandidateType
 import com.zegrt.rupee.data.local.entity.AccountEntity
 import com.zegrt.rupee.data.local.entity.AccountType
@@ -238,6 +239,19 @@ class LocalFinanceRepository(
 
     fun observePendingInboxItems(limit: Int = 20): Flow<List<InboxItemEntity>> =
         database.inboxItemDao().observeInboxItems(
+            userId = USER_ID,
+            state = InboxDecisionState.PENDING,
+            limit = limit,
+        )
+
+    // Preferred entry point for the Home dashboard's inbox rendering. Joins
+    // each pending inbox row to its candidate at the DB so the UI never has
+    // to do an in-memory lookup against a separate, windowed candidate flow
+    // (which was the source of the "husk row" bug — pending inbox items
+    // rendered with no merchant / amount once the candidate window had
+    // rotated past them). See docs/gravedigging-2026-05-18.md.
+    fun observePendingInboxItemsWithCandidates(limit: Int = 20): Flow<List<InboxItemWithCandidate>> =
+        database.inboxItemDao().observeInboxItemsWithCandidates(
             userId = USER_ID,
             state = InboxDecisionState.PENDING,
             limit = limit,
