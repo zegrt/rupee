@@ -8,6 +8,14 @@ locations, and proposed fix.
 > **Audience note.** Glosses are written for a designer reader — programming
 > jargon is defined inline. Code citations are clickable for navigation.
 
+> **Status (as of 2026-05-19):** **Audit closed.** Phase 1, phase 2, phase
+> 3a, and phase 3b have all shipped. Every High and Medium tier item is
+> done; the L-series tail (L1, L4, L5) is deferred until either the affected
+> features actually ship or release prep starts. See the
+> [Severity index](#severity-index) below for per-item status and the
+> [Suggested remediation roadmap](#suggested-remediation-roadmap) for the
+> closing-out picture.
+
 ## Cross-cutting theme
 
 The data-layer write paths are **healthy**: notifications get parsed, candidates
@@ -28,24 +36,32 @@ remediations" section at the end groups them into one structural pass.
 
 ## Severity index
 
-| ID  | Title                                                          | Severity | Scope        |
-|-----|----------------------------------------------------------------|----------|--------------|
-| H1  | Refunds recorded as EXPENSE instead of INCOME                  | High     | ~30 LOC      |
-| H2  | Husk-row pattern lurks beyond Inbox (recent transactions list) | High     | ~100 LOC     |
-| H3  | No pruning on ingestion tables — DB grows forever              | High     | Migration + DAO |
-| H4  | No foreign keys / cascade deletes declared                     | High     | Migration    |
-| M1  | Load-bearing `"txn-<candidateId>"` magic string                | Medium   | ~20 LOC + migration |
-| M2  | Transactional gate vocabulary gaps                             | Medium   | ~30 LOC + tests |
-| M3  | ATM / fuel transactions have no dedicated parser               | Medium   | ~150 LOC     |
-| M4  | `lastRecurringRefreshMs` not persisted across cold starts      | Medium   | ~10 LOC      |
-| M5  | Generic UPI parser locks confidence at 0.7                     | Medium   | ~10 LOC      |
-| M6  | Silent error swallowing on share / snapshot paths              | Medium   | ~20 LOC      |
-| M7  | `findMatchingCard` falls back to the only active card          | Medium   | ~5 LOC       |
-| L1  | "Coming soon" half-features still wired into UI                | Low      | N/A          |
-| L2  | Sparse tests on `NotificationSignalNormalizer` (ledger-type mapping) | Low   | ~50 LOC     |
-| L3  | `CrashReporter` returns empty string indistinguishably from no-log | Low | ~5 LOC      |
-| L4  | `fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4)` data-loss risk | Low | N/A      |
-| L5  | `MainActivity.kt` is 2279 lines — single-file UI                | Low      | Refactor     |
+| ID  | Title                                                              | Severity | Status     | Shipped in |
+|-----|--------------------------------------------------------------------|----------|------------|------------|
+| H1  | Refunds recorded as EXPENSE instead of INCOME                      | High     | ✅ shipped | PR #41     |
+| H2  | Husk-row pattern lurks beyond Inbox (recent transactions list)     | High     | ✅ shipped | PR #41     |
+| H3  | No pruning on ingestion tables — DB grows forever                  | High     | ✅ shipped | PR #41     |
+| H4  | No foreign keys / cascade deletes declared                         | High     | ✅ shipped | PR #41     |
+| M1  | Load-bearing `"txn-<candidateId>"` magic string                    | Medium   | ✅ shipped | PR #42     |
+| M2  | Transactional gate vocabulary gaps                                 | Medium   | ✅ shipped | PR #42     |
+| M3  | ATM / fuel transactions have no dedicated parser                   | Medium   | ✅ shipped | PR #44     |
+| M4  | `lastRecurringRefreshMs` not persisted across cold starts          | Medium   | ✅ shipped | PR #42     |
+| M5  | Generic UPI parser locks confidence at 0.7                         | Medium   | ✅ shipped | PR #42     |
+| M6  | Silent error swallowing on share / snapshot paths                  | Medium   | ✅ shipped | PR #42     |
+| M7  | `findMatchingCard` falls back to the only active card              | Medium   | ✅ shipped | PR #42     |
+| L1  | "Coming soon" half-features still wired into UI                    | Low      | ⏸ deferred | when shipped |
+| L2  | Sparse tests on `NotificationSignalNormalizer` (ledger-type mapping) | Low    | ✅ partial | PR #41     |
+| L3  | `CrashReporter` returns empty string indistinguishably from no-log | Low      | ✅ shipped | PR #42     |
+| L4  | `fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4)` data-loss risk | Low   | ⏸ deferred | release-prep |
+| L5  | `MainActivity.kt` is 2279 lines — single-file UI                   | Low      | ⏸ deferred | when blocking |
+
+**12 of 16 audit items shipped, plus the originally-reported Inbox husk bug
+fix.** Every High and Medium tier item is on `main` across three PRs (#41,
+#42, #44). The remaining four are all in the Low tier and explicitly
+deferred — L1 (placeholder comments), L4 (destructive-migration fallback;
+needs release prep), L5 (`MainActivity.kt` refactor; not blocking work
+today). Two trivial migrations and one table-rebuild migration landed
+cleanly across the High and Medium tiers.
 
 ---
 
@@ -574,36 +590,61 @@ H2's time-based queries), every screen needs to become Lazy.
 
 ## Suggested remediation roadmap
 
-A structural pass that lands these in dependency order. Estimated
-cumulative effort: ~1 week of focused work; longer with thorough
-testing.
+Phase 1, phase 2, phase 3a, and phase 3b landed across four PRs over ~3
+days. All audit items in the High and Medium tier are shipped. Roadmap
+captured in hindsight below — useful as a paper trail and to inform how
+future audits get sequenced.
 
-### Week 1 — kill the bugs *(shipped on this branch)*
+### Phase 1 — kill the bugs *(PR #41, merged)*
 1. **Inbox husk fix** — new `InboxItemWithCandidate` POJO with
    `@Embedded` + `@Relation`. Joined at the DB so husks become
    structurally impossible.
-2. **H1 — refund classification** (~30 LOC + tests). Highest user-visible
-   correctness win.
-3. **L2 — minimum viable tests** for `TransactionalGate` and
-   `NotificationSignalNormalizer`. Without these, every subsequent
-   change is risky.
+2. **H1 — refund classification** — RefUND now routes to INCOME at the
+   normalizer + parser layers.
+3. **L2 partial — canonical-type test net** — extracted `canonicalTypeFor`
+   into a pure function pinned by `CanonicalTypeMappingTest` (10 cases).
 
-### Week 2 — structural integrity
-4. **H4 — foreign keys + cascade deletes**. Migration is the largest
-   the app has shipped; needs a deliberate test pass. Land before H3.
-5. **H3 — pruning**. Phase 1 (gate-rejected telemetry table) first,
-   Phase 2 (time-based pruning) once H4's cascades are validated.
-6. **M2 — gate vocabulary gaps**. Cheap to add, big payoff in
-   notification capture rate.
+### Phase 2 — structural integrity *(PR #41, merged in the same branch)*
+4. **H4 — foreign keys + cascade deletes**. Largest migration the app
+   has shipped; rebuilt three tables with FK clauses, pre-cleaned
+   dangling references, `PRAGMA foreign_keys = OFF` around the swap.
+5. **H3 phase 1 — gate-rejected candidate writes dropped** (saves
+   ~18k rows/year on a notification-heavy phone).
+6. **H3 phase 2 — 90-day time-based prune** via FK cascade. Debounced
+   24h, fire-and-forget from `RupeeApplication.onCreate`.
+7. **H2 — date-windowed recent-transactions query**. Replaces
+   `LIMIT 20 ORDER BY occurredAt DESC` with a 30-day window.
 
-### Week 3+ — quality of life
-7. **M1 — `mergedFromExistingCanonicalId` column** (removes magic string)
-8. **M5 — dynamic UPI confidence tiering** (less Inbox fatigue)
-9. **M7 — `findMatchingCard` defensive guard** (correctness on edge case)
-10. **M6 — error surfacing on share path** (debuggability)
-11. **M4 — persist `lastRecurringRefreshMs`** (battery)
-12. **M3 — ATM and fuel parsers** (workflow friction)
-13. **L1, L3, L4, L5** — minor polish; opportunistic.
+### Phase 3a — correctness wins *(PR #42, merged)*
+8.  **M2** — gate vocabulary: `reversed`/`reversal`/`chargeback`/SIP/NACH/ECS.
+9.  **M7** — `findMatchingCard` defensive guard.
+10. **M5** — dynamic UPI confidence tiering (HIGH = 0.85 when fully extracted).
+11. **M1** — `mergedFromExistingCanonicalId` column kills the magic-string CASE.
+12. **M6** — exception logging on the share path.
+13. **M4** — `app_state` K/V table persists debounce timestamps across cold starts.
+14. **L3** — `CrashReporter.readLog` returns `Result<String>`.
+
+### Phase 3b — workflow friction *(PR #44, merged)*
+15. **M3a — ATM withdrawal parser**. New `AtmNotificationParser`,
+    registered FIRST so HDFC/ICICI/SBI/Axis ATM bodies route to
+    `CASH_WITHDRAWAL` (flattens to `CASH_ADJUSTMENT`, excluded from spend
+    totals) instead of being misclassified as SPEND by bank-specific
+    parsers. Routes to Inbox for user confirmation rather than auto-
+    create — cash withdrawals deserve a visible review step before they
+    leave the spend ledger.
+16. **M3b — fuel-brand normalisation**. Added to `MerchantNameUtils.clean`
+    rather than a dedicated parser, so every existing bank/UPI parser
+    benefits without losing maskedDigits + provider hints. IOC/HPCL/BPCL/
+    Shell/Nayara/Essar tokens normalise to the bare brand; padded
+    whole-word matcher avoids the BIOCON / IOC collision (regression
+    pinned).
+
+### Deferred indefinitely (release-prep / refactor — no user-visible payoff today)
+- **L1** — "coming soon" half-features. Surface when those features ship.
+- **L4** — `fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4)`. Pre-MVP
+  app per the rest of the docs; keep until release prep starts.
+- **L5** — `MainActivity.kt` decomposition. 2279 lines but not blocking
+  audit work; tackle when the file actively gets in the way.
 
 ## Discipline takeaways
 
@@ -630,6 +671,11 @@ internalise so future PRs can be self-screened:
 
 ---
 
-*Audit performed on commit `2a47bc2` (post-PR #37 merge). Findings are a
-snapshot — re-audit after the Week 1 fixes land to confirm the structural
-recommendations remain valid.*
+*Audit performed on commit `2a47bc2` (post-PR #37 merge). Closing-out
+state captured 2026-05-19 after PR #44 (the final audit-item merge):
+12 of 16 items shipped across PRs #41, #42, and #44, plus the
+originally-reported Inbox husk bug fix. The remaining four (L1, L4,
+L5) are deferred indefinitely per the roadmap above. **The audit is
+closed.** A re-audit after another month of real usage is the next
+sensible touch point — new vocabulary gaps and new edge cases tend to
+surface on the cadence of dump-replay sessions.*
