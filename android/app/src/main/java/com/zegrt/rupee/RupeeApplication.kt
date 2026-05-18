@@ -11,6 +11,7 @@ import com.zegrt.rupee.data.local.MIGRATION_5_6
 import com.zegrt.rupee.data.local.MIGRATION_6_7
 import com.zegrt.rupee.data.local.MIGRATION_7_8
 import com.zegrt.rupee.data.local.MIGRATION_8_9
+import com.zegrt.rupee.data.local.MIGRATION_9_10
 import com.zegrt.rupee.data.local.RupeeDatabase
 import com.zegrt.rupee.diagnostics.CrashReporter
 import com.zegrt.rupee.data.repository.LocalFinanceRepository
@@ -27,7 +28,7 @@ class RupeeApplication : Application() {
             RupeeDatabase::class.java,
             "rupee.db",
         )
-            .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+            .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
             .fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4)
             .build()
     }

@@ -545,10 +545,12 @@ class LocalFinanceRepository(
                 database.canonicalTransactionDao().getTransactionById(linkedCanonicalId)
             }
 
-            // "txn-<candidateId>" naming is load-bearing: DumpOutcomeDao's
-            // mergedIntoExistingTxnId CASE expression compares against this
-            // prefix to distinguish confirm-fresh from merge-into-existing.
-            // Rename in lockstep if you change it.
+            // "txn-<candidateId>" is just a deterministic id derived from the
+            // candidate so a confirm-then-edit-then-re-confirm flow lands on
+            // the same canonical row instead of creating duplicates. Used to
+            // be load-bearing for DumpOutcomeDao's merge detection, but that
+            // dependency moved to an explicit inbox_items column in v10 —
+            // see InboxItemEntity.mergedFromExistingCanonicalId.
             val canonicalId = existingCanonical?.id ?: "txn-${candidate.id}"
             val resolvedMerchant = merchantNameOverride?.trim()?.ifBlank { null }
                 ?: existingCanonical?.merchantName ?: candidate.toEntityName
@@ -623,6 +625,10 @@ class LocalFinanceRepository(
                 inboxItem.copy(
                     decisionState = InboxDecisionState.CONFIRMED,
                     linkedCanonicalTransactionId = existingTransactionId,
+                    // Distinguishes a merge from a fresh confirm.
+                    // DumpOutcomeDao surfaces this directly instead of
+                    // reverse-engineering the merge state from id naming.
+                    mergedFromExistingCanonicalId = existingTransactionId,
                     resolvedAt = now,
                     updatedAt = now,
                 ),

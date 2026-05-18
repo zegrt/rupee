@@ -358,3 +358,24 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
         db.execSQL("PRAGMA foreign_keys = ON")
     }
 }
+
+/**
+ * v10 — explicit `mergedFromExistingCanonicalId` column on inbox_items.
+ *
+ * Replaces the brittle DumpOutcomeDao CASE expression that derived the merge
+ * state by comparing `linkedCanonicalTransactionId` against a synthesised
+ * `'txn-' || tc.id` string. Now `confirmInboxItemMergedWith` writes the
+ * existing canonical id into this column directly, and the DAO selects it.
+ *
+ * Pre-v10 rows get NULL (the column is nullable with no default backfill —
+ * we don't know which historical confirms were merges without re-running
+ * the heuristic, and the dump-outcome snapshot is for current-state
+ * triage, not historical analysis).
+ */
+val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "ALTER TABLE `inbox_items` ADD COLUMN `mergedFromExistingCanonicalId` TEXT DEFAULT NULL"
+        )
+    }
+}
