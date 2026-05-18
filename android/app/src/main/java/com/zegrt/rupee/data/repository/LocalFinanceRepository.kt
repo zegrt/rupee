@@ -35,9 +35,9 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
-import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -55,6 +55,13 @@ data class OnboardingSetupInput(
 class LocalFinanceRepository(
     private val database: RupeeDatabase,
     private val recurringDetector: RecurringDetectionEngine = RecurringDetectionEngine(),
+    // Fire-and-forget coroutine scope for background persistence writes
+    // (debounce timestamps and similar). RupeeApplication passes its
+    // app-lifetime SupervisorJob; tests / debug callers that construct
+    // the repository directly get an isolated SupervisorJob default
+    // that won't leak across test runs. Avoids the GlobalScope opt-in
+    // that an earlier draft of M4 used.
+    private val persistScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
     // Hydrated from `app_state` at startup via [hydrateDebounceState]; written
     // back to `app_state` on every set via [persistDebounceTimestamp]. Without
@@ -909,16 +916,13 @@ class LocalFinanceRepository(
      * The in-memory AtomicLong is the source of truth during the process
      * lifetime; the DB write is the cold-start hand-off.
      */
-    @OptIn(DelicateCoroutinesApi::class)
     private fun persistDebounceTimestamp(key: String, valueMs: Long) {
         val nowIso = Instant.now().toString()
-        // ApplicationScope isn't reachable from inside the repository, so we
-        // dispatch on GlobalScope here. Defensible because (a) it's a fire-
-        // and-forget write the caller doesn't need to wait on, (b) failure
-        // to persist costs at most one extra refresh/prune next cold start
-        // — no correctness impact. Wrapped in runCatching so a transient
-        // I/O error never propagates.
-        GlobalScope.launch(Dispatchers.IO) {
+        // Fire-and-forget write — caller doesn't wait on it. Failure to
+        // persist costs at most one extra refresh/prune next cold start.
+        // Dispatched on persistScope (app-lifetime SupervisorJob in
+        // production; an isolated SupervisorJob in tests / debug callers).
+        persistScope.launch {
             runCatching {
                 database.appStateDao().upsert(
                     com.zegrt.rupee.data.local.entity.AppStateEntity(

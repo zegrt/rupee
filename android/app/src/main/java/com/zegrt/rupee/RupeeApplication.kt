@@ -23,6 +23,14 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 class RupeeApplication : Application() {
+    // App-lifetime coroutine scope for fire-and-forget background work
+    // (debounce-timestamp persistence, ingestion-row pruning, anything else
+    // that should outlive a viewModelScope but die with the process).
+    // Declared before localFinanceRepository so the lazy block below
+    // references an already-initialized field — Kotlin initialises class
+    // fields in declaration order.
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     val database: RupeeDatabase by lazy {
         Room.databaseBuilder(
             applicationContext,
@@ -38,7 +46,11 @@ class RupeeApplication : Application() {
     }
 
     val localFinanceRepository: LocalFinanceRepository by lazy {
-        LocalFinanceRepository(database)
+        // appScope is the app-lifetime SupervisorJob declared below; pass it
+        // through so the repository's fire-and-forget persistence writes
+        // ride structured concurrency tied to process lifetime instead of
+        // falling back to its constructor-default SupervisorJob.
+        LocalFinanceRepository(database, persistScope = appScope)
     }
 
     val onboardingPreferences: OnboardingPreferences by lazy {
@@ -52,8 +64,6 @@ class RupeeApplication : Application() {
     val duesAlertManager: DuesAlertManager by lazy {
         DuesAlertManager(applicationContext)
     }
-
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
