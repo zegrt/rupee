@@ -130,6 +130,44 @@ class NotificationParserParseTest {
         assertEquals(150000L, result.amountMinor)
     }
 
+    // M5: confidence tiering pins. The old static 0.7 cap routed every fully-
+    // extracted UPI debit to Inbox even when amount + merchant + masked
+    // digits all came through cleanly. New ladder: amount + merchant + digits
+    // → 0.85 HIGH (auto-create); amount + merchant → 0.78 MEDIUM; amount +
+    // digits → 0.62 MEDIUM; amount only → 0.5 LOW.
+
+    @Test
+    fun `generic upi with amount, merchant, and masked digits reaches HIGH confidence`() {
+        val result = genericUpi.parse(
+            event(body = "₹245.00 paid to Swiggy via UPI from A/c XX1234")
+        )
+        assertEquals(24500L, result.amountMinor)
+        assertEquals("Swiggy", result.toEntityName)
+        assertEquals("1234", result.maskedDigits)
+        // 0.85+ is the HIGH threshold in NotificationDecisionEngine. Pin the
+        // exact value here so a future tier shuffle that demotes this case
+        // back to MEDIUM (and back into Inbox-review fatigue) surfaces in
+        // the test diff.
+        assertEquals(0.85, result.parseConfidence, 0.0001)
+    }
+
+    @Test
+    fun `generic upi with amount and merchant only stays MEDIUM`() {
+        val result = genericUpi.parse(
+            event(body = "You paid ₹245.00 to Swiggy using UPI")
+        )
+        assertEquals(0.78, result.parseConfidence, 0.0001)
+    }
+
+    @Test
+    fun `generic upi with amount and digits but no merchant stays MEDIUM`() {
+        val result = genericUpi.parse(
+            event(body = "₹500.00 debited via UPI from A/c XX1234")
+        )
+        assertEquals("1234", result.maskedDigits)
+        assertEquals(0.62, result.parseConfidence, 0.0001)
+    }
+
     // ── PhonePe ───────────────────────────────────────────────────────────────
 
     @Test
