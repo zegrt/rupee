@@ -127,4 +127,74 @@ class MerchantNameUtilsTest {
         assertEquals(false, MerchantNameUtils.matchesPattern("Swiggy", ""))
         assertEquals(false, MerchantNameUtils.matchesPattern("   ", "Swiggy"))
     }
+
+    // ── M3b: fuel-brand normalisation ────────────────────────────────────────
+    //
+    // Petrol-station bodies vary across cities/outlets — "IOC OUTLET MUMBAI
+    // 12345", "HPCL DELHI PETROL PUMP", etc. Without normalisation, a user
+    // who sets "always trust IOC = Fuel" only gets the rule to fire on
+    // the exact merchant they categorised. With normalisation, every
+    // outlet of that brand maps to the same key.
+
+    @Test
+    fun `clean normalises IOC outlet body to bare IOC`() {
+        assertEquals("IOC", MerchantNameUtils.clean("IOC OUTLET MUMBAI 12345"))
+    }
+
+    @Test
+    fun `clean normalises Indian Oil to IOC`() {
+        // Some bodies spell out the full company name.
+        assertEquals("IOC", MerchantNameUtils.clean("INDIAN OIL CORP MUMBAI"))
+    }
+
+    @Test
+    fun `clean normalises HPCL with location to bare HPCL`() {
+        assertEquals("HPCL", MerchantNameUtils.clean("HPCL DELHI PETROL PUMP"))
+    }
+
+    @Test
+    fun `clean normalises Hindustan Petroleum to HPCL`() {
+        assertEquals("HPCL", MerchantNameUtils.clean("HINDUSTAN PETROLEUM BANGALORE"))
+    }
+
+    @Test
+    fun `clean normalises BPCL with outlet code to BPCL`() {
+        assertEquals("BPCL", MerchantNameUtils.clean("BPCL OUTLET 9876 PUNE"))
+    }
+
+    @Test
+    fun `clean normalises Shell petrol stations to Shell`() {
+        assertEquals("Shell", MerchantNameUtils.clean("SHELL FUEL STATION GURGAON"))
+    }
+
+    @Test
+    fun `clean normalises Nayara petrol to Nayara`() {
+        assertEquals("Nayara", MerchantNameUtils.clean("NAYARA ENERGY MUMBAI 4567"))
+    }
+
+    @Test
+    fun `clean does NOT mistake BIOCON pharma for IOC`() {
+        // Regression: "BIOCON" contains "IOC" as a substring. The padded
+        // whole-word matcher must avoid this collision; if it ever
+        // regresses to a bare substring check, the pharma company gets
+        // mislabelled as a petrol station.
+        assertEquals("BIOCON LIMITED", MerchantNameUtils.clean("BIOCON LIMITED"))
+    }
+
+    @Test
+    fun `clean preserves non-fuel merchants untouched`() {
+        // Counter-sanity: random merchants don't collide with the fuel
+        // whitelist. Pin a small set to catch a future overly-broad rule.
+        assertEquals("Swiggy", MerchantNameUtils.clean("Swiggy"))
+        assertEquals("Amazon", MerchantNameUtils.clean("Amazon"))
+        assertEquals("HDFC Bank", MerchantNameUtils.clean("HDFC Bank"))
+    }
+
+    @Test
+    fun `normalizeFuelBrand returns null for non-fuel inputs`() {
+        // Direct test of the helper — useful for triage if a future change
+        // makes a brand match too aggressively.
+        assertEquals(null, MerchantNameUtils.normalizeFuelBrand("Zomato"))
+        assertEquals(null, MerchantNameUtils.normalizeFuelBrand("BIOCON LIMITED"))
+    }
 }

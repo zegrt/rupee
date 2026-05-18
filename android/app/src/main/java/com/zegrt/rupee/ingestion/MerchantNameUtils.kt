@@ -11,6 +11,27 @@ package com.zegrt.rupee.ingestion
  * future notification is parsed to "Swiggy using UPI".
  */
 object MerchantNameUtils {
+    // Pairs of (uppercase-match-tokens → canonical brand name).
+    // Tokens are matched as whole-word substrings inside the upper-cased
+    // merchant string (the [normalizeFuelBrand] matcher pads with spaces
+    // and replaces non-alphanumerics with spaces before testing). So
+    // "IOC" matches "IOC OUTLET, MUMBAI" but NOT "BIOCON" (the pharma
+    // company) because there's no whitespace boundary between "B" and
+    // "IOC" in BIOCON.
+    //
+    // Bare "HP" / "BP" are deliberately omitted — too short / too
+    // ambiguous against non-fuel retailers (HP electronics, Bharat-
+    // prefixed financial companies). User can add a trust rule manually
+    // for those if needed.
+    private val fuelBrands: List<Pair<List<String>, String>> = listOf(
+        listOf("IOC", "IOCL", "INDIAN OIL") to "IOC",
+        listOf("HPCL", "HINDUSTAN PETROLEUM") to "HPCL",
+        listOf("BPCL", "BHARAT PETROLEUM") to "BPCL",
+        listOf("SHELL", "SHELL PETROL", "SHELL FUEL") to "Shell",
+        listOf("NAYARA") to "Nayara",
+        listOf("ESSAR PETROL", "ESSAR FUEL") to "Essar",
+    )
+
     private val tails = listOf(
         " on ",
         " using ",
@@ -52,7 +73,40 @@ object MerchantNameUtils {
             }
         }
         if (s.lowercase() in noiseTokens) return "Unnamed"
+        // Fuel-brand normalisation. Petrol-station bodies typically carry
+        // a location and outlet code appended to the brand: "IOC OUTLET
+        // MUMBAI 12345", "HPCL DELHI PETROL PUMP". A user who sets a
+        // merchant trust rule on "IOC" should have it fire across every
+        // outlet of that brand, not just the one they happened to
+        // categorise first. Normalise to the bare brand if matched.
+        // Whitelist is conservative — only brands whose tokens are
+        // unambiguous enough to not collide with non-fuel merchants
+        // (no bare "HP" / "BP", which could be electronics retailers
+        // and Bharat-prefixed companies respectively).
+        normalizeFuelBrand(s)?.let { return it }
         return s.ifBlank { "Unnamed" }
+    }
+
+    /**
+     * If [cleaned] contains a recognised fuel-brand token, return the bare
+     * brand name. Otherwise null. Exposed for testing the whitelist
+     * without round-tripping through [clean].
+     */
+    internal fun normalizeFuelBrand(cleaned: String): String? {
+        // Pad with spaces and replace non-alphanumerics with spaces so we
+        // can test for `" TOKEN "` cleanly without writing regex per
+        // brand. "IOC OUTLET, MUMBAI" → " IOC OUTLET  MUMBAI " — the IOC
+        // token at the start now has a leading space, and commas /
+        // punctuation between words become spaces so multi-word brand
+        // names like "INDIAN OIL" still match.
+        val padded = " " + cleaned.uppercase().replace(Regex("[^A-Z0-9 ]"), " ") + " "
+        // Collapse runs of whitespace so " IOC   OUTLET " becomes
+        // " IOC OUTLET " — the brand-token list uses single-space form.
+        val normalised = padded.replace(Regex(" +"), " ")
+        for ((tokens, brand) in fuelBrands) {
+            if (tokens.any { " $it ".replace(Regex(" +"), " ") in normalised }) return brand
+        }
+        return null
     }
 
     fun matchesPattern(rawMerchant: String?, pattern: String): Boolean {
