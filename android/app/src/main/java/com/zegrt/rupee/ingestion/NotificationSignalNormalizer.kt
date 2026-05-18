@@ -501,20 +501,31 @@ class NotificationSignalNormalizer(
          */
         internal fun canonicalTypeFor(kind: ParsedTransactionKind): CanonicalTransactionType =
             when (kind) {
-                // Money in: explicit income, refunds, and the receiver-side
-                // PAYMENT (someone paid the user). REFUND and INCOME are
-                // covered by PR 2 (the refund routing fix); pinning here
-                // means a future kind-rename will surface as a compile
-                // error rather than a silent rerouting.
+                // Money into the user: explicit income and refunds/cashback.
+                // Pinning REFUND alongside INCOME here means a future kind-
+                // rename will surface as a compile error rather than a silent
+                // rerouting (the bug that motivated this whole helper).
                 ParsedTransactionKind.INCOME,
                 ParsedTransactionKind.REFUND -> CanonicalTransactionType.INCOME
 
-                // Money out (or about to be): all standard spend kinds plus
-                // bill-due reminders (which represent a future debit). The
-                // BILL_DUE candidate doesn't write a canonical txn directly
-                // in current code — applyBillDueToCard handles that — but
-                // map it conservatively here so any future code path that
-                // does write one gets the right type.
+                // Money out (or about to be):
+                //  - SPEND: standard debit.
+                //  - BILL_DUE: doesn't currently write a canonical txn —
+                //    applyBillDueToCard handles the side-effect on
+                //    credit_cards — but mapped conservatively here so any
+                //    future path that does write one gets the right type.
+                //  - PAYMENT: e.g. CRED "card bill paid via CRED" — flattened
+                //    here as EXPENSE since cash leaves the user's bank
+                //    account. The parser tags the candidate as
+                //    TransactionCandidateType.TRANSFER (cash → card is a
+                //    transfer between user-owned accounts), so this
+                //    flattening is a known-lossy step; see gravedigging
+                //    audit M-followup for restoring TRANSFER fidelity.
+                //  - EMI / STATEMENT / RECURRING_CANDIDATE: future-debit
+                //    semantics; same treatment as BILL_DUE.
+                //  - UNKNOWN: conservative default so a body that somehow
+                //    bypassed parsing still surfaces in monthly spend rather
+                //    than masking the failure.
                 ParsedTransactionKind.SPEND,
                 ParsedTransactionKind.BILL_DUE,
                 ParsedTransactionKind.EMI,

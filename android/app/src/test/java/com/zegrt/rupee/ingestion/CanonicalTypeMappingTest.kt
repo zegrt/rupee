@@ -122,17 +122,34 @@ class CanonicalTypeMappingTest {
     }
 
     @Test
-    fun `mapping is exhaustive over the ParsedTransactionKind enum`() {
-        // Compile-time check disguised as a runtime test. If a new kind is
-        // added without updating canonicalTypeFor, the `when` inside
-        // canonicalTypeFor stops compiling (expression-position `when` on
-        // a sealed enum must be exhaustive). The check below also fails
-        // at runtime — defense in depth.
-        val allKinds = ParsedTransactionKind.values().toSet()
-        val covered = allKinds.associateWith { kind ->
-            NotificationSignalNormalizer.canonicalTypeFor(kind)
-        }
-        // Sanity: every enum value produces SOMETHING, no nulls.
-        assertEquals(allKinds.size, covered.size)
+    fun `every ParsedTransactionKind enum value has an explicit case above`() {
+        // The real exhaustiveness guarantee for the *mapping* is the
+        // expression-position `when` inside canonicalTypeFor — adding a new
+        // enum value won't compile until canonicalTypeFor is updated.
+        //
+        // This test catches the *other* failure mode: someone added a new
+        // enum value AND updated canonicalTypeFor to handle it, but forgot
+        // to add a per-value @Test case in this file. The first version of
+        // this assertion was a tautology (`associateWith` over a Set always
+        // yields a same-size Map) — this version compares against the
+        // hand-maintained list of cases above and fails loudly when they
+        // drift.
+        val explicitlyTestedCases = setOf(
+            ParsedTransactionKind.INCOME,
+            ParsedTransactionKind.REFUND,
+            ParsedTransactionKind.SPEND,
+            ParsedTransactionKind.BILL_DUE,
+            ParsedTransactionKind.EMI,
+            ParsedTransactionKind.PAYMENT,
+            ParsedTransactionKind.STATEMENT,
+            ParsedTransactionKind.RECURRING_CANDIDATE,
+            ParsedTransactionKind.UNKNOWN,
+        )
+        val missing = ParsedTransactionKind.values().toSet() - explicitlyTestedCases
+        assertEquals(
+            "ParsedTransactionKind values without an explicit @Test case in this file: $missing",
+            emptySet<ParsedTransactionKind>(),
+            missing,
+        )
     }
 }
