@@ -428,16 +428,7 @@ class NotificationSignalNormalizer(
         status: CanonicalTransactionStatus = CanonicalTransactionStatus.SUGGESTED,
         overrideCategoryId: String? = null,
     ): String {
-        // INCOME and REFUND both represent money flowing into the user — treat
-        // them as canonical INCOME. The parser layer keeps them as distinct
-        // kinds (REFUND is informational; analytics may want to distinguish
-        // "refund of a prior spend" from "fresh income") but the user-facing
-        // ledger only has expense / income / transfer / cash-adjustment as
-        // top-level types, so REFUND folds into INCOME at this boundary.
-        val canonicalType = when (parseResult.transactionKind) {
-            ParsedTransactionKind.INCOME, ParsedTransactionKind.REFUND -> CanonicalTransactionType.INCOME
-            else -> CanonicalTransactionType.EXPENSE
-        }
+        val canonicalType = canonicalTypeFor(parseResult.transactionKind)
         val canonicalTransaction = CanonicalTransactionEntity(
             id = UUID.randomUUID().toString(),
             userId = rawEvent.userId,
@@ -484,5 +475,53 @@ class NotificationSignalNormalizer(
             CandidateDecisionReason.NOT_TRANSACTIONAL ->
                 InboxReasonCode.AMBIGUOUS_KIND
         }
+    }
+
+    companion object {
+        /**
+         * Map a parser-layer [ParsedTransactionKind] to the user-facing
+         * [CanonicalTransactionType] used by the ledger.
+         *
+         * The parser layer has more granularity than the ledger needs —
+         * REFUND, BILL_DUE, STATEMENT, PAYMENT, EMI, RECURRING_CANDIDATE
+         * all show up there but the ledger only has EXPENSE / INCOME /
+         * TRANSFER / CASH_ADJUSTMENT at the top level. This function is
+         * the single source of truth for that flattening.
+         *
+         * Exhaustive `when` over the enum is deliberate — adding a new
+         * [ParsedTransactionKind] without updating this function will
+         * fail compilation, which is exactly the safety net we want.
+         * Kotlin doesn't require exhaustiveness on enum-typed `when`
+         * expressions in statement position, but we use it in expression
+         * position so the compiler enforces it.
+         *
+         * Visibility: companion-internal so tests can call it without
+         * spinning up a Room database. The mapping is pure — no
+         * dependencies on the enclosing class's state.
+         */
+        internal fun canonicalTypeFor(kind: ParsedTransactionKind): CanonicalTransactionType =
+            when (kind) {
+                // Money in: explicit income, refunds, and the receiver-side
+                // PAYMENT (someone paid the user). REFUND and INCOME are
+                // covered by PR 2 (the refund routing fix); pinning here
+                // means a future kind-rename will surface as a compile
+                // error rather than a silent rerouting.
+                ParsedTransactionKind.INCOME,
+                ParsedTransactionKind.REFUND -> CanonicalTransactionType.INCOME
+
+                // Money out (or about to be): all standard spend kinds plus
+                // bill-due reminders (which represent a future debit). The
+                // BILL_DUE candidate doesn't write a canonical txn directly
+                // in current code — applyBillDueToCard handles that — but
+                // map it conservatively here so any future code path that
+                // does write one gets the right type.
+                ParsedTransactionKind.SPEND,
+                ParsedTransactionKind.BILL_DUE,
+                ParsedTransactionKind.EMI,
+                ParsedTransactionKind.PAYMENT,
+                ParsedTransactionKind.STATEMENT,
+                ParsedTransactionKind.RECURRING_CANDIDATE,
+                ParsedTransactionKind.UNKNOWN -> CanonicalTransactionType.EXPENSE
+            }
     }
 }
