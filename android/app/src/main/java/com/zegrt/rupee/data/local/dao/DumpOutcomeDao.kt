@@ -9,9 +9,13 @@ import androidx.room.Query
  * `outcome{}` block (which is frozen at ingest time) with the *current* state
  * of every row the notification produced.
  *
- * One row per rawEventId. LEFT JOINs throughout so a notification that was
- * filtered or gate-rejected (no parsed signal) still produces a row with
- * nulls beyond `rawEventId` — useful for triaging "why didn't this fire".
+ * One row per matched rawEventId. The join starts FROM parsed_signals, so
+ * raw events that never produced a parsed signal — filtered (listener-level
+ * skip) and gate-rejected — are absent from the result. The dump's per-line
+ * `outcome{}` block already records those decisions at ingest time, so
+ * pairing the two files by rawEventId still answers "why didn't this fire".
+ * LEFT JOINs from candidate onward so a parsed signal that never reached
+ * Inbox or canonical (auto-ignored, awaiting review) still surfaces.
  */
 data class DumpOutcomeSnapshot(
     val rawEventId: String,
@@ -45,7 +49,9 @@ data class DumpOutcomeSnapshot(
     // freshly created from this candidate — i.e. the user picked "merge with
     // existing". Detected by comparing inbox.linkedCanonicalTransactionId
     // against the synthetic "txn-<candidateId>" id used by
-    // confirmInboxItem. If they differ, it was a merge.
+    // confirmInboxItem (LocalFinanceRepository.confirmInboxItem). If those
+    // diverge, it was a merge. If that naming convention ever changes,
+    // update the CASE expression below in lockstep — KSP won't catch it.
     val mergedIntoExistingTxnId: String?,
 )
 
@@ -59,8 +65,9 @@ interface DumpOutcomeDao {
      *
      * Column aliases are explicit because Room maps result columns by name
      * onto the POJO constructor parameter names. Don't rename the data
-     * class fields without updating the SELECT list — the schema test in
-     * `dumps/` exercises the full join end-to-end.
+     * class fields without updating the SELECT list — KSP catches mismatches
+     * at build time, but only for column names, not the CASE-expression
+     * semantics of `mergedIntoExistingTxnId` (see note on that field).
      */
     @Query(
         """

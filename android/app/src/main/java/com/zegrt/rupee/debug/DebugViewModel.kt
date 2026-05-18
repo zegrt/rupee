@@ -153,23 +153,21 @@ class DebugViewModel(
         val outcomesShareName = "rupee-notif-outcomes-$baseStem.jsonl"
         val sharedDumpFile = java.io.File(dir, dumpShareName)
         val sharedOutcomesFile = java.io.File(dir, outcomesShareName)
-        // Tidy: drop any prior shared copies so the folder doesn't accumulate.
-        dir.listFiles { _, name ->
-            name.startsWith("rupee-notif-dumps-") || name.startsWith("rupee-notif-outcomes-")
-        }?.forEach { it.delete() }
-        runCatching { source.copyTo(sharedDumpFile, overwrite = true) }
-            .onFailure {
-                _uiState.value = _uiState.value.copy(message = "Couldn't prepare dump for sharing.")
-                return
-            }
-
-        // Phase 2a: build the sibling outcomes snapshot off the main thread,
-        // then fire the share intent. The DB join + file write are I/O-bound;
-        // viewModelScope.launch keeps them off the UI thread. Share intent is
-        // dispatched on the same coroutine — Android's startActivity must run
-        // on the main thread, but launching from viewModelScope (Dispatchers.
-        // Main.immediate) preserves that.
+        // Phase 2a: do the file copy, snapshot build, and outcomes write off
+        // the main thread. viewModelScope dispatches on Main.immediate so the
+        // share intent at the end still fires on the UI thread as required.
         viewModelScope.launch {
+            val copyOk = withContext(Dispatchers.IO) {
+                // Tidy stale shared copies first so the folder doesn't accumulate.
+                dir.listFiles { _, name ->
+                    name.startsWith("rupee-notif-dumps-") || name.startsWith("rupee-notif-outcomes-")
+                }?.forEach { it.delete() }
+                runCatching { source.copyTo(sharedDumpFile, overwrite = true) }.isSuccess
+            }
+            if (!copyOk) {
+                _uiState.value = _uiState.value.copy(message = "Couldn't prepare dump for sharing.")
+                return@launch
+            }
             // Read ids from the snapshotted copy, not the live dump, so any
             // notification that lands between the copy above and this parse
             // can't appear in outcomes-but-not-in-dump.

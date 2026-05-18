@@ -27,6 +27,12 @@ Every file in this folder is gitignored by `dumps/.gitignore` except this README
 and the gitignore itself. Notification bodies typically contain account numbers,
 merchant names, amounts — nothing in here will ever land in the repo by accident.
 
+The outcomes file goes further: it includes the user's **post-edit** merchant
+names and notes from `canonical_transactions`. That's deliberate — replay tooling
+needs to see the user's renames to learn what categorization signals the parser
+missed — but it means PII the bank's body didn't contain can still appear here.
+Treat outcomes files with the same care as raw dumps.
+
 ## Don't commit
 
 If `git status` ever shows a `.jsonl` here as untracked, something's wrong with the

@@ -2,6 +2,7 @@ package com.zegrt.rupee.data.repository
 
 import com.zegrt.rupee.data.local.RupeeDatabase
 import com.zegrt.rupee.data.local.dao.CategorySpend
+import com.zegrt.rupee.data.local.dao.DumpOutcomeSnapshot
 import com.zegrt.rupee.data.local.entity.TransactionCandidateType
 import com.zegrt.rupee.data.local.entity.AccountEntity
 import com.zegrt.rupee.data.local.entity.AccountType
@@ -494,6 +495,10 @@ class LocalFinanceRepository(
                 database.canonicalTransactionDao().getTransactionById(linkedCanonicalId)
             }
 
+            // "txn-<candidateId>" naming is load-bearing: DumpOutcomeDao's
+            // mergedIntoExistingTxnId CASE expression compares against this
+            // prefix to distinguish confirm-fresh from merge-into-existing.
+            // Rename in lockstep if you change it.
             val canonicalId = existingCanonical?.id ?: "txn-${candidate.id}"
             val resolvedMerchant = merchantNameOverride?.trim()?.ifBlank { null }
                 ?: existingCanonical?.merchantName ?: candidate.toEntityName
@@ -806,7 +811,7 @@ class LocalFinanceRepository(
     // ~2.5k entries today; 500 leaves headroom for the rest of the WHERE clause.
     suspend fun getDumpOutcomeSnapshot(
         rawEventIds: List<String>,
-    ): List<com.zegrt.rupee.data.local.dao.DumpOutcomeSnapshot> = withContext(Dispatchers.IO) {
+    ): List<DumpOutcomeSnapshot> = withContext(Dispatchers.IO) {
         if (rawEventIds.isEmpty()) return@withContext emptyList()
         rawEventIds.chunked(500).flatMap { chunk ->
             database.dumpOutcomeDao().getDumpOutcomeSnapshot(chunk)
