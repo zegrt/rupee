@@ -247,8 +247,28 @@ class LocalFinanceRepository(
 
     fun observeBuckets(): Flow<List<BucketEntity>> = database.bucketDao().observeBuckets()
 
-    fun observeRecentTransactions(limit: Int = 20): Flow<List<CanonicalTransactionEntity>> =
-        database.canonicalTransactionDao().observeRecentTransactions(USER_ID, limit)
+    /**
+     * Recent canonical transactions for the Home screen. Date-windowed
+     * (default 30 days back from [now]) rather than row-windowed because a
+     * row cap silently hides any back-dated manual entry or any
+     * notification with an old `deviceEventTime`. See gravedigging audit
+     * H2 and PR 7.
+     *
+     * [limit] caps memory inside the window — generous default (200) since
+     * the Home UI takes only 20 from the head. If the window has more rows
+     * than [limit], the oldest get dropped, but at least the user sees a
+     * coherent "last 30 days" slice rather than an arbitrary truncation.
+     */
+    fun observeRecentTransactions(
+        now: java.time.LocalDate = java.time.LocalDate.now(),
+        windowDays: Long = 30,
+        limit: Int = 200,
+    ): Flow<List<CanonicalTransactionEntity>> =
+        database.canonicalTransactionDao().observeRecentTransactionsSince(
+            userId = USER_ID,
+            fromIso = now.minusDays(windowDays).toString(),
+            limit = limit,
+        )
 
     fun observeRecentTransactionCandidates(limit: Int = 20): Flow<List<TransactionCandidateEntity>> =
         database.transactionCandidateDao().observeRecentTransactionCandidates(limit)

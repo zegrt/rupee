@@ -9,17 +9,27 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CanonicalTransactionDao {
+    /**
+     * Recent transactions inside a date window. The Home screen used to
+     * call a `LIMIT 20 ORDER BY occurredAt DESC` variant of this query;
+     * that semantic silently drops back-dated manual entries and any
+     * notification with an old `deviceEventTime` (gravedigging audit H2).
+     * The window-based form caps memory via [limit] but never lies about
+     * what's "recent" — anything inside [fromIso] is visible.
+     */
     @Query(
         """
         SELECT * FROM canonical_transactions
         WHERE userId = :userId
+          AND occurredAt >= :fromIso
         ORDER BY occurredAt DESC
         LIMIT :limit
         """
     )
-    fun observeRecentTransactions(
+    fun observeRecentTransactionsSince(
         userId: String,
-        limit: Int = 20,
+        fromIso: String,
+        limit: Int = 200,
     ): Flow<List<CanonicalTransactionEntity>>
 
     @Query("SELECT * FROM canonical_transactions WHERE id = :id LIMIT 1")
