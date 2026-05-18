@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
@@ -157,15 +158,18 @@ class DebugViewModel(
         // the main thread. viewModelScope dispatches on Main.immediate so the
         // share intent at the end still fires on the UI thread as required.
         viewModelScope.launch {
-            val copyOk = withContext(Dispatchers.IO) {
+            val copyResult: Result<Unit> = withContext(Dispatchers.IO) {
                 // Tidy stale shared copies first so the folder doesn't accumulate.
                 dir.listFiles { _, name ->
                     name.startsWith("rupee-notif-dumps-") || name.startsWith("rupee-notif-outcomes-")
                 }?.forEach { it.delete() }
-                runCatching { source.copyTo(sharedDumpFile, overwrite = true) }.isSuccess
+                runCatching { source.copyTo(sharedDumpFile, overwrite = true); Unit }
             }
-            if (!copyOk) {
-                _uiState.value = _uiState.value.copy(message = "Couldn't prepare dump for sharing.")
+            copyResult.exceptionOrNull()?.let { t ->
+                Log.w(SHARE_TAG, "Dump copy failed", t)
+                _uiState.value = _uiState.value.copy(
+                    message = "Couldn't prepare dump for sharing (${shortReason(t)}).",
+                )
                 return@launch
             }
             // Read ids from the snapshotted copy, not the live dump, so any
@@ -185,6 +189,11 @@ class DebugViewModel(
                         "${context.packageName}.fileprovider",
                         sharedOutcomesFile,
                     )
+                }.onFailure { t ->
+                    // Don't fail the whole share — we still attach the raw
+                    // dump below via single-file ACTION_SEND. Just log so
+                    // the cause is in logcat for debugging.
+                    Log.w(SHARE_TAG, "Outcomes snapshot build failed; sharing dump-only", t)
                 }.getOrNull()
             } else {
                 null
@@ -224,8 +233,11 @@ class DebugViewModel(
                 context.startActivity(
                     Intent.createChooser(intent, "Share dumps").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 )
-            }.onFailure {
-                _uiState.value = _uiState.value.copy(message = "No share target available.")
+            }.onFailure { t ->
+                Log.w(SHARE_TAG, "Share intent failed", t)
+                _uiState.value = _uiState.value.copy(
+                    message = "Couldn't launch share (${shortReason(t)}).",
+                )
             }
         }
     }
@@ -362,8 +374,26 @@ class DebugViewModel(
         )
     }
 
+    /**
+     * Single-line failure summary for the user-facing toast. Trims the
+     * exception message because some IOException messages dump entire
+     * file paths and would blow up the snackbar. Pair with a logcat warn
+     * call (tag = SHARE_TAG) for full detail.
+     */
+    private fun shortReason(t: Throwable): String {
+        val msg = t.message.orEmpty().take(60).ifBlank { "no detail" }
+        return "${t.javaClass.simpleName}: $msg"
+    }
+
     companion object {
         private const val MOCK_NOTIFICATION_ID = 4001
+
+        /**
+         * Logcat tag for the dump-share flow. Lets a user grep logcat for
+         * "RupeeShare" when the share-dump button reports a failure they
+         * can't otherwise diagnose.
+         */
+        private const val SHARE_TAG = "RupeeShare"
     }
 }
 
