@@ -66,7 +66,7 @@ android {
             dimension = "design"
             applicationIdSuffix = ".vwfndr"
             versionNameSuffix = "-vwfndr"
-            resValue("string", "app_name", "RPE™")
+            resValue("string", "app_name", "RPEE™")
             buildConfigField("String", "STYLE", "\"vwfndr\"")
         }
     }

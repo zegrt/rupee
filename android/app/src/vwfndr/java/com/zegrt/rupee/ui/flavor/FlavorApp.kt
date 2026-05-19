@@ -68,7 +68,11 @@ fun FlavorApp() {
     ) { insets ->
         AnimatedContent(
             targetState = route,
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            // Instant cut, no fade. vwfndr is a viewfinder — views snap.
+            transitionSpec = {
+                androidx.compose.animation.EnterTransition.None togetherWith
+                    androidx.compose.animation.ExitTransition.None
+            },
             modifier = Modifier.padding(insets),
             label = "route",
         ) { current ->
@@ -228,11 +232,17 @@ private fun HomeViewfinder(onOpenTxn: (VTxn) -> Unit) {
                 .fillMaxWidth()
                 .padding(20.dp),
         ) {
-            Text(
-                "BAL · LIVE",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "BAL · LIVE",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.weight(1f))
+                // Range chip in upper-right — the wallet's analogue of the
+                // aspect-ratio badge in vwfndr's viewfinder.
+                RangeChip(label = "7D", active = true)
+            }
             Spacer(Modifier.height(6.dp))
             Text(
                 "₹ 1,42,438",
@@ -247,6 +257,30 @@ private fun HomeViewfinder(onOpenTxn: (VTxn) -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(Modifier.height(14.dp))
+            // EV-style spend-velocity scale. Mirrors the EV bar that sits
+            // over vwfndr's viewfinder — needle drifts left/right of zero
+            // to indicate "under" / "over" baseline.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "EV",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.width(8.dp))
+                EvScale(
+                    modifier = Modifier
+                        .width(180.dp)
+                        .height(14.dp),
+                    needleFrac = -0.30f,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "− 12 %",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
@@ -304,7 +338,7 @@ private fun TopMarker() {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "RPE™",
+            "RPEE™",
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground,
             fontWeight = FontWeight.Black,
@@ -320,7 +354,9 @@ private fun TopMarker() {
             Modifier
                 .clip(RoundedCornerShape(0.dp))
                 .background(MaterialTheme.colorScheme.primary)
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                // Pulse on a 1.5s loop — the pipeline-is-live indicator.
+                .livePulse(),
         ) {
             Text(
                 "● LIVE",
@@ -381,6 +417,13 @@ private fun TxnExifRow(txn: VTxn, onClick: () -> Unit) {
     ) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // Lime pip next to the merchant — signals "signed."
+                // Muted grey for unsigned rows.
+                StatusPip(
+                    color = if (txn.signed) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(8.dp))
                 Text(
                     txn.merchantCode,
                     style = MaterialTheme.typography.titleMedium,
@@ -542,7 +585,7 @@ private fun TxnReceiptScreen(txn: VTxn, onBack: () -> Unit) {
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
-                    "RPE™  /  RECEIPT",
+                    "RPEE™  /  RECEIPT",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -564,13 +607,28 @@ private fun TxnReceiptScreen(txn: VTxn, onBack: () -> Unit) {
                     fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.onBackground,
                 )
+                Spacer(Modifier.weight(1f))
+                // CR provenance monogram — borrowed from vwfndr's content
+                // credentials badge. Sits above the receipt to signal
+                // "this row carries a signature."
+                CrMonogram(
+                    tint = if (txn.signed) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             Spacer(Modifier.height(20.dp))
 
-            // The receipt card — exposed-grid metadata table
+            // The receipt card — exposed-grid metadata table, with four
+            // registration crosses scattered around it for brand chrome.
+            Box {
+                RegistrationCrosses(
+                    modifier = Modifier.matchParentSize(),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             Box(
                 Modifier
                     .fillMaxWidth()
+                    .padding(8.dp)
                     .border(1.dp, MaterialTheme.colorScheme.outline),
             ) {
                 Column(Modifier.padding(0.dp)) {
@@ -620,9 +678,11 @@ private fun TxnReceiptScreen(txn: VTxn, onBack: () -> Unit) {
                     ReceiptRow("CONFIDENCE", "98 %", lime = true)
                 }
             }
+            } // close outer Box that hosts the RegistrationCrosses overlay
             Spacer(Modifier.height(12.dp))
 
-            // Raw signal block — like the photo metadata block in vwfndr
+            // Raw signal block — EXIF-style metadata strip with the original
+            // notification text rendered like a developer dump.
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -757,7 +817,7 @@ private fun SettingsScreen() {
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "INSTRUMENT PREFERENCES",
+                "SYSTEM PREFERENCES",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -772,10 +832,10 @@ private fun SettingsScreen() {
             )
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-        SettingsBlock("CAPTURE FORMAT") {
+        SettingsBlock("EXPORT FORMAT") {
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                FormatOption("RPE™ JSON + DUMP", true)
-                FormatOption("RPE™ JSON", false)
+                FormatOption("LEDGER + RAW", true)
+                FormatOption("LEDGER ONLY", false)
                 FormatOption("CSV", false)
             }
         }
@@ -789,7 +849,7 @@ private fun SettingsScreen() {
             )
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-        SettingsBlock("VOLUME UP") {
+        SettingsBlock("SHORTCUTS") {
             Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
                 Text(
                     "ADD TXN",

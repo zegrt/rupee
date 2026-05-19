@@ -241,7 +241,16 @@ private fun SpendHeroCard() {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Box {
-            // Decorative arc — analogous to the route arc in Aviate trip-detail.
+            // Orbital sparkles in the upper-right — the recap-card signature
+            // gesture, used here so the home hero feels identity-coded too.
+            OrbitalSparkles(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(width = 180.dp, height = 140.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            // Decorative arc — a soft spending-trajectory line that frames
+            // the hero number without committing to data semantics.
             Canvas(Modifier.fillMaxWidth().height(200.dp).padding(top = 16.dp)) {
                 val brush = Brush.linearGradient(
                     listOf(
@@ -275,8 +284,9 @@ private fun SpendHeroCard() {
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                 )
                 Spacer(Modifier.height(6.dp))
-                Text(
-                    "₹38,420",
+                // Count-up: 0 → 38,420 on first frame. The Wrapped gesture.
+                AnimatedRupees(
+                    target = 38_420,
                     style = MaterialTheme.typography.displayLarge,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
@@ -676,6 +686,17 @@ private fun RecapWrappedScreen() {
             }
         }
         Spacer(Modifier.height(20.dp))
+        // Page dots — the Wrapped-style carousel paginator. Currently a single
+        // card, but the structure signals "more is coming" without forcing
+        // the user to swipe before there's something to swipe to.
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            PageDots(
+                count = 5,
+                selected = 0,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Spacer(Modifier.height(20.dp))
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -815,7 +836,12 @@ private fun PassportScreen() {
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.background),
                     contentAlignment = Alignment.Center,
-                ) { Text("✨", fontSize = 18.sp) }
+                ) {
+                    DualSparkle(
+                        modifier = Modifier.size(26.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
@@ -846,6 +872,15 @@ private fun PassportScreen() {
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
             modifier = Modifier.fillMaxWidth(),
         ) {
+            Box {
+                // Orbital sparkles — identity-coded decoration around
+                // the era's headline number.
+                OrbitalSparkles(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(width = 200.dp, height = 160.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
             Column(Modifier.padding(20.dp)) {
                 Text(
                     "MONEY THIS ERA",
@@ -878,6 +913,7 @@ private fun PassportScreen() {
                     HeroSubStat("11", "MERCHANTS")
                 }
             }
+            } // close Box added for OrbitalSparkles overlay
         }
         Spacer(Modifier.height(16.dp))
 
@@ -1010,7 +1046,40 @@ private fun PassportScreen() {
             color = MaterialTheme.colorScheme.onBackground,
             fontWeight = FontWeight.Bold,
         )
+        Spacer(Modifier.height(14.dp))
+        // Stamp tiles — each slams in with a soft spring bounce on first
+        // composition. The earned-stamp gesture.
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            StampTile("Frugal Fri", "5×", MaterialTheme.colorScheme.primaryContainer)
+            StampTile("No-spend", "3 days", MaterialTheme.colorScheme.tertiaryContainer)
+            StampTile("Under bdgt", "May", MaterialTheme.colorScheme.secondaryContainer)
+            StampTile("Saved ₹50K", "2026", MaterialTheme.colorScheme.surfaceVariant)
+        }
         Spacer(Modifier.height(40.dp))
+    }
+}
+
+@Composable
+private fun StampTile(label: String, value: String, bg: Color) {
+    Column(
+        modifier = Modifier
+            .slamIn()
+            .clip(RoundedCornerShape(14.dp))
+            .background(bg)
+            .padding(10.dp),
+    ) {
+        Text(
+            label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            value,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onBackground,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 
@@ -1054,7 +1123,7 @@ private fun EraChip(label: String, active: Boolean) {
 }
 
 // ---------------------------------------------------------------------------
-// TXN DETAIL — boarding-pass style ticket
+// TXN DETAIL — receipt-style detail card
 // ---------------------------------------------------------------------------
 
 @Composable
@@ -1091,7 +1160,7 @@ private fun TxnDetailSheet(txn: MockTxn, onClose: () -> Unit) {
             }
             Spacer(Modifier.height(20.dp))
 
-            // Upper boarding-pass card
+            // Upper receipt card
             Card(
                 shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp, bottomEnd = 0.dp, bottomStart = 0.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
