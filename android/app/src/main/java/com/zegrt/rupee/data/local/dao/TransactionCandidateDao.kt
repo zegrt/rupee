@@ -15,6 +15,35 @@ interface TransactionCandidateDao {
     @Query("SELECT * FROM transaction_candidates WHERE id = :id LIMIT 1")
     suspend fun getTransactionCandidateById(id: String): TransactionCandidateEntity?
 
+    /**
+     * "Have we seen this fingerprint recently?" — used by the dedupe engine.
+     * Includes IGNORED rows on purpose: when three identical low-confidence
+     * mirrors arrive within seconds (Truecaller's SMS bridge typically
+     * fires the same body 2-3× a few seconds apart), all three would
+     * otherwise write distinct IGNORED rows because each one's lookup
+     * filtered out the prior IGNORED tombstones. See
+     * docs/ingestion-pipeline-research-2026-05-19.md §3 for the dump-traced
+     * root cause.
+     */
+    @Query(
+        """
+        SELECT * FROM transaction_candidates
+        WHERE userId = :userId
+          AND candidateFingerprint = :fingerprint
+        ORDER BY createdAt DESC
+        LIMIT 1
+        """
+    )
+    suspend fun getLatestByFingerprint(
+        userId: String,
+        fingerprint: String,
+    ): TransactionCandidateEntity?
+
+    /**
+     * Non-tombstone variant. Used wherever we want "a candidate we'd link
+     * a confirm / merge against" — IGNORED rows are excluded because
+     * they're decisions we've already made.
+     */
     @Query(
         """
         SELECT * FROM transaction_candidates

@@ -9,6 +9,18 @@ internal object NotificationParsingUtils {
     private val cardDigitsRegexes = listOf(
         Regex("""(?:xx|xx\s*card|card|a/c|account|ending)\D{0,12}(\d{4})""", RegexOption.IGNORE_CASE),
         Regex("""[*xX]{2,}\s*(\d{4})"""),
+        // Single-X bank SMS form: "AC X4129" / "A/c X1234" — Kotak811 and a
+        // few other SMS bridges use one X plus the last-4 digits. The
+        // [*xX]{2,} above misses this. Anchor to A/c | AC | Account so we
+        // don't snap to random "X#### " patterns inside merchant names.
+        // Added 2026-05-19 from the v0.14.0 Nothing-A015 dump where the
+        // Truecaller-mirrored Kotak debit shape "Sent Rs.14.00 from Kotak
+        // Bank AC X4129." had maskedDigits = null and dropped to LOW
+        // confidence as a result.
+        Regex(
+            """\b(?:a[/.]?c|ac|account)\D{0,4}[*xX](\d{4})\b""",
+            RegexOption.IGNORE_CASE,
+        ),
     )
 
     private val monthAbbrev = mapOf(

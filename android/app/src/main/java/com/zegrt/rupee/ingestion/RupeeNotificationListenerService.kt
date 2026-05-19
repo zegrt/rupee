@@ -100,7 +100,15 @@ class RupeeNotificationListenerService : NotificationListenerService() {
                 )
             }.getOrElse { t ->
                 Log.e(TAG, "Failed to ingest notification from ${sbn.packageName}", t)
-                IngestionResult.Filtered(IngestionResult.FilterReason.INGEST_FAILED)
+                // Capture the throwable identity onto the outcome so the next
+                // dump self-triages. Without this, the v0.14.0 FK-regression
+                // hid in a runCatching for a day because the exception type
+                // never reached the dump file.
+                IngestionResult.Filtered(
+                    reason = IngestionResult.FilterReason.INGEST_FAILED,
+                    errorClass = t.javaClass.simpleName,
+                    errorMessage = t.message?.take(200),
+                )
             }
 
             // Log a brief outcome line for ad-hoc logcat debugging. The full

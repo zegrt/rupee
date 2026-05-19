@@ -235,6 +235,34 @@ class TransactionalGateTest {
         assertAccept(body)
     }
 
+    // ── v0.14.1 — title-only debit shapes from the 2026-05-19 dump ────────────
+    //
+    // Bank apps on newer Android skins put the transaction in the TITLE and
+    // leave the body for CTA copy. The combined-body the gate sees has the
+    // transaction on the first line, but the verb shape ("sent FROM XX1234")
+    // is different from the older "sent to / via" forms. Without these the
+    // gate rejects real debits as NO_TRANSACTIONAL_VERB.
+
+    @Test
+    fun `accept Kotak811 native title-only debit`() {
+        // From the v0.14.0 Nothing-A015 dump (2026-05-19) — title-only debit
+        // notification. Combined body is title + body separated by newline.
+        val body = "₹14.00 sent from XX4129\nLow balance! Add funds for seamless payment"
+        assertAccept(body)
+    }
+
+    @Test
+    fun `accept generic debit-from body`() {
+        val body = "Rs.500 debit from A/c XX1234 on 19-May-26"
+        assertAccept(body)
+    }
+
+    @Test
+    fun `accept credit-to body`() {
+        val body = "Rs.2,500 credit to A/c XX1234 — salary deposit"
+        assertAccept(body)
+    }
+
     // ── Bodies with neither verbs nor promo keywords ───────────────────────────
 
     @Test

@@ -69,9 +69,14 @@ class NotificationDedupeEngine(
     ): DedupeResult {
         val (current, previous) = DedupeFingerprint.compute(rawEvent, parseResult)
 
+        // Use the "include IGNORED" variant on purpose. When three identical
+        // mirrors arrive within the same 5-min bucket (Truecaller SMS bridge
+        // re-fires within seconds), each one needs to see the prior IGNORED
+        // tombstone or every dupe writes a fresh row. See
+        // docs/ingestion-pipeline-research-2026-05-19.md §3.
         val duplicateCandidate = database.transactionCandidateDao()
-            .getLatestUsableByFingerprint(rawEvent.userId, current)
-            ?: database.transactionCandidateDao().getLatestUsableByFingerprint(rawEvent.userId, previous)
+            .getLatestByFingerprint(rawEvent.userId, current)
+            ?: database.transactionCandidateDao().getLatestByFingerprint(rawEvent.userId, previous)
         val duplicateCanonicalTransaction = database.canonicalTransactionDao()
             .getLatestByDedupeFingerprint(rawEvent.userId, current)
             ?: database.canonicalTransactionDao().getLatestByDedupeFingerprint(rawEvent.userId, previous)
