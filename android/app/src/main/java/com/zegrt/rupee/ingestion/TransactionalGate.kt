@@ -65,6 +65,12 @@ object TransactionalGate {
         // Debit-side
         "debited", " debit ", "spent ", "spent on", "paid ", "paying ",
         "sent via", "sent to", "sent rs", "sent inr",
+        // Title-only Kotak811 native shape: "₹14.00 sent from XX4129".
+        // Body is just CTA copy ("Low balance!") so the gate's only
+        // signal is the title. Added 2026-05-19 after the v0.14.0
+        // production dump showed real UPI debits being dropped as
+        // NO_TRANSACTIONAL_VERB.
+        "sent from", " debit from", " credit to",
         "transferred", "withdrawn", "withdraw ", "deducted",
         "auto-debit", "auto debit", "autodebit", "charged ", "swiped",
         // ICICI canonical ("Your card has been used for a transaction of INR X")

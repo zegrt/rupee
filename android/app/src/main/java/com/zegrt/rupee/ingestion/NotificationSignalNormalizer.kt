@@ -185,17 +185,8 @@ class NotificationSignalNormalizer(
 
             database.parsedSignalDao().upsertParsedSignal(parsedSignal)
 
-            val inboxItemId = if (decision.decisionState == CandidateDecisionState.INBOX_PENDING) {
-                createInboxItem(
-                    userId = rawEvent.userId,
-                    transactionCandidateId = candidateId,
-                    reasonCode = toInboxReasonCode(decision.decisionReason),
-                    now = now,
-                )
-            } else {
-                null
-            }
-
+            // Canonical txn comes first (no FK dependency on the candidate or
+            // the inbox row), so it's safe to compute up front.
             val canonicalTransactionId = when {
                 dedupeResult.duplicateCanonicalTransaction != null -> dedupeResult.duplicateCanonicalTransaction.id
                 decision.decisionState == CandidateDecisionState.AUTO_CREATED -> createCanonicalTransaction(
@@ -211,6 +202,23 @@ class NotificationSignalNormalizer(
                 else -> null
             }
 
+            // Write order matters: H4 (v0.14.0) declared a CASCADE foreign key
+            // from `inbox_items.transactionCandidateId` to
+            // `transaction_candidates.id`. Creating the inbox row first crashes
+            // with SQLiteConstraintException because the parent candidate
+            // doesn't exist yet — that's the v0.14.0 regression that silently
+            // killed every INBOX_PENDING notification for a full day.
+            //
+            // The correct ordering:
+            //   1. Insert the candidate row (without linkedInboxItemId — we
+            //      don't have it yet)
+            //   2. Insert the inbox row (its FK on transactionCandidateId now
+            //      points at an existing parent)
+            //   3. Upsert the candidate again with linkedInboxItemId set, so
+            //      the candidate-side back-pointer stays in sync
+            //
+            // All three writes are inside the same withTransaction block so
+            // they commit or roll back atomically.
             val candidate = TransactionCandidateEntity(
                 id = candidateId,
                 userId = rawEvent.userId,
@@ -228,7 +236,7 @@ class NotificationSignalNormalizer(
                 decisionState = decision.decisionState,
                 decisionReason = decision.decisionReason,
                 duplicateOfCandidateId = dedupeResult.duplicateCandidate?.id,
-                linkedInboxItemId = inboxItemId,
+                linkedInboxItemId = null, // backfilled below when inbox exists
                 linkedCanonicalTransactionId = canonicalTransactionId ?: dedupeResult.duplicateCandidate?.linkedCanonicalTransactionId,
                 normalizationVersion = "v1",
                 createdAt = now,
@@ -237,6 +245,24 @@ class NotificationSignalNormalizer(
             )
 
             database.transactionCandidateDao().upsertTransactionCandidate(candidate)
+
+            val inboxItemId = if (decision.decisionState == CandidateDecisionState.INBOX_PENDING) {
+                val newInboxId = createInboxItem(
+                    userId = rawEvent.userId,
+                    transactionCandidateId = candidateId,
+                    reasonCode = toInboxReasonCode(decision.decisionReason),
+                    now = now,
+                )
+                // Second upsert wires the back-pointer. Could be a targeted
+                // UPDATE, but upsert via REPLACE is what the DAO offers and
+                // the cost is negligible.
+                database.transactionCandidateDao().upsertTransactionCandidate(
+                    candidate.copy(linkedInboxItemId = newInboxId),
+                )
+                newInboxId
+            } else {
+                null
+            }
 
             // BILL_DUE side-effect: write the parsed amount/date into the matching
             // credit_card row so DuesAlertManager and the Home dashboard have data

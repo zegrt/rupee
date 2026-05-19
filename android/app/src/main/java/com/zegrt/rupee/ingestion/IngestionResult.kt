@@ -35,10 +35,24 @@ import com.zegrt.rupee.data.local.entity.TransactionCandidateType
 sealed interface IngestionResult {
 
     /**
-     * Listener rejected the notification before normalization started.
-     * No DB writes attempted; [rawEventId] is null because nothing was persisted.
+     * Listener rejected the notification before normalization started OR
+     * normalizeNotification threw and the listener's runCatching caught it.
+     *
+     * For [FilterReason.INGEST_FAILED], the catch site populates [errorClass]
+     * with the throwable's simple class name and [errorMessage] with the
+     * first 200 chars of its message — so the next dump triages itself
+     * without needing logcat. v0.14.0 had a foreign-key regression that hid
+     * inside this branch for a whole day because the exception type never
+     * reached the dump.
+     *
+     * For non-INGEST_FAILED reasons both fields are null; the [reason] enum
+     * carries all the signal.
      */
-    data class Filtered(val reason: FilterReason) : IngestionResult
+    data class Filtered(
+        val reason: FilterReason,
+        val errorClass: String? = null,
+        val errorMessage: String? = null,
+    ) : IngestionResult
 
     /**
      * Normalization ran but TransactionalGate rejected the body as non-

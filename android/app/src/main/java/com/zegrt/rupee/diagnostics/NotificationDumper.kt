@@ -200,6 +200,15 @@ object NotificationDumper {
             is IngestionResult.Filtered -> {
                 appendField("kind", "filtered"); append(',')
                 appendField("reason", outcome.reason.name)
+                // errorClass / errorMessage are only set when the listener
+                // catches an exception out of ingestNotification (i.e. when
+                // reason = INGEST_FAILED). For other filter reasons both are
+                // null and we still emit them as explicit JSON null so the
+                // dump schema stays rigid — replay tooling can rely on the
+                // field set per kind.
+                append(',')
+                appendField("errorClass", outcome.errorClass); append(',')
+                appendField("errorMessage", outcome.errorMessage)
             }
             is IngestionResult.GateRejected -> {
                 appendField("kind", "gate_rejected"); append(',')
