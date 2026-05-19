@@ -77,7 +77,8 @@ Right now the project has:
 - a Monthly recap surface (Settings → Monthly recap) with total spent, change vs last month, top categories, top merchants, and biggest transactions
 - light/dark theme following the Android system setting
 - per-account / per-card "exclude from spend totals" toggle for wallets that double-count from another tracked source
-- dedicated parsers for GPay, CRED, ICICI, Kotak (incl. Kotak811), PhonePe, Paytm, EMI debits, generic UPI fallback; debug-only notification-dump tool to bootstrap real-world parser corpus
+- dedicated parsers for ATM withdrawals, GPay, CRED, ICICI, Kotak (incl. Kotak811), PhonePe, Paytm, EMI debits, generic UPI fallback; ATM bodies route to `CASH_WITHDRAWAL` (excluded from monthly spend totals so cash withdrawals don't double-count when later spent); debug-only notification-dump tool with sibling outcomes snapshot to bootstrap and replay against the parser corpus
+- DB-level foreign keys with cascade deletes across the ingestion chain (raw → parsed signal → candidate → inbox), automatic 90-day prune of raw notification events, and fuel-brand normalisation (IOC / HPCL / BPCL / Shell etc.) so a single merchant trust rule covers every outlet of a brand
 - manual transaction entry through a bottom sheet
 - a Settings page (display name, monthly budget, notification permission re-check, version, category/bucket lists)
 - a Debug page (preset + editable mock notifications, parser playground, DB reset) accessible via a floating pill and from Settings
@@ -95,8 +96,8 @@ The current preview build:
 
 APK output:
 
-- [rupee-0.13.10-release.apk](./android/app/build/outputs/apk/release/rupee-0.13.10-release.apk) (signed; for friends/family)
-- [rupee-0.13.10-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.13.10-debug.apk) (for personal dogfooding — includes the notification-dump tool that bootstraps the parser corpus)
+- [rupee-0.14.0-release.apk](./android/app/build/outputs/apk/release/rupee-0.14.0-release.apk) (signed; for friends/family)
+- [rupee-0.14.0-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.14.0-debug.apk) (for personal dogfooding — includes the notification-dump tool that bootstraps the parser corpus)
 
 ## Main Docs
 
@@ -107,6 +108,7 @@ APK output:
 - [Android Screen Spec](./docs/rupee-android-screens.md)
 - [Engineering Roadmap](./docs/rupee-roadmap.md)
 - [Deferred Work & Sprint Backlog](./docs/rupee-backlog.md)
+- [Gravedigging Audit (2026-05-18)](./docs/gravedigging-2026-05-18.md) — closed-out paper trail of the bug-of-the-Inbox-husk-shape audit and the four PRs that landed phases 1–3b in v0.14.0
 
 ## Project Context
 

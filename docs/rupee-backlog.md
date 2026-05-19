@@ -2,7 +2,7 @@
 
 **Purpose:** durable, in-repo backlog. Anything Claude promised to do "next sprint" or "later" lives here, not just in conversation context. This file is the single source of truth for what's deferred — if it's not here, it doesn't exist.
 
-**Last updated:** 2026-05-13 (after Sprint 1.4 / v0.13.7)
+**Last updated:** 2026-05-19 (after the gravedigging audit / v0.14.0)
 
 ---
 
@@ -19,7 +19,57 @@ Each item should have: *what*, *why it matters*, *touchpoints*, *blocked by*.
 
 ## In flight
 
-_(nothing right now — v0.13.5 just landed)_
+_(nothing right now — v0.14.0 landed the gravedigging audit; next sprint
+direction TBD against the milestone roadmap in [rupee-roadmap.md](rupee-roadmap.md).)_
+
+---
+
+## Recently shipped — gravedigging audit, v0.14.0 *(2026-05-19)*
+
+Full ledger lives in [docs/gravedigging-2026-05-18.md](gravedigging-2026-05-18.md);
+abbreviated here so the backlog reflects current backlog and history.
+
+- **Inbox husk bug** — DB-level `@Relation` join replaces the parallel-
+  flow in-memory join; husks structurally impossible.
+- **H1** — REFUND now routes to canonical INCOME (PhonePe / Paytm parsers
+  + normalizer).
+- **H2** — Home recent-transactions list switched from `LIMIT 20` to a
+  30-day windowed query.
+- **H3** — gate-rejected notifs no longer write candidate rows; 90-day
+  prune of `raw_capture_events` (FK cascades sweep the chain).
+- **H4** — foreign keys + CASCADE / SET NULL on parsed_signals →
+  transaction_candidates → inbox_items. Migration `MIGRATION_8_9`
+  rebuilt three tables.
+- **M1** — `inbox_items.mergedFromExistingCanonicalId` column replaces
+  magic-string CASE expression in `DumpOutcomeDao`. Migration
+  `MIGRATION_9_10`.
+- **M2** — gate vocab additions: `reversed`, `reversal`, `chargeback`,
+  `SIP installment`, `NACH mandate`, `ECS debit`, `refund of`,
+  `standing instruction`.
+- **M3a** — dedicated `AtmNotificationParser`, registered FIRST so ATM
+  withdrawals route as `CASH_WITHDRAWAL` (→ `CASH_ADJUSTMENT` canonical,
+  excluded from spend totals).
+- **M3b** — fuel-brand normalisation in `MerchantNameUtils.clean`
+  (IOC / HPCL / BPCL / Shell / Nayara / Essar) — trust rules now fire
+  across every outlet of a brand.
+- **M4** — `app_state` K/V table persists debounce timestamps across
+  cold starts. Migration `MIGRATION_10_11`.
+- **M5** — UPI confidence tiering: amount + merchant + maskedDigits →
+  HIGH (auto-create); less → MEDIUM (Inbox).
+- **M6** — share-path exceptions now logged + surfaced in toast via
+  exception class.
+- **M7** — `findMatchingCard` refuses single-card fallback when parser
+  captured a non-matching digit or provider hint.
+- **L3** — `CrashReporter.readLog` returns `Result<String>` so the
+  debug screen distinguishes "no crashes" from "read failed".
+- Repository gains `persistScope: CoroutineScope` parameter; production
+  uses `RupeeApplication.appScope` instead of `GlobalScope`.
+
+S1.4 fully shipped in v0.13.7 — Home income line, Transactions list +₹X
+tinted rows, manual entry Expense/Income toggle, GPay/PhonePe/Paytm
+INCOME branching all landed. CRED/ICICI parsers still hardcode SPEND
+for some paths — fine for card alerts, audit if a real card-credit
+notification slips through.
 
 ---
 
@@ -30,8 +80,6 @@ _(nothing right now — v0.13.5 just landed)_
 **Why:** today two very different bodies score the same `0.62` — one with strong evidence, one with weak. Tuning is per-parser edits in nine files. With a tally, tuning is one knob.
 **Touchpoints:** `NotificationParseResult.parseConfidence`, all 9 parsers in `ingestion/`, `NotificationDecisionEngineTest`.
 **Blocked by:** nothing. Can do one parser at a time — start with `GenericNotificationParser` + `GenericUpiNotificationParser` (the two with the loosest current scoring).
-
-_(S1.4 fully shipped in v0.13.7 — Home income line, Transactions list +₹X tinted rows, manual entry Expense/Income toggle, GPay/PhonePe/Paytm INCOME branching all landed. CRED/ICICI parsers still hardcode SPEND — fine for card alerts, audit if a real card-credit notification slips through.)_
 
 ---
 
@@ -68,9 +116,9 @@ _(S1.4 fully shipped in v0.13.7 — Home income line, Transactions list +₹X ti
 - **§9.9 Post-ship parse-rate counter.** Surface "notifs received vs notifs with `amountMinor != null`" as a debug stat. Aim ≥70% on a typical day. Useful for catching parser regression without needing a fresh dump every time.
 
 ### From `docs/rupee-settings-debug.md` §6 (deferred-by-design)
-- **Merge with existing transaction.** Repository contract: `mergeInboxIntoTransaction(inboxItemId, targetTransactionId)`. Two-step soft-confirm currently exists in UI but no full search-then-select picker.
+- **Merge with existing transaction.** Repository contract: `mergeInboxIntoTransaction(inboxItemId, targetTransactionId)`. Two-step soft-confirm currently exists in UI but no full search-then-select picker. (M1's `mergedFromExistingCanonicalId` column landed v0.14.0 — surfaces the merge in analytics, but the UI picker remains TODO.)
 - **Recategorize on Transactions detail sheet.** Edit form has Merchant + Notes; add CategoryDropdown row mirroring Inbox review.
-- **Dedicated PhonePe / Paytm parsers** — they fall into `GenericUpi` today. Better merchant extraction + branded provider hint.
+- ~~**Dedicated PhonePe / Paytm parsers**~~ — shipped earlier; PhonePe and Paytm have dedicated parsers in `ingestion/`.
 - **Custom bucket progress cards on Home.** Needs per-bucket budgets seeded + `transaction_bucket_assignments` DAO.
 
 ### Schema entities defined but unimplemented
