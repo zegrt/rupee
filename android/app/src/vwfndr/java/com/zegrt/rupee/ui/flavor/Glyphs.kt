@@ -10,10 +10,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,9 +52,33 @@ import androidx.compose.ui.unit.dp
 internal fun EvScale(
     modifier: Modifier = Modifier,
     needleFrac: Float = 0f,
+    wiggleAmount: Float = 0f,
     activeColor: Color = Color(0xFFCFFF5C),
     inactiveColor: Color = Color(0xFF606060),
 ) {
+    // Wiggle: when >0, the needle jitters ±wiggleAmount around the input
+    // position with two unsynced sine waves so it never reads as a clean
+    // oscillation. Simulates a noisy live reading.
+    val live = if (wiggleAmount > 0f) {
+        val tx = rememberInfiniteTransition(label = "ev-wiggle")
+        val a by tx.animateFloat(
+            initialValue = -1f, targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1300, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "ev-wiggle-a",
+        )
+        val b by tx.animateFloat(
+            initialValue = -1f, targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 870, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "ev-wiggle-b",
+        )
+        needleFrac + wiggleAmount * (a * 0.6f + b * 0.4f)
+    } else needleFrac
     Canvas(modifier) {
         val cy = size.height / 2f
         val w = size.width
@@ -65,8 +96,8 @@ internal fun EvScale(
                 cap = StrokeCap.Square,
             )
         }
-        // Needle / indicator triangle
-        val needleX = (w / 2f) + (needleFrac.coerceIn(-1f, 1f) * (w / 2f))
+        // Needle — driven by [live] which is [needleFrac] + wiggle.
+        val needleX = (w / 2f) + (live.coerceIn(-1f, 1f) * (w / 2f))
         val triH = size.height * 0.5f
         drawLine(
             color = activeColor,

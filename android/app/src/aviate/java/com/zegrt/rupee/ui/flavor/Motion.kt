@@ -88,6 +88,37 @@ internal fun Modifier.slamIn(): Modifier {
     }
 }
 
+/**
+ * Staggered fade-in. Apply to each child of a reveal sequence (Wrapped
+ * card body, hero stack). Each call gets a unique [index]; the modifier
+ * delays its fade-in by `index * stepMs` so children appear in order.
+ *
+ * Fades 14dp up and 0→1 alpha over 240ms easeOutCubic. Subtle, generous,
+ * unmistakably the Spotify Wrapped reveal moment.
+ */
+@Composable
+internal fun Modifier.staggerFadeIn(index: Int, stepMs: Long = 150L): Modifier {
+    var visible by remember { mutableStateOf(false) }
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(durationMillis = 240, easing = EaseOutCubic),
+        label = "stagger-alpha-$index",
+    )
+    val translateY by animateFloatAsState(
+        targetValue = if (visible) 0f else 14f,
+        animationSpec = tween(durationMillis = 240, easing = EaseOutCubic),
+        label = "stagger-y-$index",
+    )
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(index * stepMs)
+        visible = true
+    }
+    return this.graphicsLayer {
+        this.alpha = alpha
+        this.translationY = translateY
+    }
+}
+
 private fun formatInr(value: Int): String {
     if (value < 1_000) return value.toString()
     // Lakh/crore grouping: last 3 digits, then groups of 2

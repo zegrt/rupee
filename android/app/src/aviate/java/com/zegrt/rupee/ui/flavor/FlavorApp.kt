@@ -41,6 +41,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -251,6 +252,18 @@ private fun SpendHeroCard() {
             )
             // Decorative arc — a soft spending-trajectory line that frames
             // the hero number without committing to data semantics.
+            // Self-draws on first render: sweep animates 0 → 140 with
+            // easeOutCubic over ~900ms. The Wrapped reveal moment.
+            val traceProgress = remember { androidx.compose.animation.core.Animatable(0f) }
+            LaunchedEffect(Unit) {
+                traceProgress.animateTo(
+                    targetValue = 1f,
+                    animationSpec = androidx.compose.animation.core.tween(
+                        durationMillis = 900,
+                        easing = androidx.compose.animation.core.EaseOutCubic,
+                    ),
+                )
+            }
             Canvas(Modifier.fillMaxWidth().height(200.dp).padding(top = 16.dp)) {
                 val brush = Brush.linearGradient(
                     listOf(
@@ -260,21 +273,28 @@ private fun SpendHeroCard() {
                 )
                 drawArc(
                     brush = brush,
-                    startAngle = 200f, sweepAngle = 140f, useCenter = false,
+                    startAngle = 200f,
+                    sweepAngle = 140f * traceProgress.value,
+                    useCenter = false,
                     topLeft = Offset(-80f, 40f),
                     size = Size(size.width + 160f, size.height * 1.8f),
                     style = Stroke(width = 6f),
                 )
+                // Origin pip — visible from the start
                 drawCircle(
                     color = Color(0xFF2E5BFF),
                     radius = 14f,
                     center = Offset(size.width * 0.18f, size.height * 0.78f),
                 )
-                drawCircle(
-                    color = Color(0xFF2E5BFF),
-                    radius = 14f,
-                    center = Offset(size.width * 0.82f, size.height * 0.42f),
-                )
+                // Terminal pip — fades in as the arc completes
+                if (traceProgress.value > 0.85f) {
+                    val a = ((traceProgress.value - 0.85f) / 0.15f).coerceIn(0f, 1f)
+                    drawCircle(
+                        color = Color(0xFF2E5BFF).copy(alpha = a),
+                        radius = 14f,
+                        center = Offset(size.width * 0.82f, size.height * 0.42f),
+                    )
+                }
             }
 
             Column(Modifier.padding(20.dp)) {
@@ -592,7 +612,10 @@ private fun RecapWrappedScreen() {
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(Modifier.padding(24.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.staggerFadeIn(0),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Box(
                         Modifier
                             .size(28.dp)
@@ -625,14 +648,20 @@ private fun RecapWrappedScreen() {
                     "YOU SPENT IN",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                    modifier = Modifier.staggerFadeIn(1),
                 )
                 Spacer(Modifier.height(10.dp))
-                Text(
-                    "23",
-                    fontSize = 156.sp,
-                    lineHeight = 156.sp,
+                AnimatedRupees(
+                    target = 23,
+                    prefix = "",
+                    style = androidx.compose.ui.text.TextStyle(
+                        fontSize = 156.sp,
+                        lineHeight = 156.sp,
+                        fontWeight = FontWeight.Black,
+                    ),
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    fontWeight = FontWeight.Black,
+                    durationMs = 1200,
+                    modifier = Modifier.staggerFadeIn(2),
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -640,6 +669,7 @@ private fun RecapWrappedScreen() {
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                     fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.staggerFadeIn(3),
                 )
                 Spacer(Modifier.height(28.dp))
 
@@ -648,6 +678,7 @@ private fun RecapWrappedScreen() {
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                     ),
+                    modifier = Modifier.staggerFadeIn(4),
                 ) {
                     Column(Modifier.padding(16.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -682,6 +713,7 @@ private fun RecapWrappedScreen() {
                     "→ rupee.app",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f),
+                    modifier = Modifier.staggerFadeIn(5),
                 )
             }
         }
@@ -889,12 +921,16 @@ private fun PassportScreen() {
                 )
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        "₹4.2L",
-                        fontSize = 64.sp,
-                        lineHeight = 64.sp,
+                    // Lakh-grouped count-up: 0 → 4,20,000 over 1200ms.
+                    AnimatedRupees(
+                        target = 420_000,
+                        style = androidx.compose.ui.text.TextStyle(
+                            fontSize = 56.sp,
+                            lineHeight = 56.sp,
+                            fontWeight = FontWeight.Black,
+                        ),
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontWeight = FontWeight.Black,
+                        durationMs = 1200,
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(

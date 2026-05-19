@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -42,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -98,7 +100,7 @@ private sealed class Route {
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun CornerBrackets(content: @Composable () -> Unit) {
+private fun CornerBrackets(content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
     Box(Modifier.fillMaxSize()) {
         content()
         Canvas(Modifier.fillMaxSize().padding(8.dp)) {
@@ -137,9 +139,13 @@ private fun VwBottomBar(route: Route, onSelect: (Route) -> Unit) {
                     .height(96.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // Cells double as nav + status readouts — vwfndr-grammar:
+                // the label is the surface code, the value is the readout
+                // that surface is reporting *right now* (pipeline activity,
+                // ledger row count, system status).
                 ControlCell(
-                    label = "MODE",
-                    value = if (route is Route.Home) "VIEW" else "—",
+                    label = "HOM",
+                    value = "LIVE",
                     active = route is Route.Home,
                     modifier = Modifier.weight(1f),
                     onClick = { onSelect(Route.Home) },
@@ -165,8 +171,8 @@ private fun VwBottomBar(route: Route, onSelect: (Route) -> Unit) {
 
                 VerticalDivider(color = MaterialTheme.colorScheme.outline)
                 ControlCell(
-                    label = "LEDGER",
-                    value = if (route is Route.Ledger) "OPEN" else "—",
+                    label = "LDG",
+                    value = "412",
                     active = route is Route.Ledger,
                     modifier = Modifier.weight(1f),
                     onClick = { onSelect(Route.Ledger) },
@@ -174,7 +180,7 @@ private fun VwBottomBar(route: Route, onSelect: (Route) -> Unit) {
                 VerticalDivider(color = MaterialTheme.colorScheme.outline)
                 ControlCell(
                     label = "CFG",
-                    value = if (route is Route.Settings) "OPEN" else "—",
+                    value = "OK",
                     active = route is Route.Settings,
                     modifier = Modifier.weight(1f),
                     onClick = { onSelect(Route.Settings) },
@@ -273,6 +279,9 @@ private fun HomeViewfinder(onOpenTxn: (VTxn) -> Unit) {
                         .width(180.dp)
                         .height(14.dp),
                     needleFrac = -0.30f,
+                    // Subtle live jitter — needle never sits perfectly still,
+                    // reads as "sensor reporting, not static."
+                    wiggleAmount = 0.06f,
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
@@ -283,6 +292,12 @@ private fun HomeViewfinder(onOpenTxn: (VTxn) -> Unit) {
             }
         }
 
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+
+        // LIVE FEED ticker — auto-marquee through the last few signals.
+        // Single-line strip; the pipeline is broadcasting, the user is
+        // operating equipment that's listening.
+        LiveFeedTicker()
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 
         // 2×2 stat grid — SPND / RECV / SAVE / DUES — exposed cell borders
@@ -473,6 +488,18 @@ private fun TxnExifRow(txn: VTxn, onClick: () -> Unit) {
 @Composable
 private fun LedgerScreen(onOpenTxn: (VTxn) -> Unit) {
     val scroll = rememberScrollState()
+    Box(Modifier.fillMaxSize()) {
+        // Rotated edge label down the left side — vwfndr's signature
+        // "rotated metadata strip" applied to the wallet's ledger context.
+        EdgeMeta(
+            key = "LDG",
+            value = "30D · 412 TX",
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .rotate(-90f)
+                .padding(horizontal = 4.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     Column(
         Modifier
             .fillMaxSize()
@@ -524,6 +551,7 @@ private fun LedgerScreen(onOpenTxn: (VTxn) -> Unit) {
         }
         Spacer(Modifier.height(60.dp))
     }
+    } // close outer Box hosting the rotated EdgeMeta overlay
 }
 
 @Composable
@@ -569,6 +597,17 @@ private fun LedgerHeader(label: String) {
 private fun TxnReceiptScreen(txn: VTxn, onBack: () -> Unit) {
     val scroll = rememberScrollState()
     CornerBrackets {
+        // Rotated edge label down the right side — receipt provenance
+        // strip. Visible chrome that reinforces "this is a signed artifact."
+        EdgeMeta(
+            key = "SIG",
+            value = "0.98 · ${txn.source}",
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .rotate(90f)
+                .padding(horizontal = 4.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Column(
             Modifier
                 .fillMaxSize()
@@ -971,6 +1010,40 @@ private fun ReadoutColumn(label: String, value: String, lime: Boolean = false, d
                 else -> MaterialTheme.colorScheme.onBackground
             },
             fontWeight = FontWeight.Black,
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// LIVE FEED ticker — auto-marquee
+// ---------------------------------------------------------------------------
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun LiveFeedTicker() {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "● LIVE",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.livePulse(),
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            "ZMTO ₹612  ·  UBER ₹284  ·  HDFC·EMI ₹4,250  ·  BIGBASKET ₹1,624  ·  AMZN ₹899  ·  METRO ₹500  ·  BMS ₹640  ·  SPOTIFY ₹199",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            modifier = Modifier
+                .weight(1f)
+                .basicMarquee(),
         )
     }
 }
