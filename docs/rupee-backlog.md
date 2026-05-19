@@ -104,6 +104,37 @@ notification slips through.
 **Touchpoints:** new `IngestionHealthCard` composable on `DebugScreen`, queries against `parsed_signals` + `raw_capture_events` (7-day window). Optional notification when failure rate spikes.
 **Blocked by:** nothing. Half a day.
 
+### EMI-AUTO — EMI auto-detection from notifications
+**What:** Today `EmiPlanEntity` is populated only by manual entry through the Cards & EMIs screen. EMI debit notifications parse as SPEND. Extend the EMI parser to upsert into `emi_plans` directly when amount + merchant + due-date all extract confidently — same shape as the BILL_DUE → credit_cards side-effect that's already wired.
+**Why:** the only "Track basic EMI obligations" gap on the MVP checklist in [rupee-roadmap.md §3](rupee-roadmap.md). Everything else on the MVP list ships today.
+**Touchpoints:** `EmiNotificationParser` (already exists, extracts amount + merchantishly + dueDateIso), `NotificationSignalNormalizer.applyBillDueToCard` is the structural mirror — copy the shape for `applyEmiToPlan`. New repo method + DAO upsert.
+**Blocked by:** nothing. ~1-2 days.
+**Open design Q:** route confirmed EMIs to Inbox first vs auto-add to `emi_plans`? Recommend Inbox (EMIs are commitments — user should verify before they show up on Home's upcoming-dues strip).
+
+### SEED-SERVICE — proper seeding service (replace hardcoded IDs)
+**What:** `LocalFinanceRepository.completeInitialSetup` hardcodes seed IDs (`account-bank-1`, `card-1`, `account-cash`) and a single 2026-03 budget period. Works for one tester; breaks for a clean install in any other month. Replace with UUID generation + current-month budget.
+**Why:** release blocker (any install outside March 2026 silently has no budget seeded for the current month).
+**Touchpoints:** `LocalFinanceRepository.completeInitialSetup`, possibly `OnboardingViewModel` if budget period needs surfacing.
+**Blocked by:** nothing. ~half-day.
+
+### POLISH-1 — Home / Inbox / Settings polish pass
+**What:** Designer-driven visual review pass on the three most-trafficked surfaces. Specific items emerge from walkthrough; common rough spots based on past testing:
+- spacing inconsistencies (margins, padding) between Home / Inbox / Settings
+- typography hierarchy on Home (greeting vs month vs budget number)
+- empty states (Inbox empty, no transactions yet, no income captured)
+- loading states on first cold start before flows hydrate
+- snackbar / toast styling
+- Recap surface visual density
+**Why:** pre-1.0 product polish; the v0.13.8 onboarding pass cleaned Welcome / Permissions / Profile screens but Home / Inbox / Settings haven't had a focused visual review since.
+**Touchpoints:** mostly `MainActivity.kt` composables. Could prompt an L5-flavoured decomposition pass as a side effect.
+**Blocked by:** nothing — needs a polish brief, not a tech blocker. ~½ to 2 days depending on scope.
+
+### L4 — remove `fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4)`
+**What:** Drop the destructive-migration fallback in `RupeeApplication.kt:25`. Anyone on v1-v4 has long passed the upgrade window; this is just data-loss-risk for any real release.
+**Why:** release blocker. Captured in [gravedigging-2026-05-18.md §L4](gravedigging-2026-05-18.md) as "deferred indefinitely until release prep" — promoting here so it doesn't get forgotten.
+**Touchpoints:** one line in `RupeeApplication.kt`. ~5 minutes.
+**Blocked by:** "we're committing to never supporting v1-v4 upgrades again" — true today.
+
 ### S1.3 — Evidence-stacked confidence scoring
 **What:** Replace every parser's hardcoded confidence brackets (`0.62 / 0.55 / 0.15` etc.) with an additive evidence tally. Each parser contributes points per signal found (canonical verb +3, masked digits +2, UPI ref +2, named merchant +2, amount-only +1, soft anti-signals −5). Single global threshold decides MEDIUM vs HIGH.
 **Why:** today two very different bodies score the same `0.62` — one with strong evidence, one with weak. Tuning is per-parser edits in nine files. With a tally, tuning is one knob.

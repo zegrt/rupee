@@ -140,6 +140,10 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     testImplementation("junit:junit:4.13.2")
+    // T2 — dump-replay harness parses production dumps.jsonl files. Android's
+    // org.json stubs throw at JVM test time; the real org.json artifact
+    // overrides them. Tiny dep, test scope only.
+    testImplementation("org.json:json:20240303")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
