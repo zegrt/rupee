@@ -143,4 +143,11 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    // T1 — instrumented DB tests use Room's in-memory builder. The
+    // -testing artifact specifically gives us MigrationTestHelper for
+    // testing the v8 → v9 → v10 → v11 migration chain against fixture
+    // data. See backlog T1 in docs/rupee-backlog.md.
+    androidTestImplementation("androidx.room:room-testing:2.7.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:core-ktx:1.6.1")
 }
