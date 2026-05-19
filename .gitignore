@@ -10,3 +10,19 @@ captures/
 
 *.jks
 *.keystore
+
+# Local IDE / agent tooling — never tracked
+.agents/
+.cursor/
+.github/
+.jetro/
+.kotlin/
+.mcp.json
+.windsurfrules
+
+# Jetro auto-generated session prompts (regenerated on each boot)
+AGENT.md
+CLAUDE.md
+
+# Local Gradle daemon JVM config (depends on the dev's installed JDK)
+gradle/gradle-daemon-jvm.properties
