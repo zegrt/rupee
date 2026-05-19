@@ -1,8 +1,19 @@
 # Rupee Schema Spec
 
-Date: March 27, 2026
-Status: Draft v1
-Author: Codex
+Date: March 27, 2026 (Draft v1) · last refreshed 2026-05-19 to reflect v0.14.0 (Room DB v11)
+Status: Living spec — refreshed alongside the implementation
+Author: Codex (original draft); rolled forward by audit work tracked in
+[docs/gravedigging-2026-05-18.md](gravedigging-2026-05-18.md).
+
+> **Implementation status note.** The original Codex draft was a v1 paper
+> spec — written before any code shipped. The implementation has diverged
+> from that draft on several fronts (cascade deletes, new columns,
+> additional table) as fixes landed. Sections below have been refreshed in
+> place with a `*(shipped v0.14.0)*` or version-marker tag where the code
+> is the source of truth. The Room DB is currently at **v11**; the
+> migration history of record lives at
+> [`android/app/src/main/java/com/zegrt/rupee/data/local/RupeeMigrations.kt`](../android/app/src/main/java/com/zegrt/rupee/data/local/RupeeMigrations.kt),
+> with versioned schema dumps under [`android/app/schemas/com.zegrt.rupee.data.local.RupeeDatabase/`](../android/app/schemas/com.zegrt.rupee.data.local.RupeeDatabase/).
 
 ## 1. Purpose
 
@@ -251,8 +262,16 @@ Columns:
 - `masked_digits` text nullable
 - `mode` text nullable
 - `event_occurred_at` text nullable
+- `network_reference_id` text nullable *(shipped v0.13.0)* — UPI / IMPS /
+  NEFT / RTGS reference token extracted by parsers, used for cross-stream
+  dedupe with the canonical_transactions side
+- `network_reference_type` text nullable *(shipped v0.13.0)*
+- `pattern_uid` integer nullable *(shipped v0.13.0)* — reserved for the
+  upcoming JSON rule engine; populated only when a rule fires
 - `parse_confidence` real not null
-- `structured_json` text nullable
+- `structured_json` text nullable — for gate-rejected rows holds the
+  `<reason>:<matched-keyword>` summary so dump-replay can reconstruct
+  why a body was dropped
 - `created_at` text not null
 - `updated_at` text not null
 - `sync_status` text not null
@@ -260,7 +279,9 @@ Columns:
 Foreign keys:
 
 - `user_id -> users.id`
-- `raw_capture_event_id -> raw_capture_events.id`
+- `raw_capture_event_id -> raw_capture_events.id` **ON DELETE CASCADE**
+  *(shipped v0.14.0, H4)* — pruning a raw event sweeps up its derived
+  parsed signal automatically
 
 Indexes:
 
@@ -288,6 +309,15 @@ Columns:
 - `mode` text nullable
 - `occurred_at` text nullable
 - `candidate_fingerprint` text nullable
+- `confidence_tier` text nullable *(shipped early; tracks parser confidence
+  tier on the candidate row)*
+- `decision_state` text not null *(shipped early)* — see §4.10 / decision
+  engine for values
+- `decision_reason` text not null *(shipped early)*
+- `duplicate_of_candidate_id` text nullable *(shipped early)* — dedupe
+  back-pointer when this candidate was flagged as a duplicate
+- `linked_inbox_item_id` text nullable
+- `linked_canonical_transaction_id` text nullable
 - `normalization_version` text not null
 - `created_at` text not null
 - `updated_at` text not null
@@ -296,13 +326,23 @@ Columns:
 Foreign keys:
 
 - `user_id -> users.id`
-- `parsed_signal_id -> parsed_signals.id`
+- `parsed_signal_id -> parsed_signals.id` **ON DELETE CASCADE**
+  *(shipped v0.14.0, H4)*
+- `linked_canonical_transaction_id -> canonical_transactions.id` **ON
+  DELETE SET NULL** *(shipped v0.14.0, H4)* — preserves the candidate
+  audit row when the user deletes the canonical txn
+- `duplicate_of_candidate_id -> transaction_candidates.id` **ON DELETE
+  SET NULL** *(shipped v0.14.0, H4)* — self-ref; null-out a dangling
+  dedupe back-pointer rather than cascade-delete the downstream row
 
 Indexes:
 
 - index on `user_id`
 - index on `parsed_signal_id`
 - index on `candidate_type`
+- index on `linked_canonical_transaction_id` *(shipped v0.14.0, required
+  by Room for the FK above)*
+- index on `duplicate_of_candidate_id` *(shipped v0.14.0)*
 - index on `occurred_at`
 - index on `candidate_fingerprint`
 
@@ -368,6 +408,12 @@ Columns:
 - `currency_code` text not null
 - `opening_balance_minor` integer nullable
 - `current_balance_minor` integer nullable
+- `exclude_from_expense_totals` integer not null default 0 *(shipped
+  v0.13.0)* — per-account opt-out from monthly spend rollups so a
+  wallet that's "internal" (e.g. funded by transfers from a tracked
+  account) doesn't double-count
+- `exclude_from_income_totals` integer not null default 0 *(shipped
+  v0.13.0)*
 - `is_active` integer not null default 1
 - `sort_order` integer not null default 0
 - `created_at` text not null
@@ -404,6 +450,12 @@ Columns:
 - `statement_due_date` text nullable
 - `current_outstanding_minor` integer nullable
 - `available_limit_minor` integer nullable
+- `exclude_from_expense_totals` integer not null default 0 *(shipped
+  v0.13.0)* — same semantics as the accounts flag; useful for a card
+  that's a household / business card whose spend shouldn't roll up
+  into the user's personal monthly total
+- `exclude_from_income_totals` integer not null default 0 *(shipped
+  v0.13.0)*
 - `is_active` integer not null default 1
 - `sort_order` integer not null default 0
 - `created_at` text not null
@@ -521,6 +573,15 @@ Columns:
 - `created_by` text not null
 - `confidence_tier` text nullable
 - `similar_history_key` text nullable
+- `dedupe_fingerprint` text nullable *(shipped early)* — flat fingerprint
+  used by the dedupe engine for "did we see this exact charge in the
+  last few minutes?" matching; see [docs/rupee-architecture.md](rupee-architecture.md)
+  §10.2 for derivation
+- `network_reference_id` text nullable *(shipped v0.13.0)* — carried
+  through from `parsed_signals` so cross-stream duplicates (HDFC SMS
+  + CRED mirror of the same charge) can be reconciled later by
+  reference id rather than fingerprint alone
+- `network_reference_type` text nullable *(shipped v0.13.0)*
 - `is_hidden_from_budget` integer not null default 0
 - `created_at` text not null
 - `updated_at` text not null
@@ -534,6 +595,11 @@ Foreign keys:
 - `cash_account_id -> accounts.id`
 - `category_id -> categories.id`
 
+The H4 CASCADE/SET NULL declarations live on the *child* tables that
+reference `canonical_transactions.id` (see §5.4 transaction_candidates,
+§5.15 inbox_items) — the parent has no FK enforcement on its own column
+references today.
+
 Indexes:
 
 - index on `user_id`
@@ -544,6 +610,8 @@ Indexes:
 - index on `type`
 - index on `status`
 - index on `similar_history_key`
+- index on `dedupe_fingerprint` *(shipped early; required for fast
+  dedupe lookup)*
 
 Constraints:
 
@@ -613,7 +681,12 @@ Columns:
 - `transaction_candidate_id` text not null
 - `reason_code` text not null
 - `decision_state` text not null
-- `linked_canonical_transaction_id` text nullable
+- `linked_canonical_transaction_id` text nullable — set on confirm or merge
+- `merged_from_existing_canonical_id` text nullable *(shipped v0.14.0,
+  M1)* — non-null only when the user picked "merge with existing" in
+  Inbox; distinguishes a merge from a fresh confirm. Replaces a brittle
+  CASE expression that previously reverse-engineered the merge state
+  from a synthetic id naming convention.
 - `created_at` text not null
 - `resolved_at` text nullable
 - `updated_at` text not null
@@ -622,8 +695,13 @@ Columns:
 Foreign keys:
 
 - `user_id -> users.id`
-- `transaction_candidate_id -> transaction_candidates.id`
-- `linked_canonical_transaction_id -> canonical_transactions.id`
+- `transaction_candidate_id -> transaction_candidates.id` **ON DELETE
+  CASCADE** *(shipped v0.14.0, H4)* — pruning a candidate sweeps up
+  its inbox row
+- `linked_canonical_transaction_id -> canonical_transactions.id` **ON
+  DELETE SET NULL** *(shipped v0.14.0, H4)* — preserves the inbox row
+  (audit trail of the decision) when the user deletes the canonical
+  transaction it pointed at
 
 Indexes:
 
@@ -631,6 +709,8 @@ Indexes:
 - index on `decision_state`
 - index on `transaction_candidate_id`
 - index on `created_at`
+- index on `linked_canonical_transaction_id` *(shipped v0.14.0; required
+  by Room for the FK above)*
 
 ## 5.16 recurring_patterns
 
@@ -828,6 +908,41 @@ Indexes:
 - index on `user_id`
 - unique index on `user_id, year, month`
 
+## 5.23 app_state *(shipped v0.14.0, M4)*
+
+Tiny key/value table for app-scoped persistent state that doesn't deserve
+its own table. Currently used by debounce-timestamp persistence (recurring
+pattern refresh, ingestion-row prune) so a cold start doesn't re-fire
+within-debounce-window work. New keys go here when something else needs
+to survive process death without warranting a SharedPreferences / DataStore
+dependency.
+
+Columns:
+
+- `key` text primary key
+- `value` text not null
+- `updated_at` text not null
+
+Foreign keys: none — table is global, not per-user.
+
+Indexes: primary-key index only.
+
+Current keys:
+
+- `last_recurring_refresh_ms` — epoch-millis of the last recurring-pattern
+  refresh; debounce window is 30 minutes
+- `last_ingestion_prune_ms` — epoch-millis of the last raw_capture_events
+  prune; debounce window is 24 hours
+
+Notes:
+
+- Values are stored as plain decimal strings (`Long.toString()`); callers
+  parse with whatever shape they wrote. JSON-encode if a future key needs
+  structured data.
+- Persistence is fire-and-forget on a repository-scoped CoroutineScope; a
+  missed write costs at most one extra refresh/prune next cold start — no
+  correctness impact.
+
 ## 6. Derived Views / Query Models
 
 These do not need separate stored tables on day one, but the app will need optimized query paths for them.
@@ -954,20 +1069,61 @@ Recommendation:
 
 - keep raw evidence local by default in v1 unless a clear server-side need appears
 
-## 9. Retention Recommendations
+## 9. Retention Policy *(shipped v0.14.0, H3)*
 
-### Raw evidence
+Bounded retention is implemented for the ingestion chain. The originally-
+suggested 90-day window for raw captures is now the default in code, with
+H4's foreign-key cascades sweeping the downstream rows automatically.
 
-Keep locally for a bounded retention window if storage or privacy becomes a concern.
+### Raw evidence — implemented
 
-Suggested starting point:
+- `raw_capture_events` older than 90 days are deleted via
+  `RawCaptureEventDao.deleteOlderThan(cutoffIso)` and the
+  `LocalFinanceRepository.pruneStaleIngestionRows()` wrapper.
+- Pruning is dispatched fire-and-forget on a SupervisorJob-backed scope
+  from `RupeeApplication.onCreate`, debounced to once per 24 hours via the
+  `last_ingestion_prune_ms` key in `app_state` (§5.23) so a user bouncing
+  the app several times in a day doesn't thrash the disk.
+- The 90-day cutoff is the `DEFAULT_RAW_EVENT_RETENTION_DAYS` constant in
+  `LocalFinanceRepository`; callable with a smaller window for tests via
+  the `retentionDays` parameter.
 
-- retain raw captures for 90 days
-- retain canonical transactions indefinitely
+### Cascade behaviour
+
+Raw event deletion sweeps the downstream chain via H4's foreign keys:
+
+```
+raw_capture_events (deleted)
+    ↓ CASCADE
+parsed_signals
+    ↓ CASCADE
+transaction_candidates
+    ↓ CASCADE
+inbox_items
+```
+
+Back-references to `canonical_transactions` use `SET NULL` so user-
+confirmed canonical transactions survive the prune — their inbox /
+candidate audit rows are deleted, but the canonical txn keeps its
+`linkedCanonicalTransactionId` clean.
+
+### Gate-rejected rows — no candidate write *(shipped v0.14.0, H3 phase 1)*
+
+`NotificationSignalNormalizer.writeGateRejectedSignal` writes only a
+`parsed_signals` row (carrying the reject reason + matched keyword in
+`structured_json`) — it no longer writes an IGNORED candidate per
+gate-rejected notification. On a notification-heavy phone this saves
+~18k candidate rows/year and stops the recent-candidates window from
+rotating multiple times per day on marketing-push spam alone.
+
+### Canonical transactions
+
+Retained indefinitely. No pruning path today.
 
 ### Parser outputs
 
-May be retained longer than raw text if needed for explainability and model tuning.
+`parsed_signals` rows die with their raw event via CASCADE. No separate
+parser-output retention window.
 
 ## 10. Seed Data Recommendations
 

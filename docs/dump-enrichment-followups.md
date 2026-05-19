@@ -165,8 +165,13 @@ Phase 2a's current-state snapshot is enough. 2b helps with timeline
 forensics ("at 14:01 they confirmed, at 14:05 they deleted — was that a
 mistake?"), which isn't a question we're asking yet.
 
-## Doc-touch followups (small)
+## Doc-touch followups (small) — all resolved
 
 - `dumps/README.md` updated with the sibling `outcomes.jsonl`.
-- `docs/notification-ingestion-deep-dive.md` (if it covers the dump) still
-  needs a "what's in the outcome block" section pointing at `IngestionResult.kt`.
+- `docs/notification-ingestion-deep-dive.md` received an inline v0.14.0
+  callout pointing at this document for the dump format v2 + outcome
+  block. The dump-shape source of truth lives in
+  [IngestionResult.kt](../android/app/src/main/java/com/zegrt/rupee/ingestion/IngestionResult.kt)
+  and [NotificationDumper.kt](../android/app/src/main/java/com/zegrt/rupee/diagnostics/NotificationDumper.kt);
+  the deep-dive doc references both rather than duplicating the field
+  list inline.

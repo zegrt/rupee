@@ -1,8 +1,17 @@
 # Rupee Architecture
 
-Date: March 27, 2026
-Status: Draft v1
-Author: Codex
+Date: March 27, 2026 (Draft v1) · last refreshed 2026-05-19 for v0.14.0
+Status: Living doc — paper-spec sections retain the original framing;
+inline tags call out where the implementation has moved on.
+Author: Codex (original draft); rolled forward by the gravedigging audit
+([docs/gravedigging-2026-05-18.md](gravedigging-2026-05-18.md)).
+
+> **Implementation status note.** This document was a v1 paper spec
+> written before any code shipped. Several sections (parser priority,
+> dedupe fingerprint shape, InboxItem decision states) have diverged from
+> the implementation as fixes landed. Where the divergence is non-trivial
+> the section carries an inline `> [v0.14.0]` callout pointing at the
+> current source of truth.
 
 ## 1. Purpose
 
@@ -355,9 +364,8 @@ Fields:
 - `decision_state`
   - `pending`
   - `confirmed`
-  - `edited`
   - `dismissed`
-  - `merged`
+  - *(v0.12.0 removed `edited` and `merged` as separate states — `confirmed` covers both. A merge into a pre-existing canonical transaction is now distinguished by the `merged_from_existing_canonical_id` column added in v0.14.0; see [docs/rupee-schema.md §5.15](rupee-schema.md).)*
 - `created_at`
 - `resolved_at` nullable
 
@@ -554,13 +562,25 @@ Interface expectation:
 
 ### 8.2 Parser priority
 
-Initial parser coverage should focus on:
-
-- GPay notifications
-- CRED notifications
-- Kotak notifications first, SMS later
-- SBI notifications first, SMS later
-- ICICI credit card alerts
+> [v0.14.0] Current parser layout, in registry order (first `canParse()`
+> wins; see `NotificationParserRegistry.default()`):
+>
+> 1. `AtmNotificationParser` — sits FIRST so ATM withdrawals route as
+>    `CASH_WITHDRAWAL` regardless of which bank app posted them
+> 2. `CredNotificationParser`
+> 3. `IciciNotificationParser`
+> 4. `KotakNotificationParser`
+> 5. `GPayNotificationParser`
+> 6. `PhonePeNotificationParser`
+> 7. `PaytmNotificationParser`
+> 8. `EmiNotificationParser`
+> 9. `GenericUpiNotificationParser` (UPI bodies from any source)
+> 10. `GenericNotificationParser` (catch-all)
+>
+> All bodies pass through `TransactionalGate.evaluate(body)` BEFORE the
+> registry — promotional pushes / OTPs / payment-requests get
+> short-circuited with a `GateRejected` outcome. SBI is not yet covered
+> by a dedicated parser; SBI SMS still falls through to Generic.
 
 ### 8.3 Parser versioning
 
@@ -617,6 +637,8 @@ Trust in Rupee will depend heavily on not showing the same spend multiple times.
 Current implementation note:
 
 - the first dedupe pass uses a conservative fingerprint built from candidate type, amount, currency, mode, masked digits, normalized merchant/counterparty text, and a five-minute time bucket
+- v0.12.0 widened the bucket check to inspect *both* the current and previous 5-min bucket, catching boundary cases like 11:59:30 / 12:00:30 that previously slipped through
+- v0.13.0 added `networkReferenceId` / `networkReferenceType` columns to both `parsed_signals` and `canonical_transactions`; UPI/IMPS/NEFT/RTGS reference tokens are captured by parsers and stored alongside the candidate so a future cross-stream chain-dedupe pass (S2.1 in [docs/rupee-backlog.md](rupee-backlog.md)) can join on reference id rather than reconstructing it from the body
 - this is meant to suppress obvious repeated alerts, not fully solve fuzzy duplicate matching yet
 
 ### 10.3 Proposed scoring approach

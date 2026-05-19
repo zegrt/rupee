@@ -1,8 +1,35 @@
 # Notification ingestion deep dive — Rupee
 
-**Date:** 2026-05-13
-**Status:** Research brief. Reference before writing the v0.13 listener fix.
-**Context:** Current `RupeeNotificationListenerService` reads `NotificationCompat.EXTRA_TEXT` only, finds it blank for almost every real-world bank notification, logs *"Skipped: empty body"*, and never reaches the parsers. We've never captured a real-world bank notification — only debug mocks work. This document maps the entire surface before code is written.
+**Date:** 2026-05-13 · last refreshed 2026-05-19 for v0.14.0
+**Status:** Research brief. Original framing was "reference before writing
+the v0.13 listener fix" — the v0.13 / v0.14 work has all shipped. Kept
+in-repo as background for the ingestion pipeline's design; the v0.14
+audit work added inline callouts where the spec has moved on.
+**Context:** Pre-v0.13, `RupeeNotificationListenerService` read
+`NotificationCompat.EXTRA_TEXT` only, found it blank for almost every
+real-world bank notification, logged *"Skipped: empty body"*, and never
+reached the parsers. This document mapped the entire surface; the
+listener-side and parser-side fixes are now live.
+
+> **What's changed since the original write-up (v0.13.4 → v0.14.0)**:
+> - `TransactionalGate` pre-filter — rejects promo pushes / OTPs /
+>   payment-requests before any parser runs. Vocabulary grew in v0.13.6,
+>   v0.13.8, and v0.14.0 (M2 — reversed/chargeback/SIP/NACH/ECS).
+> - `ParsedTransactionKind.INCOME` and the shared
+>   `NotificationParsingUtils.classifyDirection` (v0.13.6) — parsers
+>   route INCOME vs SPEND off direction rather than hardcoding SPEND.
+> - REFUND → INCOME canonical routing (v0.14.0, H1) for PhonePe/Paytm.
+> - UPI confidence tiering (v0.14.0, M5) — amount + merchant + masked
+>   digits → 0.85 HIGH (auto-create) instead of locking at 0.7 MEDIUM.
+> - `AtmNotificationParser` registered FIRST in the registry (v0.14.0,
+>   M3a) — ATM withdrawals route as `CASH_WITHDRAWAL`.
+> - Fuel-brand normalisation in `MerchantNameUtils.clean` (v0.14.0, M3b).
+> - Foreign-key cascades + 90-day pruning of `raw_capture_events`
+>   (v0.14.0, H3/H4) — see [docs/rupee-schema.md §9](rupee-schema.md).
+> - Notification dump format v2: ingest-time `outcome{}` block per line
+>   (v0.13.x) plus sibling `outcomes.jsonl` snapshot at share time
+>   (v0.13.x phase 2a). Full schema:
+>   [docs/dump-enrichment-followups.md](dump-enrichment-followups.md).
 
 ---
 
