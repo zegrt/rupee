@@ -28,3 +28,9 @@ val AviSurfaceDark = Color(0xFF141D36)
 val AviSurfaceDarkRaised = Color(0xFF1C2745)
 val AviWarmGreyDark = Color(0xFFE3E8F2)
 val AviHairlineDark = Color(0xFF273252)
+
+// Dusty peach for dark-mode "warning" tiles. Aviate's signature negative
+// surface should never read as a Material default red — it's a warm hint
+// the user is over budget, not an alert. Pairs with a warm cream foreground.
+val AviPeachDark = Color(0xFF3E1F14)
+val AviPeachInkOnDark = Color(0xFFF6CBB1)

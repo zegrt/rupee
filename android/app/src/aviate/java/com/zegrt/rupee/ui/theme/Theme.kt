@@ -66,6 +66,12 @@ private val Dark = darkColorScheme(
     onSurfaceVariant = AviSkyDim,
     outline = AviHairlineDark,
     outlineVariant = AviHairlineDark,
+    // Dark-mode "warning" tiles use a dusty peach instead of Material's
+    // default saturated red — Aviate is supposed to suggest, not scold.
+    error = AviPeachInkOnDark,
+    onError = AviInkDark,
+    errorContainer = AviPeachDark,
+    onErrorContainer = AviPeachInkOnDark,
 )
 
 @Composable

@@ -749,25 +749,45 @@ private fun RecapWrappedScreen() {
     }
 }
 
+// Per-merchant brand colors. Source-of-truth lookup so each chip in the
+// Wrapped grid reads as a real brand tile, not an empty grey slot. Falls
+// back to a soft slate so unknown codes still feel intentional.
+private val merchantBrand: Map<String, Color> = mapOf(
+    "ZMTO" to Color(0xFFE23744),   // Zomato red
+    "UBER" to Color(0xFF000000),   // Uber black
+    "AMZN" to Color(0xFFFF9900),   // Amazon orange
+    "ZPTO" to Color(0xFF6A0DAD),   // Zepto purple
+    "CRED" to Color(0xFF1B1B1B),   // CRED near-black
+    "SWGG" to Color(0xFFFC8019),   // Swiggy orange
+    "BBSK" to Color(0xFF84BD3A),   // BigBasket green
+    "SPOT" to Color(0xFF1DB954),   // Spotify green
+    "NFLX" to Color(0xFFE50914),   // Netflix red
+    "FLPK" to Color(0xFF2874F0),   // Flipkart blue
+    "BLNK" to Color(0xFFFFCB04),   // Blinkit yellow
+    "HDFC" to Color(0xFF004C8F),   // HDFC navy
+    "ICIC" to Color(0xFFAE3F1B),   // ICICI rust
+)
+
 @Composable
 private fun ChipMerchant(code: String) {
+    val brandColor = merchantBrand[code] ?: MaterialTheme.colorScheme.surfaceVariant
     Box(
         Modifier
             .size(width = 60.dp, height = 50.dp)
             .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+            .background(brandColor),
         contentAlignment = Alignment.BottomStart,
     ) {
         Box(
             Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f))
+                .background(Color.Black.copy(alpha = 0.45f))
                 .padding(horizontal = 6.dp, vertical = 2.dp),
         ) {
             Text(
                 code,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.background,
+                color = Color.White,
                 fontWeight = FontWeight.Bold,
             )
         }
@@ -822,14 +842,20 @@ private fun PassportScreen() {
         )
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
+            Row(
                 Modifier
                     .clip(RoundedCornerShape(50))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .padding(horizontal = 10.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
+                DualSparkle(
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.width(6.dp))
                 Text(
-                    "✨ RUPEE PRO",
+                    "RUPEE PRO",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Bold,
@@ -1231,24 +1257,24 @@ private fun TxnDetailSheet(txn: MockTxn, onClose: () -> Unit) {
                         }
                     }
                     Spacer(Modifier.height(24.dp))
+                    // Render the full merchant name — the previous take(3)
+                    // truncation produced "UBE" / "ZOM" which read as a
+                    // clipped bug, not as a deliberate code.
                     Text(
-                        txn.merchant.take(3).uppercase(),
-                        fontSize = 84.sp,
-                        lineHeight = 84.sp,
+                        txn.merchant,
+                        fontSize = 56.sp,
+                        lineHeight = 60.sp,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         fontWeight = FontWeight.Black,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
+                    Spacer(Modifier.height(8.dp))
                     Text(
                         "₹${txn.amount}",
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        txn.merchant,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                     )
                     Spacer(Modifier.height(28.dp))
                     Row(
@@ -1326,7 +1352,7 @@ private fun TxnDetailSheet(txn: MockTxn, onClose: () -> Unit) {
                     )
                     Spacer(Modifier.height(20.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ChipMerchantMini("ALWAYS TRUST · ZOMATO")
+                        ChipMerchantMini("ALWAYS TRUST · ${txn.merchant.uppercase()}")
                         ChipMerchantMini("REPORT ISSUE")
                     }
                 }

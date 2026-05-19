@@ -269,7 +269,7 @@ private fun HomeViewfinder(onOpenTxn: (VTxn) -> Unit) {
             // to indicate "under" / "over" baseline.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "EV",
+                    "FLO",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -491,15 +491,22 @@ private fun LedgerScreen(onOpenTxn: (VTxn) -> Unit) {
     Box(Modifier.fillMaxSize()) {
         // Rotated edge label down the left side — vwfndr's signature
         // "rotated metadata strip" applied to the wallet's ledger context.
-        EdgeMeta(
-            key = "LDG",
-            value = "30D · 412 TX",
+        // Wrapped in a 14dp fixed-width Box so the rotation pivots on a
+        // narrow column at the screen edge instead of overflowing inward.
+        Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .rotate(-90f)
-                .padding(horizontal = 4.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+                .width(14.dp)
+                .height(160.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            EdgeMeta(
+                key = "LDG",
+                value = "30D · 412 TX",
+                modifier = Modifier.rotate(-90f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     Column(
         Modifier
             .fillMaxSize()
@@ -598,16 +605,22 @@ private fun TxnReceiptScreen(txn: VTxn, onBack: () -> Unit) {
     val scroll = rememberScrollState()
     CornerBrackets {
         // Rotated edge label down the right side — receipt provenance
-        // strip. Visible chrome that reinforces "this is a signed artifact."
-        EdgeMeta(
-            key = "SIG",
-            value = "0.98 · ${txn.source}",
+        // strip. Pinned to a 14dp-wide column so the rotation pivots on a
+        // narrow strip at the screen edge.
+        Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .rotate(90f)
-                .padding(horizontal = 4.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+                .width(14.dp)
+                .height(180.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            EdgeMeta(
+                key = "SIG",
+                value = "0.98 · ${txn.source}",
+                modifier = Modifier.rotate(90f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Column(
             Modifier
                 .fillMaxSize()
@@ -921,22 +934,27 @@ private fun SettingsScreen() {
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
         SettingsBlock("INGESTION HEALTH") {
-            // T3-inspired exposed metrics. Even the debug surface gets the vwfndr treatment.
-            Row(verticalAlignment = Alignment.Bottom) {
-                ReadoutColumn("RECV", "1284")
-                Spacer(Modifier.width(28.dp))
-                ReadoutColumn("PARSED", "1217", lime = true)
-                Spacer(Modifier.width(28.dp))
-                ReadoutColumn("FAILED", "12", danger = true)
-                Spacer(Modifier.width(28.dp))
-                ReadoutColumn("GATED", "55")
+            // T3-inspired exposed metrics. Even the debug surface gets the
+            // vwfndr treatment. Column wraps the readout row + caption so they
+            // stack vertically (SettingsBlock places content inside a Box,
+            // which would otherwise overlay them).
+            Column {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    ReadoutColumn("RECV", "1284", modifier = Modifier.weight(1f))
+                    ReadoutColumn("PRSD", "1217", lime = true, modifier = Modifier.weight(1f))
+                    ReadoutColumn("FAIL", "12", danger = true, modifier = Modifier.weight(1f))
+                    ReadoutColumn("GREJ", "55", modifier = Modifier.weight(1f))
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "PIPELINE / 24H · GATE REJECT 4.3%",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "PIPELINE / 24H · GATE REJECT 4.3%",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
         Spacer(Modifier.height(40.dp))
@@ -993,8 +1011,14 @@ private fun ColourDot(c: Color, selected: Boolean = false) {
 }
 
 @Composable
-private fun ReadoutColumn(label: String, value: String, lime: Boolean = false, danger: Boolean = false) {
-    Column {
+private fun ReadoutColumn(
+    label: String,
+    value: String,
+    lime: Boolean = false,
+    danger: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier) {
         Text(
             label,
             style = MaterialTheme.typography.labelMedium,
