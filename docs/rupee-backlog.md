@@ -2,7 +2,8 @@
 
 **Purpose:** durable, in-repo backlog. Anything Claude promised to do "next sprint" or "later" lives here, not just in conversation context. This file is the single source of truth for what's deferred — if it's not here, it doesn't exist.
 
-**Last updated:** 2026-05-19 (after the gravedigging audit / v0.14.0)
+**Last updated:** 2026-05-19 (after the v0.14.1 hotfix research; promoting
+test/observability infra items out of "implied" and into the formal backlog)
 
 ---
 
@@ -19,8 +20,15 @@ Each item should have: *what*, *why it matters*, *touchpoints*, *blocked by*.
 
 ## In flight
 
-_(nothing right now — v0.14.0 landed the gravedigging audit; next sprint
-direction TBD against the milestone roadmap in [rupee-roadmap.md](rupee-roadmap.md).)_
+- **v0.14.1 hotfix** (PR #48) — recovers the v0.14.0 ingestion regression
+  surfaced by the 2026-05-19 Nothing-A015 dump: 0/916 notifications
+  reached Inbox or Transactions because H4's foreign key collided with
+  the existing write order in `normalizeLocked`. Fix reverses the order
+  (candidate → inbox → backfill), splits the dedupe DAO (stop filtering
+  IGNORED in the lookup), adds `"sent from"` etc. to gate vocab, surfaces
+  exception class+message into the dump's `outcome` block, and loosens
+  the masked-digit regex for single-X SMS forms. Full investigation:
+  [ingestion-pipeline-research-2026-05-19.md](ingestion-pipeline-research-2026-05-19.md).
 
 ---
 
@@ -75,6 +83,27 @@ notification slips through.
 
 ## Next — pick one of these to start
 
+### T1 — In-memory Room test fixture
+**What:** Add `androidx.room:room-testing` to `androidTestImplementation`, set up an in-memory `RupeeDatabase` builder, and seed a base fixture (one user, one account, one card, one budget). Use it to write the first instrumented DB test — proposed coverage:
+- The H4 FK ordering: ingest one INBOX_PENDING-bound notification, assert that `inbox_items` and `transaction_candidates` both have a row (regression for yesterday's bug)
+- `DumpOutcomeDao` joined query: insert a synthetic raw → parsed → candidate → inbox → canonical chain, call the DAO, assert the snapshot has the expected fields populated
+- Migration `MIGRATION_8_9` (the only table-rebuild migration we've shipped): seed v8 data, run the migration, assert FKs were declared correctly
+**Why:** every "structural" fix the gravedigging audit deferred ([gravedigging-2026-05-18.md §L2](gravedigging-2026-05-18.md)) blocks on this fixture. Yesterday's regression would have been caught at PR time with a single test. Until we have this, every schema change is a roulette spin.
+**Touchpoints:** new `androidTest/.../IngestionPipelineTest.kt`, `DumpOutcomeDaoTest.kt`, `MigrationTest.kt`; tiny gradle change in `app/build.gradle.kts`.
+**Blocked by:** nothing. ~1 day of setup + first three tests.
+
+### T2 — Automated dump-replay in CI
+**What:** Each committed dump file in `dumps/*.jsonl` becomes a regression corpus. New gradle task `:android:app:replayDumps` loads each dump, runs every raw body through `NotificationSignalNormalizer.ingestNotification` against an in-memory DB, and asserts that the ingested-vs-rejected distribution doesn't regress more than ±5pp vs a checked-in baseline. PR CI runs the task.
+**Why:** three of the last four production bugs were "the gate dropped a class of body it used to accept" or "a parser regressed on a body shape." The dump files ARE our regression corpus — we just don't read them. The user pushes a dump → CI catches the next regression at PR time → we patch without losing a day of transactions.
+**Touchpoints:** new `app/src/test/java/.../DumpReplayHarness.kt`, gradle task, baseline snapshot file. Depends on T1.
+**Blocked by:** T1 (needs the in-memory Room fixture to run the normalizer end-to-end).
+
+### T3 — Ingestion health surface in the Debug screen
+**What:** New Debug-tab card showing rolling 7-day ingestion metrics — total notifications received, % accepted by gate, % ingested with `amountMinor != null`, count of `INGEST_FAILED` with the most common `errorClass` (now that v0.14.1 captures it). Loud red if `INGEST_FAILED` count > 0.
+**Why:** v0.14.0's regression hid for 24 hours because nothing in-app reflected the silent failure rate. The data is already captured (it lives in `parsed_signals` for gate decisions and in `raw_capture_events.ingestionStatus`); we just don't surface it. Without this, you notice missing transactions days later instead of minutes.
+**Touchpoints:** new `IngestionHealthCard` composable on `DebugScreen`, queries against `parsed_signals` + `raw_capture_events` (7-day window). Optional notification when failure rate spikes.
+**Blocked by:** nothing. Half a day.
+
 ### S1.3 — Evidence-stacked confidence scoring
 **What:** Replace every parser's hardcoded confidence brackets (`0.62 / 0.55 / 0.15` etc.) with an additive evidence tally. Each parser contributes points per signal found (canonical verb +3, masked digits +2, UPI ref +2, named merchant +2, amount-only +1, soft anti-signals −5). Single global threshold decides MEDIUM vs HIGH.
 **Why:** today two very different bodies score the same `0.62` — one with strong evidence, one with weak. Tuning is per-parser edits in nine files. With a tally, tuning is one knob.
@@ -101,6 +130,24 @@ notification slips through.
 **Why:** refunds today are either ignored or appear as separate negative entries.
 **Reference:** `docs/axio-takeaways.md` Item 5.
 
+### S6 — Dedupe enrichment (additive instead of subtractive)
+**What:** Today's dedupe is *subtractive* — finds a duplicate, marks it `DUPLICATE_IGNORED`, throws the data away. Change to *additive* — treat the dup as a second source of evidence that fills gaps on the existing canonical transaction:
+- If the original canonical has `merchantName=null` but the dup has `merchantName="Swiggy"` → fill merchant
+- If the original has no `maskedDigits` but the dup has `"1234"` → fill digits
+- If the original has no `networkReferenceId` but the dup has one → fill ref id
+**Why:** the 2026-05-19 dump showed PhonePe pushes (rich merchant, no account digits) and Truecaller-mirrored bank SMS (rich account digits, weak merchant) arriving for the same transaction. Each has data the other doesn't. Today we keep whichever fired first and discard the second. Enrichment captures the best of both.
+
+**Three structural decisions before this ships:**
+
+1. **Field-by-field merge policy.** Per field: "first non-null wins" vs "higher-confidence parser wins" vs "newer wins." Probably different per field. `merchantName` should prefer the brand-aware parser's value. `maskedDigits` should prefer first-non-null (they don't change across sources). `networkReferenceId` is similar.
+2. **Respect user edits.** If the user manually changed the merchant to "Coffee shop" after confirming the inbox row, a later mirror with a generic merchant must NOT overwrite. Two options: a per-field `userEditedAt` timestamp, or treat any `CONFIRMED` canonical's user-facing fields as locked. The second is simpler and probably right.
+3. **Provenance trail.** For debugging "why did this transaction's merchant change," we'd want either a `merchantSource: parserKey` lookup field on the canonical row, or an audit log of field-level updates. Without provenance, enrichment becomes silent mutation.
+
+**Touchpoints:** `NotificationDedupeEngine.detect` (currently returns a `DedupeResult` with `duplicateCandidate`/`duplicateCanonicalTransaction`); `NotificationSignalNormalizer.normalizeLocked` (currently routes to `DUPLICATE_IGNORED` when `isDuplicate=true`); new `CanonicalTransactionEnricher` that does the field merge; possibly a small column or audit log addition.
+**Why family:** S2.1 (chain dedupe via network reference), S3 (refund linking), and S6 (enrichment) all share the underlying pattern "this notification is *related to* an existing record, not a fresh event." Worth shipping together as a "cross-stream record linking" sprint if/when prioritised together.
+**Blocked by:** ideally T1 (in-memory Room tests) — enrichment is a state-mutation feature that's hard to ship safely without DB-level regression coverage.
+**Source:** user-requested via 2026-05-19 conversation; not yet captured against an Axio takeaway.
+
 ### S4-5 — Adaptive confidence from user behaviour (Item 13)
 **What:** `ingestion_signal_stats` table keyed `(package, parserKey, cleanedMerchant)`. Confirm counts up, dismiss counts down. Bootstrap mode for first 14 days lowers MEDIUM threshold from 0.6 → 0.5 to be more liberal at onboarding. Auto-promote to `MerchantTrustRule` after 3 confirms in a 7+ day window.
 **Why:** the app learns the user's actual transaction patterns instead of relying on hardcoded confidence floors. User asked for this explicitly.
@@ -113,7 +160,7 @@ notification slips through.
 
 ### From `docs/notification-ingestion-deep-dive.md` §9
 - **§9.3 `extractedJson TEXT NULL` on `RawCaptureEventEntity`.** Persist structured Bundle fields so we can re-parse old events when parser v2 ships. ~1-2 KB/notif storage cost. Not urgent — current `body` field has the combinedBody which is enough for re-parsing 95% of cases.
-- **§9.9 Post-ship parse-rate counter.** Surface "notifs received vs notifs with `amountMinor != null`" as a debug stat. Aim ≥70% on a typical day. Useful for catching parser regression without needing a fresh dump every time.
+- ~~**§9.9 Post-ship parse-rate counter.**~~ Promoted to **T3 — Ingestion health surface in the Debug screen** in the **Next** section above (2026-05-19).
 
 ### From `docs/rupee-settings-debug.md` §6 (deferred-by-design)
 - **Merge with existing transaction.** Repository contract: `mergeInboxIntoTransaction(inboxItemId, targetTransactionId)`. Two-step soft-confirm currently exists in UI but no full search-then-select picker. (M1's `mergedFromExistingCanonicalId` column landed v0.14.0 — surfaces the merge in analytics, but the UI picker remains TODO.)
