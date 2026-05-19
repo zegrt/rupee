@@ -32,5 +32,31 @@ interface RawCaptureEventDao {
      */
     @Query("DELETE FROM raw_capture_events WHERE receivedAt < :cutoffIso")
     suspend fun deleteOlderThan(cutoffIso: String): Int
+
+    /**
+     * Status × count rollup for the ingestion-health surface (T3). Returns
+     * one row per distinct `ingestionStatus` value seen in the window plus
+     * its count. Backs the Debug-screen funnel — total received splits into
+     * PARSED / FAILED / CAPTURED (in-flight at query time) buckets.
+     *
+     * 7-day window is the typical default; the [fromIso] parameter is the
+     * inclusive start. Reactive flow so the surface updates as ingest fires.
+     */
+    @Query(
+        """
+        SELECT ingestionStatus AS status, COUNT(*) AS count
+        FROM raw_capture_events
+        WHERE receivedAt >= :fromIso
+        GROUP BY ingestionStatus
+        """
+    )
+    fun observeStatusCountsSince(fromIso: String): Flow<List<IngestionStatusCount>>
 }
+
+/**
+ * Row shape for [RawCaptureEventDao.observeStatusCountsSince]. `status` is
+ * the string form of [com.zegrt.rupee.data.local.entity.RawCaptureIngestionStatus];
+ * use `enumValueOf` at the call site if you need the typed form.
+ */
+data class IngestionStatusCount(val status: String, val count: Int)
 

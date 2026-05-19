@@ -44,8 +44,8 @@ android {
         applicationId = "com.zegrt.rupee"
         minSdk = 29
         targetSdk = 35
-        versionCode = 37
-        versionName = "0.14.1"
+        versionCode = 38
+        versionName = "0.14.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

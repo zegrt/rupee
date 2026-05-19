@@ -47,43 +47,66 @@ class NotificationSignalNormalizer(
         body: String,
         postedAtMillis: Long?,
     ): IngestionResult {
-        return database.withTransaction {
-            val now = Instant.now().toString()
-            val fingerprint = sha256(
-                listOf(
-                    RawCaptureSourceType.NOTIFICATION.name,
-                    packageName.orEmpty(),
-                    title.orEmpty(),
-                    body,
-                    postedAtMillis?.toString().orEmpty(),
-                ).joinToString("|"),
-            )
-            val rawEvent = RawCaptureEventEntity(
-                id = UUID.randomUUID().toString(),
-                userId = userId,
-                sourceType = RawCaptureSourceType.NOTIFICATION,
-                sourceAppPackage = packageName,
-                title = title,
-                body = body,
-                receivedAt = now,
-                deviceEventTime = postedAtMillis?.let { Instant.ofEpochMilli(it).toString() },
-                hashFingerprint = fingerprint,
-                ingestionStatus = RawCaptureIngestionStatus.CAPTURED,
-                createdAt = now,
-                updatedAt = now,
-                syncStatus = SyncStatus.LOCAL_ONLY,
-            )
-            val inserted = database.rawCaptureEventDao().insertRawCaptureEvent(rawEvent)
-            if (inserted == -1L) {
-                return@withTransaction IngestionResult.Filtered(IngestionResult.FilterReason.RAW_DUPLICATE)
-            }
-            val outcome: IngestionResult = normalizeLocked(rawEvent)
+        val now = Instant.now().toString()
+        val fingerprint = sha256(
+            listOf(
+                RawCaptureSourceType.NOTIFICATION.name,
+                packageName.orEmpty(),
+                title.orEmpty(),
+                body,
+                postedAtMillis?.toString().orEmpty(),
+            ).joinToString("|"),
+        )
+        val rawEvent = RawCaptureEventEntity(
+            id = UUID.randomUUID().toString(),
+            userId = userId,
+            sourceType = RawCaptureSourceType.NOTIFICATION,
+            sourceAppPackage = packageName,
+            title = title,
+            body = body,
+            receivedAt = now,
+            deviceEventTime = postedAtMillis?.let { Instant.ofEpochMilli(it).toString() },
+            hashFingerprint = fingerprint,
+            ingestionStatus = RawCaptureIngestionStatus.CAPTURED,
+            createdAt = now,
+            updatedAt = now,
+            syncStatus = SyncStatus.LOCAL_ONLY,
+        )
+
+        // Raw event commits OUTSIDE the withTransaction block so it survives
+        // when normalizeLocked throws — without this, an exception path
+        // rolls back the raw insert too and INGEST_FAILED notifications
+        // leave zero on-device trace. T3 (the Debug-screen ingestion health
+        // surface) reads `ingestionStatus = FAILED` to count failures
+        // without needing the dump file.
+        //
+        // If the raw insert returns -1L the unique hashFingerprint index
+        // rejected the row — same-body duplicate, short-circuit as before.
+        val inserted = database.rawCaptureEventDao().insertRawCaptureEvent(rawEvent)
+        if (inserted == -1L) {
+            return IngestionResult.Filtered(IngestionResult.FilterReason.RAW_DUPLICATE)
+        }
+
+        return try {
+            val outcome = database.withTransaction { normalizeLocked(rawEvent) }
             database.rawCaptureEventDao().updateIngestionStatus(
                 id = rawEvent.id,
                 status = RawCaptureIngestionStatus.PARSED.name,
                 updatedAt = Instant.now().toString(),
             )
             outcome
+        } catch (t: Throwable) {
+            // Mark the raw row FAILED before re-throwing so the listener's
+            // runCatching surfaces the throwable into the dump while the
+            // DB carries a long-lived count of failure rate over time.
+            runCatching {
+                database.rawCaptureEventDao().updateIngestionStatus(
+                    id = rawEvent.id,
+                    status = RawCaptureIngestionStatus.FAILED.name,
+                    updatedAt = Instant.now().toString(),
+                )
+            }
+            throw t
         }
     }
 

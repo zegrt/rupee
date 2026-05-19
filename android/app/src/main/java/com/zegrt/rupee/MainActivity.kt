@@ -224,6 +224,7 @@ private fun RupeeApp(
     val recurringUiState by recurringViewModel.uiState.collectAsState()
     val recapUiState by recapViewModel.uiState.collectAsState()
     val debugUiState by debugViewModel.uiState.collectAsState()
+    val debugIngestionHealth by debugViewModel.ingestionHealth.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -331,6 +332,7 @@ private fun RupeeApp(
             recurringState = recurringUiState,
             recapState = recapUiState,
             debugState = debugUiState,
+            debugIngestionHealth = debugIngestionHealth,
             versionLabel = versionLabel,
             onSelectTab = homeViewModel::selectTab,
             onSelectReviewRow = homeViewModel::selectReviewRow,
@@ -716,6 +718,7 @@ private fun RupeeHome(
     recurringState: RecurringUiState,
     recapState: RecapUiState,
     debugState: DebugUiState,
+    debugIngestionHealth: com.zegrt.rupee.data.local.dao.IngestionHealth,
     versionLabel: String,
     onSelectTab: (HomeTab) -> Unit,
     onSelectReviewRow: (String) -> Unit,
@@ -1156,6 +1159,7 @@ private fun RupeeHome(
                         onShareNotificationDumps = onDebugShareNotificationDumps,
                         onClearNotificationDumps = onDebugClearNotificationDumps,
                         notificationDumpSize = debugState.notificationDumpSize,
+                        ingestionHealth = debugIngestionHealth,
                     )
                 }
             }

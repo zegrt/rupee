@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -48,6 +50,7 @@ fun DebugScreen(
     onShareNotificationDumps: () -> Unit = {},
     onClearNotificationDumps: () -> Unit = {},
     notificationDumpSize: Long = 0L,
+    ingestionHealth: com.zegrt.rupee.data.local.dao.IngestionHealth? = null,
 ) {
     var resetConfirmOpen by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -56,6 +59,7 @@ fun DebugScreen(
             "Internal-only. These actions touch the local database directly.",
             style = MaterialTheme.typography.bodyMedium,
         )
+        ingestionHealth?.let { IngestionHealthCard(it) }
         DebugCard(title = "Send sample notification") {
             Text(
                 "Pushes a synthetic notification through the real ingestion pipeline (writer → parser → dedupe → decision).",
@@ -279,6 +283,120 @@ fun DebugScreen(
             dismissButton = {
                 TextButton(onClick = { resetConfirmOpen = false }) { Text("Cancel") }
             },
+        )
+    }
+}
+
+/**
+ * T3 — ingestion health card.
+ *
+ * Renders the 7-day funnel: total notifications received by the listener,
+ * how many were successfully ingested as transaction candidates, how many
+ * the gate rejected as non-transactional, and how many threw exceptions
+ * mid-pipeline. A non-zero failure count paints the card's accent loud
+ * red — the whole reason this surface exists is so silent regressions
+ * like the v0.14.0 H4 FK bug become *visible* on-device.
+ *
+ * Compact numerical layout to keep the Debug screen scannable. Not a
+ * pretty chart — this is internal diagnostics, not user-facing analytics.
+ */
+@Composable
+private fun IngestionHealthCard(health: com.zegrt.rupee.data.local.dao.IngestionHealth) {
+    val accent = if (health.hasFailures) MaterialTheme.colorScheme.error
+    else MaterialTheme.colorScheme.primary
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(
+            width = if (health.hasFailures) 2.dp else 1.dp,
+            color = if (health.hasFailures) MaterialTheme.colorScheme.error
+            else MaterialTheme.colorScheme.outlineVariant,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Ingestion health · last ${health.windowDays}d",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                if (health.hasFailures) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "⚠ failures",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "${health.totalReceived} notifications reached the parser pipeline.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            HealthRow(
+                label = "Ingested as transaction candidates",
+                count = health.ingestedCount,
+                total = health.totalReceived,
+                accent = accent,
+            )
+            HealthRow(
+                label = "Gate-rejected (non-transactional)",
+                count = health.gateRejectedCount,
+                total = health.totalReceived,
+                accent = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            HealthRow(
+                label = "Failed (exception during ingest)",
+                count = health.failedCount,
+                total = health.totalReceived,
+                accent = if (health.failedCount > 0) MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (health.inFlightCount > 0) {
+                HealthRow(
+                    label = "In-flight (still processing)",
+                    count = health.inFlightCount,
+                    total = health.totalReceived,
+                    accent = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (health.hasFailures) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Failures mean an exception fired inside `normalizeLocked`. " +
+                        "Share the notification dump (button below) — the dump's " +
+                        "`outcome.errorClass` field carries the exception name.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HealthRow(label: String, count: Int, total: Int, accent: androidx.compose.ui.graphics.Color) {
+    val pct = if (total == 0) 0 else (count * 100 / total)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            "$count ($pct%)",
+            style = MaterialTheme.typography.bodyMedium,
+            color = accent,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }
