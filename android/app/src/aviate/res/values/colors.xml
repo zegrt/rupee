@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Aviate launcher icon — calm pale blue with deep navy glyph.
+         Matches the in-app primaryContainer / onBackground pairing so the
+         icon previews the app's vibe before you tap it. -->
+    <color name="ic_launcher_background">#E5ECF9</color>
+    <color name="ic_launcher_foreground_glyph">#0E1B33</color>
+</resources>

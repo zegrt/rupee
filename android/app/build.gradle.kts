@@ -53,6 +53,24 @@ android {
         }
     }
 
+    flavorDimensions += "design"
+    productFlavors {
+        create("aviate") {
+            dimension = "design"
+            applicationIdSuffix = ".aviate"
+            versionNameSuffix = "-aviate"
+            resValue("string", "app_name", "Rupee · Calm")
+            buildConfigField("String", "STYLE", "\"aviate\"")
+        }
+        create("vwfndr") {
+            dimension = "design"
+            applicationIdSuffix = ".vwfndr"
+            versionNameSuffix = "-vwfndr"
+            resValue("string", "app_name", "RPE™")
+            buildConfigField("String", "STYLE", "\"vwfndr\"")
+        }
+    }
+
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {

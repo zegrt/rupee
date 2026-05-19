@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- vwfndr launcher icon — pure black with electric lime glyph.
+         The icon should read as "instrument," not "consumer app."
+         When the user sees it in their drawer, it should look out of place
+         in a good way — like an APRS radio next to chat apps. -->
+    <color name="ic_launcher_background">#000000</color>
+    <color name="ic_launcher_foreground_glyph">#CFFF5C</color>
+</resources>

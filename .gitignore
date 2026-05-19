@@ -1,5 +1,9 @@
 .DS_Store
 .idea/
+
+# Built APKs copied into design-research/apks for sharing — never committed
+design-research/apks/
+
 *.iml
 .gradle/
 local.properties
