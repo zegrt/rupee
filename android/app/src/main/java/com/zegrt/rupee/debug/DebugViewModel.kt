@@ -24,8 +24,10 @@ import com.zegrt.rupee.ingestion.NotificationParserRegistry
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -91,6 +93,29 @@ class DebugViewModel(
     val uiState: StateFlow<DebugUiState> = _uiState.asStateFlow()
 
     private val parserRegistry = NotificationParserRegistry.default()
+
+    /**
+     * T3 — ingestion health funnel for the last 7 days. Renders on the
+     * Debug screen so the user can see the parse/failure/gate-reject
+     * ratio without sharing a dump. A non-zero failed-count paints loud
+     * red — if you see this drop unexpectedly, something silent is
+     * eating notifications.
+     */
+    val ingestionHealth: StateFlow<com.zegrt.rupee.data.local.dao.IngestionHealth> =
+        repository.observeIngestionHealth()
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = com.zegrt.rupee.data.local.dao.IngestionHealth(
+                    totalReceived = 0,
+                    parsedCount = 0,
+                    failedCount = 0,
+                    inFlightCount = 0,
+                    gateRejectedCount = 0,
+                    ingestedCount = 0,
+                    windowDays = 7,
+                ),
+            )
 
     fun wipeRawCapture() {
         viewModelScope.launch {

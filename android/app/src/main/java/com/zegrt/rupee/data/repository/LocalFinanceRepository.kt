@@ -4,6 +4,9 @@ import com.zegrt.rupee.data.local.RupeeDatabase
 import com.zegrt.rupee.data.local.dao.CategorySpend
 import com.zegrt.rupee.data.local.dao.DumpOutcomeSnapshot
 import com.zegrt.rupee.data.local.dao.InboxItemWithCandidate
+import com.zegrt.rupee.data.local.dao.IngestionHealth
+import com.zegrt.rupee.data.local.dao.IngestionStatusCount
+import com.zegrt.rupee.data.local.dao.ParserBucketCount
 import com.zegrt.rupee.data.local.entity.TransactionCandidateType
 import com.zegrt.rupee.data.local.entity.AccountEntity
 import com.zegrt.rupee.data.local.entity.AccountType
@@ -313,6 +316,41 @@ class LocalFinanceRepository(
             state = InboxDecisionState.PENDING,
             limit = limit,
         )
+
+    /**
+     * T3 — ingestion health funnel. Returns a flow of [IngestionHealth]
+     * aggregating (raw_capture_events by ingestionStatus) and
+     * (parsed_signals by gate-rejected vs ingested bucket) over the past
+     * [windowDays]. Read by the Debug-screen health card.
+     *
+     * Listener-level filter reasons (group_summary, self_pkg, empty_body)
+     * happen *before* the raw insert, so they aren't reflected here — those
+     * only live in the dump file. From the user's POV the funnel surfaces
+     * "of the notifications that reached the pipeline, what did we do with
+     * them?", which is the question that matters for catching regressions.
+     */
+    fun observeIngestionHealth(
+        now: java.time.Instant = java.time.Instant.now(),
+        windowDays: Long = 7,
+    ): Flow<IngestionHealth> {
+        val cutoff = now.minusSeconds(windowDays * 24 * 60 * 60).toString()
+        return kotlinx.coroutines.flow.combine(
+            database.rawCaptureEventDao().observeStatusCountsSince(cutoff),
+            database.parsedSignalDao().observeBucketCountsSince(cutoff),
+        ) { statusRows, bucketRows ->
+            val byStatus = statusRows.associate { it.status to it.count }
+            val byBucket = bucketRows.associate { it.bucket to it.count }
+            IngestionHealth(
+                totalReceived = byStatus.values.sum(),
+                parsedCount = byStatus["PARSED"] ?: 0,
+                failedCount = byStatus["FAILED"] ?: 0,
+                inFlightCount = byStatus["CAPTURED"] ?: 0,
+                gateRejectedCount = byBucket["gate_rejected"] ?: 0,
+                ingestedCount = byBucket["ingested"] ?: 0,
+                windowDays = windowDays,
+            )
+        }
+    }
 
     fun observeSuggestedTransactions(limit: Int = 50): Flow<List<CanonicalTransactionEntity>> =
         database.canonicalTransactionDao().observeSuggestedTransactions(USER_ID, limit)
