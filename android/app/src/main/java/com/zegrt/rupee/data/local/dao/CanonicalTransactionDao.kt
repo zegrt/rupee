@@ -35,6 +35,22 @@ interface CanonicalTransactionDao {
     @Query("SELECT * FROM canonical_transactions WHERE id = :id LIMIT 1")
     suspend fun getTransactionById(id: String): CanonicalTransactionEntity?
 
+    /**
+     * Snapshot of every non-IGNORED transaction, newest first. Used by the
+     * user-facing Export to CSV / JSON flow in Settings. Unlike
+     * `observeRecentTransactionsSince` this has no time window — the user
+     * exporting their ledger expects "everything" by default.
+     */
+    @Query(
+        """
+        SELECT * FROM canonical_transactions
+        WHERE userId = :userId
+          AND status != 'IGNORED'
+        ORDER BY occurredAt DESC
+        """
+    )
+    suspend fun getAllTransactionsForExport(userId: String): List<CanonicalTransactionEntity>
+
     // Spend totals join accounts and credit_cards so per-account / per-card
     // "exclude from expense totals" toggles take effect. Transactions without
     // an accountId / creditCardId (cash, unattributed) still count — the

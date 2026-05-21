@@ -1,15 +1,20 @@
 package com.zegrt.rupee.settings
 
+import android.content.Context
+import android.content.Intent
 import android.os.Build
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.zegrt.rupee.BuildConfig
 import com.zegrt.rupee.data.local.entity.BucketEntity
 import com.zegrt.rupee.data.local.entity.BudgetEntity
 import com.zegrt.rupee.data.local.entity.CategoryEntity
 import com.zegrt.rupee.data.local.entity.MerchantTrustRuleEntity
 import com.zegrt.rupee.data.local.entity.UserEntity
 import com.zegrt.rupee.data.repository.LocalFinanceRepository
+import com.zegrt.rupee.diagnostics.LedgerExporter
 import java.text.NumberFormat
 import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -142,6 +147,50 @@ class SettingsViewModel(
         }
     }
 
+    /**
+     * Build a ledger export ([format]) and immediately launch a share intent
+     * for it via [context]. Mirrors the DebugViewModel.shareNotificationDumps
+     * pattern: VM owns the file + URI, the launch happens via the caller's
+     * Context so the chooser fires on the UI thread.
+     */
+    fun exportLedger(context: Context, format: LedgerExporter.Format) {
+        viewModelScope.launch {
+            val snapshot = runCatching { repository.getLedgerExportSnapshot() }
+                .onFailure { Log.w(EXPORT_TAG, "Ledger export snapshot failed", it) }
+                .getOrNull()
+            if (snapshot == null) {
+                message.value = "Couldn't read ledger for export"
+                return@launch
+            }
+            val uri = runCatching {
+                LedgerExporter.export(
+                    context = context,
+                    snapshot = snapshot,
+                    format = format,
+                    versionName = BuildConfig.VERSION_NAME,
+                )
+            }.onFailure { Log.w(EXPORT_TAG, "Ledger export write failed", it) }.getOrNull()
+            if (uri == null) {
+                message.value = "Couldn't write ${format.extension.uppercase()} export"
+                return@launch
+            }
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = format.mime
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(
+                    Intent.EXTRA_SUBJECT,
+                    "Rupee ledger export (${snapshot.transactions.size} transactions)",
+                )
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(
+                Intent.createChooser(send, "Share ledger ${format.extension.uppercase()}")
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+            message.value = "Exported ${snapshot.transactions.size} rows"
+        }
+    }
+
     fun clearMessage() {
         message.value = null
     }
@@ -152,6 +201,10 @@ class SettingsViewModel(
 
     fun setPostNotificationsGranted(granted: Boolean) {
         postNotificationsGranted.value = granted
+    }
+
+    companion object {
+        private const val EXPORT_TAG = "RupeeExport"
     }
 }
 

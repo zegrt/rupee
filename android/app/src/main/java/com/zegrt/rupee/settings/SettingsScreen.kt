@@ -39,6 +39,8 @@ fun SettingsScreen(
     onOpenRecap: () -> Unit,
     onSendFeedback: () -> Unit,
     onOpenDebug: () -> Unit,
+    onExportLedgerCsv: () -> Unit,
+    onExportLedgerJson: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -240,6 +242,18 @@ fun SettingsScreen(
                     "If you uninstall or reset, your data is gone. A cloud backup is on the roadmap.",
                 style = MaterialTheme.typography.bodyMedium,
             )
+        }
+        SettingsCard(title = "Export data") {
+            Text(
+                "Save a copy of your ledger and share it. CSV is spreadsheet-friendly. " +
+                    "JSON is structured for downstream tools.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(onClick = onExportLedgerCsv) { Text("Export CSV") }
+                OutlinedButton(onClick = onExportLedgerJson) { Text("Export JSON") }
+            }
         }
         SettingsCard(title = "Feedback") {
             Text(
