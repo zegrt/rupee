@@ -2,8 +2,10 @@
 
 **Purpose:** durable, in-repo backlog. Anything Claude promised to do "next sprint" or "later" lives here, not just in conversation context. This file is the single source of truth for what's deferred — if it's not here, it doesn't exist.
 
-**Last updated:** 2026-05-21 (after the design-exploration branch was parked
-and a docs-wide post-MVP scan surfaced items not yet captured)
+**Last updated:** 2026-05-22 (full code-vs-docs audit; corrected several
+items previously claimed as "pending" that are actually already in code —
+EXT-COMBINED, TRUSTED-UI, INBOX-WHY, PERM-REOPEN — and rescoped three
+partially-shipped items)
 
 ---
 
@@ -60,6 +62,31 @@ Each item should have: *what*, *why it matters*, *touchpoints*, *blocked by*.
   rolling 7-day funnel — total received, % gate-accepted, % with
   `amountMinor != null`, count of `INGEST_FAILED` with most common
   `errorClass`. Loud red when failure count > 0.
+- **Audit corrections** *(2026-05-22)* — surfaced four items that
+  earlier turns of this file claimed as "pending" but are already in
+  code. Listed here so the next reader doesn't re-propose them:
+  - **EXT-COMBINED — Bundle-extras unification.** Already wired.
+    `ingestion/NotificationExtractor.kt` reads every extra (title,
+    titleBig, text, bigText, subText, infoText, textLines, messages,
+    ticker) into a deduplicated `combinedBody`. The listener stores
+    that as `RawCaptureEventEntity.body`; every parser reads it.
+    Implements `notification-ingestion-deep-dive.md §5` exactly. The
+    "+60% coverage" projection lives in production.
+  - **TRUSTED-UI — Trusted merchants management.**
+    `settings/TrustRulesScreen.kt` is a real composable (~87 lines):
+    empty-state card, list of `TrustRuleRow` cards showing
+    `merchantPattern` + optional `categoryLabel`, **Remove** action.
+    Reached via the Settings card. No placeholder.
+  - **INBOX-WHY — Reason chips on Inbox rows.** Each row in
+    `ReviewTab` renders `row.reasonLabel` inside a tinted Surface
+    (`MainActivity.kt:1837`). Reasons today distinguish SUGGESTED
+    vs INBOX sources; refining the per-reason copy is still possible
+    but the badge slot exists.
+  - **PERM-REOPEN — Notification-access re-enable shortcut.**
+    `MainActivity.kt:274` defines `openNotificationSettings = ...
+    ACTION_NOTIFICATION_LISTENER_SETTINGS`; the Settings → Notifications
+    card surfaces it whenever `PermissionStateChecker.hasNotificationAccess`
+    returns false. Works post-onboarding too.
 
 ---
 
@@ -114,13 +141,6 @@ notification slips through.
 
 ## Next — pick one of these to start
 
-### EXT-COMBINED — Notification extractor `combinedBody` refactor
-**What:** Today `NotificationExtractor` reads `Notification.extras.getString(EXTRA_TEXT)` and ignores `EXTRA_TITLE`, `EXTRA_SUB_TEXT`, `EXTRA_BIG_TEXT`, and the various inbox-style extras. Some senders (Kotak811, certain SBI mirrors, ICICI cross-app forwards) place the amount or merchant in the *title* or *subText* and leave `text` empty or generic. The notification arrives, the gate sees no body, and the transaction is silently lost. Fix: extract every present Bundle extra into a single canonical `combinedBody` string before any parser/gate logic runs.
-**Why:** the deep-dive estimates **~60% more notification coverage** with this one change. It is the single biggest "we are quietly losing transactions" item in the repo today. Bigger user impact than EMI-AUTO.
-**Touchpoints:** `ingestion/NotificationExtractor.kt`, `ingestion/ExtractedNotification.kt` (add `combinedBody` field), all 9 parsers (`canParse` + `parse` switch from `body` to `combinedBody`), `NotificationDecisionEngine` (gate runs on combined), tests under `ingestion/NotificationExtractorTest.kt` + every parser test.
-**Reference:** [notification-ingestion-deep-dive.md §5–§9](notification-ingestion-deep-dive.md).
-**Blocked by:** nothing. ~3–4 days. **T1/T2** are already shipped, so regression coverage is automatic — every dump in `dumps/*.jsonl` replays through the new path on every PR.
-
 ### EMI-AUTO — EMI auto-detection from notifications
 **What:** Today `EmiPlanEntity` is populated only by manual entry through the Cards & EMIs screen. EMI debit notifications parse as SPEND. Extend the EMI parser to upsert into `emi_plans` directly when amount + merchant + due-date all extract confidently — same shape as the BILL_DUE → credit_cards side-effect that's already wired.
 **Why:** the only "Track basic EMI obligations" gap on the MVP checklist in [rupee-roadmap.md §3](rupee-roadmap.md). Everything else on the MVP list ships today.
@@ -144,14 +164,7 @@ notification slips through.
 - Recap surface visual density
 **Why:** pre-1.0 product polish; the v0.13.8 onboarding pass cleaned Welcome / Permissions / Profile screens but Home / Inbox / Settings haven't had a focused visual review since.
 **Touchpoints:** mostly `MainActivity.kt` composables. Could prompt an L5-flavoured decomposition pass as a side effect.
-**Blocked by:** **the design-direction decision** on the parked `design/aviate-vs-vwfndr` branch. Most polish work is design-neutral (spacing, empty/loading states) but the typography hierarchy, surface tinting, motion vocabulary, and Recap visual density all flow from picking Aviate vs vwfndr. Do **TRUSTED-UI**, **EXPORT-UI**, **TRUST-FROM-TXN**, **EXCL-FROM-SPEND** first — they're pure utility and flavor-agnostic. ~½ to 2 days for the design-neutral subset; full pass needs the direction call first.
-
-### TRUSTED-UI — Trusted Merchants management screen
-**What:** `MerchantTrustRuleEntity` and `MerchantTrustRuleDao` have shipped since v0.13.x — the data model + insert path are done. What's missing is a dedicated screen to list / edit / delete trust rules. Currently the only way to manage trust rules is via the Settings deep-link modal that's stub-implemented; spec calls for a full list view with per-merchant scope, "always confirm" toggle, and last-fired timestamp.
-**Why:** users have no visibility into which auto-confirm rules they've accumulated. A user adding "Always trust Swiggy" can never see or revoke it without dev tooling. Pre-1.0 trust requirement.
-**Touchpoints:** `settings/TrustRulesScreen.kt` (currently a placeholder), `SettingsViewModel`, possibly a `MerchantTrustRuleDao.observeAll()` flow.
-**Reference:** [rupee-android-screens.md §20](rupee-android-screens.md).
-**Blocked by:** nothing. ~1–2 days. Pure UI on existing data.
+**Blocked by:** **the design-direction decision** on the parked `design/aviate-vs-vwfndr` branch. Most polish work is design-neutral (spacing, empty/loading states) but the typography hierarchy, surface tinting, motion vocabulary, and Recap visual density all flow from picking Aviate vs vwfndr. Do **EXPORT-UI**, **TRUST-FROM-TXN**, **EXCL-FROM-SPEND** first — they're pure utility and flavor-agnostic. ~½ to 2 days for the design-neutral subset; full pass needs the direction call first.
 
 ### EXPORT-UI — Export to CSV / JSON
 **What:** PRD §14 lists data-export as an MVP capability but no UI affordance exists today. Surface a Settings entry that lets the user save a date-windowed export of `canonical_transactions` (+ joined merchant/category) as CSV or JSON to local storage, then offer the share-sheet. JSON export should also include `raw_capture_events` for the same window so power users can debug ingestion themselves.
@@ -159,17 +172,17 @@ notification slips through.
 **Touchpoints:** new `diagnostics/Exporter.kt` (CSV + JSON formatters — the JSON path can lean on `DumpOutcomeExporter` plumbing that already exists for diagnostics), Settings entry, `FileProvider` share intent (already declared in manifest).
 **Blocked by:** nothing. ~1–2 days.
 
-### TRUST-FROM-TXN — "Always trust this merchant" from txn detail
-**What:** Today adding a trust rule requires diving into Settings. The transaction-detail sheet on the Transactions tab has a Merchant field and a Notes field — add a "Always auto-confirm from {merchant}" toggle row that writes a `MerchantTrustRuleEntity` on enable and deletes it on disable. Same affordance on the Inbox confirmation surface.
-**Why:** the friction of opening Settings → Trust Rules → Add → pick merchant is enough that users never make a trust rule even when they obviously want one. This is the "Walnut-style fast-path" referenced in [axio-takeaways.md Item 6](axio-takeaways.md).
-**Touchpoints:** Transactions detail sheet in `MainActivity.kt`, Inbox review UI, `MerchantTrustRuleDao.upsert/delete`.
-**Blocked by:** nothing. ~½ day. Pairs nicely with **TRUSTED-UI** in the same PR.
-
-### EXCL-FROM-SPEND — Account "exclude from spend totals" toggle
-**What:** `AccountEntity.excludeFromSpendTotals` and `CreditCardEntity` equivalents already exist as columns but the toggle is buried in the Cards & EMIs modal and absent for bank/cash accounts. Surface a per-account toggle in the same Settings pass as TRUSTED-UI.
-**Why:** users with savings-account drains (loan EMIs auto-debited from a different account) want to exclude that account from "May spend" totals without losing the rows. Currently they have to manually mark each transaction.
-**Touchpoints:** `settings/SettingsScreen.kt` accounts modal, `AccountDao.setExcludeFromSpend(...)`.
+### TRUST-FROM-TXN — "Always trust this merchant" from the Transactions edit sheet
+**What:** The Inbox review row already exposes an "Always trust {merchant}" Switch (`MainActivity.kt:1887`) that writes a `MerchantTrustRuleEntity`. The gap is on the **Transactions tab edit sheet** — when the user opens a confirmed transaction to edit merchant / category, there's no trust toggle. Mirror the Inbox row's affordance there so trust rules can be added after the fact, not only at confirm time.
+**Why:** the Inbox shortcut covers "trust as I confirm." It doesn't cover "I just realised every Swiggy charge is fine, let me trust them" once those rows have already left the Inbox. Friction here pushes users to dig through Settings → Trust Rules → Add → pick merchant.
+**Touchpoints:** the transaction edit sheet inside `TransactionsTab` (`MainActivity.kt`); same `MerchantTrustRuleDao.upsertRule` call the Inbox path uses.
 **Blocked by:** nothing. ~½ day.
+
+### EXCL-FROM-SPEND — Account-level "exclude from totals" toggle
+**What:** `AccountEntity.excludeFromExpenseTotals` and `excludeFromIncomeTotals` columns exist (added v0.13.x); `LocalFinanceRepository.setAccountExcludeFromExpenseTotals` exists; **no UI surface** wires it. The credit-card equivalent shipped via `CardsEmisScreen.kt:170` (`onToggleExclude`). The account path is repo-only — accounts can only be edited via onboarding today.
+**Why:** users with savings-account drains (loan EMIs auto-debited from a different account they don't track for budgeting) want to exclude that account from "May spend" totals without losing the rows. Today they have to manually mark each transaction.
+**Touchpoints:** need a new account-management entry in Settings (currently only Cards & EMIs is exposed). Calls `repository.setAccountExcludeFromExpenseTotals(accountId, exclude)`.
+**Blocked by:** nothing. ~½ day for the toggle row; ~1 day if we add a proper "Accounts" Settings screen alongside it.
 
 ### CRED-ICICI-AUDIT — Audit hardcoded SPEND in CRED / ICICI parsers
 **What:** Per [Recently shipped — gravedigging audit](#) notes, "CRED/ICICI parsers still hardcode SPEND for some paths — fine for card alerts, audit if a real card-credit notification slips through." Concrete audit: enumerate every `parse()` return in `CredNotificationParser` and `IciciNotificationParser`, check each against a real-world card-credit dump (refund, reversal, statement credit, EMI conversion reversal), patch any that miscategorise.
@@ -239,11 +252,10 @@ different answer:
 
 Pick a direction before sprinting on these.
 
-#### INBOX-WHY — "Why was this in Inbox?" badges
-**What:** Every Inbox item today just says "needs review." Surface the actual reason as a small chip on the row — `LOW CONFIDENCE`, `NO MERCHANT`, `AMOUNT ONLY`, `NEW SENDER`, `MASKED DIGITS MISSING`. Read from `parsed_signals.parserKey` + the existing confidence tier + presence/absence of merchant/maskedDigits fields.
-**Why:** PRD calls for "every inferred transaction should be explainable." Today the user has no signal for *why* the parser couldn't fully resolve — they just see an unreviewed row and have to guess.
-**Touchpoints:** Inbox tab in `MainActivity.kt`, `InboxItemWithCandidate` already exposes the joined fields. No data change.
-**Reference:** [rupee-android-screens.md §21](rupee-android-screens.md).
+#### INBOX-WHY-COPY — Refine the reason copy on Inbox chips *(scope reduced 2026-05-22)*
+**What:** The reason-chip *slot* already exists — `row.reasonLabel` renders in a tinted Surface at `MainActivity.kt:1837`. What's pending is the per-reason copy: today the label distinguishes mainly SUGGESTED vs INBOX. Expand to read from `parsed_signals.parserKey` + confidence tier + presence/absence of merchant/maskedDigits and emit specific reasons (`LOW CONFIDENCE`, `NO MERCHANT`, `AMOUNT ONLY`, `NEW SENDER`, `MASKED DIGITS MISSING`).
+**Why:** PRD calls for "every inferred transaction should be explainable." Today users see a chip but it doesn't tell them what specifically tripped the gate.
+**Touchpoints:** the `reasonLabel` derivation in `HomeViewModel` (or wherever `ReviewRow` is composed). No UI rebuild needed.
 
 #### MANUAL-FAST — Manual entry speed pass (20-second goal)
 **What:** Spec target for manual entry is 20 seconds. Levers: (a) category autocomplete from the user's recent 30-day picks, (b) "similar to last Swiggy / Uber" suggestion when amount + merchant match a recent pattern, (c) swipe-to-account pre-selection so card vs cash is one gesture not a dropdown.
@@ -275,15 +287,14 @@ Pick a direction before sprinting on these.
 ## Watching — known gaps, no sprint yet
 
 ### UI/UX — post-MVP, not blocked on design direction
-- **CAL-INTER — Calendar interactions.** Spec ([rupee-android-screens.md §18.2–§18.3](rupee-android-screens.md)) calls for tap-day → show txns for that day, swipe-month → next/previous, tap-due-item → detail screen. The heatmap renders; the gestures don't. Half a day.
-- **PERM-REOPEN — Permission re-enable shortcut.** [rupee-prd.md §21.1](rupee-prd.md) describes an in-app shortcut for users who denied notification access and later want to re-enable. Today they have to dig through system settings. `PermissionStateChecker.kt` knows the state; surface a "Notifications denied — turn on" affordance on the Home top strip or Settings when the check returns false. ~½ day.
+- **CAL-INTER — Swipe-month navigation on Calendar.** *(scope reduced 2026-05-22)* Tap-day-to-show-txns is already wired (`CalendarScreen.kt:76` calls `onSelectDate(cell.date)`, ViewModel toggles `selectedDate`, the screen conditionally renders the day's transactions). What's missing is gesture-based **month** navigation — the ViewModel has a `displayMonth: MutableStateFlow<YearMonth>` but only chevron buttons drive it. Add `HorizontalPager` or detectHorizontalDragGestures bound to `displayMonth`. ~½ day.
 
 ### Architecture — post-MVP, depends on rule engine
 - **PATTERN-TELEM — Pattern telemetry / OTA-readiness.** Per [axio-competitor-analysis.md §3.7](axio-competitor-analysis.md), once **S2** ships JSON rules with `pattern_UID`, we'd want to log which patterns fire in production (counts, last-fired timestamp) so the rule corpus can be tuned from real data. Useless without S2; trivial to add once S2 exists.
-- **MISSED-TXN — Missed-transaction detector via balance reconciliation.** [axio-takeaways.md Item 8](axio-takeaways.md). `ParsedSignalEntity.balanceAfterMinor` column already exists but no reconcile logic. Walnut catches the "you said balance is X but txns sum to Y" gap. Needs reliable balance extraction across providers first (multi-sprint effort tied to S2). Sprint 4+ with low priority.
+- **MISSED-TXN — Missed-transaction detector via balance reconciliation.** [axio-takeaways.md Item 8](axio-takeaways.md). Walnut catches the "you said balance is X but txns sum to Y" gap. We currently track `currentBalanceMinor` on `AccountEntity` but **don't extract** `balanceAfterMinor` from notifications and **don't reconcile** the running sum against it. Needs (a) parsers emitting `balanceAfterMinor` reliably across providers, (b) a new column on `ParsedSignalEntity` (or `CanonicalTransactionEntity`) to store it, (c) a reconcile job that diff'ses transactions-sum vs latest reported balance and raises a "missed something" surface. Multi-sprint; tied to S2 for breadth of provider coverage. Low priority.
 
 ### From `docs/notification-ingestion-deep-dive.md` §9
-- **§9.3 `extractedJson TEXT NULL` on `RawCaptureEventEntity`.** Persist structured Bundle fields so we can re-parse old events when parser v2 ships. ~1-2 KB/notif storage cost. Not urgent — current `body` field has the combinedBody which is enough for re-parsing 95% of cases. *(2026-05-21: less urgent once **EXT-COMBINED** lands, since `combinedBody` will already cover the title/subText fields that today get dropped.)*
+- **§9.3 `extractedJson TEXT NULL` on `RawCaptureEventEntity`.** Persist structured per-Bundle-field breakdown so we can re-parse old events when a future rule-driven parser (S2) ships. The flat `combinedBody` is already stored as `body`; what's missing is the per-field separation (title vs subText vs textLines) for parsers that want to apply field-priority rules. ~1-2 KB/notif storage cost. Not urgent — `combinedBody` is enough for re-parsing in 95% of cases today.
 - ~~**§9.9 Post-ship parse-rate counter.**~~ Promoted to **T3 — Ingestion health surface in the Debug screen** — shipped in v0.14.2 (PR #51, 2026-05-21).
 
 ### From `docs/rupee-settings-debug.md` §6 (deferred-by-design)
@@ -292,14 +303,16 @@ Pick a direction before sprinting on these.
 - ~~**Dedicated PhonePe / Paytm parsers**~~ — shipped earlier; PhonePe and Paytm have dedicated parsers in `ingestion/`.
 - **Custom bucket progress cards on Home.** Needs per-bucket budgets seeded + `transaction_bucket_assignments` DAO.
 
-### Schema entities defined but unimplemented
-From `CONTEXT.md` "Known Gaps":
-- `canonical_transaction_source_links`
-- `dedupe_groups`, `dedupe_group_members` (current code uses flat `dedupeFingerprint` field — pragmatic shortcut, not the long-term shape)
-- `alert_rules`, `alert_events` (current `DuesAlertManager` uses SharedPrefs dedupe, not these tables)
-- `monthly_recaps` (current Recap is computed on read)
-- `emi_transaction_links`
-- `budget_category_assignments`
+### Schema entities planned but not yet defined
+*(Audited 2026-05-22 — none of these have an `@Entity` annotation in
+`data/local/entity/`. The "defined but unimplemented" framing was stale;
+none are defined yet.)* From `CONTEXT.md` "Known Gaps":
+- `canonical_transaction_source_links` — multi-source provenance audit trail.
+- `dedupe_groups`, `dedupe_group_members` — current code uses flat `dedupeFingerprint` field on `CanonicalTransactionEntity` (pragmatic shortcut, not the long-term shape).
+- `alert_rules`, `alert_events` — current `DuesAlertManager` uses SharedPrefs dedupe, not these tables.
+- `monthly_recaps` — current Recap is computed on read (`RecapViewModel`). See **RECAP-PERSIST** in Slotted.
+- `emi_transaction_links` — link auto-detected EMI debits back to their plan. Pairs with **EMI-AUTO**.
+- `budget_category_assignments` — explicit per-category-per-budget link table (today budgets reference categories implicitly).
 
 ### SMS pipeline
 - TRAI `-T`/`-S`/`-P`/`-G` sender-suffix as free first-stage signal (May 2025 rule).
