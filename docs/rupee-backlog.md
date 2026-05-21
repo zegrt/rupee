@@ -2,8 +2,8 @@
 
 **Purpose:** durable, in-repo backlog. Anything Claude promised to do "next sprint" or "later" lives here, not just in conversation context. This file is the single source of truth for what's deferred — if it's not here, it doesn't exist.
 
-**Last updated:** 2026-05-19 (after the v0.14.1 hotfix research; promoting
-test/observability infra items out of "implied" and into the formal backlog)
+**Last updated:** 2026-05-21 (after the design-exploration branch was parked
+and a docs-wide post-MVP scan surfaced items not yet captured)
 
 ---
 
@@ -20,15 +20,46 @@ Each item should have: *what*, *why it matters*, *touchpoints*, *blocked by*.
 
 ## In flight
 
-- **v0.14.1 hotfix** (PR #48) — recovers the v0.14.0 ingestion regression
-  surfaced by the 2026-05-19 Nothing-A015 dump: 0/916 notifications
-  reached Inbox or Transactions because H4's foreign key collided with
-  the existing write order in `normalizeLocked`. Fix reverses the order
-  (candidate → inbox → backfill), splits the dedupe DAO (stop filtering
-  IGNORED in the lookup), adds `"sent from"` etc. to gate vocab, surfaces
-  exception class+message into the dump's `outcome` block, and loosens
-  the masked-digit regex for single-X SMS forms. Full investigation:
-  [ingestion-pipeline-research-2026-05-19.md](ingestion-pipeline-research-2026-05-19.md).
+- **Design exploration — parked on branch** *(2026-05-21)*. Branch
+  `design/aviate-vs-vwfndr` pushed to origin, **not merged**. Two product
+  flavors (`aviate` = calm/Wrapped, `vwfndr` = instrument/signed-receipt)
+  ship as side-by-side installable APKs from one repo via Gradle product
+  flavors. Real wallet logic (Room / ViewModels / ingestion) is untouched
+  and dormant during the evaluation. Decision is pending. Picking a
+  direction blocks **POLISH-1** and the **RECAP-PERSIST** / **INBOX-WHY**
+  items below. See `DESIGN_NOTES.md` (root) + `design-research/DESIGN_NOTES.md`
+  for what each direction does, what would change behind the screen, and
+  trade-offs.
+
+---
+
+## Recently shipped — post-v0.14.0 *(2026-05-19 → 2026-05-21)*
+
+- **v0.14.1 hotfix** (PR #48, merged 2026-05-19) — recovered the v0.14.0
+  ingestion regression surfaced by the Nothing-A015 dump: 0/916
+  notifications reached Inbox or Transactions because H4's foreign key
+  collided with the existing write order in `normalizeLocked`. Fix
+  reversed the order (candidate → inbox → backfill), split the dedupe
+  DAO (stopped filtering IGNORED in the lookup), added `"sent from"`
+  etc. to gate vocab, surfaced exception class+message into the dump's
+  `outcome` block, loosened the masked-digit regex for single-X SMS
+  forms. Investigation: [ingestion-pipeline-research-2026-05-19.md](ingestion-pipeline-research-2026-05-19.md).
+- **T1 — In-memory Room test fixture** (PR #50, merged 2026-05-20).
+  `androidx.room:room-testing` wired; in-memory `RupeeDatabase` builder;
+  base fixture seeds user/account/card/budget. First three instrumented
+  tests landed: H4 FK ordering regression, `DumpOutcomeDao` joined query,
+  `MIGRATION_8_9` table-rebuild migration.
+- **T2 — Dump-replay harness** (PR #52, merged 2026-05-21). Committed
+  dumps under `dumps/*.jsonl` are now a regression corpus runnable from
+  JVM unit tests; `DumpReplayHarness` parses each dump, replays bodies
+  through the normalizer against an in-memory DB, asserts ingested-vs-
+  rejected distribution stays within ±5pp of a checked-in baseline. Four
+  missing backlog items were captured during the implementation.
+- **T3 — Ingestion-health surface** (PR #51, shipped as v0.14.2 on
+  2026-05-21). New `IngestionHealthCard` on the Debug screen shows
+  rolling 7-day funnel — total received, % gate-accepted, % with
+  `amountMinor != null`, count of `INGEST_FAILED` with most common
+  `errorClass`. Loud red when failure count > 0.
 
 ---
 
@@ -83,26 +114,12 @@ notification slips through.
 
 ## Next — pick one of these to start
 
-### T1 — In-memory Room test fixture
-**What:** Add `androidx.room:room-testing` to `androidTestImplementation`, set up an in-memory `RupeeDatabase` builder, and seed a base fixture (one user, one account, one card, one budget). Use it to write the first instrumented DB test — proposed coverage:
-- The H4 FK ordering: ingest one INBOX_PENDING-bound notification, assert that `inbox_items` and `transaction_candidates` both have a row (regression for yesterday's bug)
-- `DumpOutcomeDao` joined query: insert a synthetic raw → parsed → candidate → inbox → canonical chain, call the DAO, assert the snapshot has the expected fields populated
-- Migration `MIGRATION_8_9` (the only table-rebuild migration we've shipped): seed v8 data, run the migration, assert FKs were declared correctly
-**Why:** every "structural" fix the gravedigging audit deferred ([gravedigging-2026-05-18.md §L2](gravedigging-2026-05-18.md)) blocks on this fixture. Yesterday's regression would have been caught at PR time with a single test. Until we have this, every schema change is a roulette spin.
-**Touchpoints:** new `androidTest/.../IngestionPipelineTest.kt`, `DumpOutcomeDaoTest.kt`, `MigrationTest.kt`; tiny gradle change in `app/build.gradle.kts`.
-**Blocked by:** nothing. ~1 day of setup + first three tests.
-
-### T2 — Automated dump-replay in CI
-**What:** Each committed dump file in `dumps/*.jsonl` becomes a regression corpus. New gradle task `:android:app:replayDumps` loads each dump, runs every raw body through `NotificationSignalNormalizer.ingestNotification` against an in-memory DB, and asserts that the ingested-vs-rejected distribution doesn't regress more than ±5pp vs a checked-in baseline. PR CI runs the task.
-**Why:** three of the last four production bugs were "the gate dropped a class of body it used to accept" or "a parser regressed on a body shape." The dump files ARE our regression corpus — we just don't read them. The user pushes a dump → CI catches the next regression at PR time → we patch without losing a day of transactions.
-**Touchpoints:** new `app/src/test/java/.../DumpReplayHarness.kt`, gradle task, baseline snapshot file. Depends on T1.
-**Blocked by:** T1 (needs the in-memory Room fixture to run the normalizer end-to-end).
-
-### T3 — Ingestion health surface in the Debug screen
-**What:** New Debug-tab card showing rolling 7-day ingestion metrics — total notifications received, % accepted by gate, % ingested with `amountMinor != null`, count of `INGEST_FAILED` with the most common `errorClass` (now that v0.14.1 captures it). Loud red if `INGEST_FAILED` count > 0.
-**Why:** v0.14.0's regression hid for 24 hours because nothing in-app reflected the silent failure rate. The data is already captured (it lives in `parsed_signals` for gate decisions and in `raw_capture_events.ingestionStatus`); we just don't surface it. Without this, you notice missing transactions days later instead of minutes.
-**Touchpoints:** new `IngestionHealthCard` composable on `DebugScreen`, queries against `parsed_signals` + `raw_capture_events` (7-day window). Optional notification when failure rate spikes.
-**Blocked by:** nothing. Half a day.
+### EXT-COMBINED — Notification extractor `combinedBody` refactor
+**What:** Today `NotificationExtractor` reads `Notification.extras.getString(EXTRA_TEXT)` and ignores `EXTRA_TITLE`, `EXTRA_SUB_TEXT`, `EXTRA_BIG_TEXT`, and the various inbox-style extras. Some senders (Kotak811, certain SBI mirrors, ICICI cross-app forwards) place the amount or merchant in the *title* or *subText* and leave `text` empty or generic. The notification arrives, the gate sees no body, and the transaction is silently lost. Fix: extract every present Bundle extra into a single canonical `combinedBody` string before any parser/gate logic runs.
+**Why:** the deep-dive estimates **~60% more notification coverage** with this one change. It is the single biggest "we are quietly losing transactions" item in the repo today. Bigger user impact than EMI-AUTO.
+**Touchpoints:** `ingestion/NotificationExtractor.kt`, `ingestion/ExtractedNotification.kt` (add `combinedBody` field), all 9 parsers (`canParse` + `parse` switch from `body` to `combinedBody`), `NotificationDecisionEngine` (gate runs on combined), tests under `ingestion/NotificationExtractorTest.kt` + every parser test.
+**Reference:** [notification-ingestion-deep-dive.md §5–§9](notification-ingestion-deep-dive.md).
+**Blocked by:** nothing. ~3–4 days. **T1/T2** are already shipped, so regression coverage is automatic — every dump in `dumps/*.jsonl` replays through the new path on every PR.
 
 ### EMI-AUTO — EMI auto-detection from notifications
 **What:** Today `EmiPlanEntity` is populated only by manual entry through the Cards & EMIs screen. EMI debit notifications parse as SPEND. Extend the EMI parser to upsert into `emi_plans` directly when amount + merchant + due-date all extract confidently — same shape as the BILL_DUE → credit_cards side-effect that's already wired.
@@ -127,7 +144,38 @@ notification slips through.
 - Recap surface visual density
 **Why:** pre-1.0 product polish; the v0.13.8 onboarding pass cleaned Welcome / Permissions / Profile screens but Home / Inbox / Settings haven't had a focused visual review since.
 **Touchpoints:** mostly `MainActivity.kt` composables. Could prompt an L5-flavoured decomposition pass as a side effect.
-**Blocked by:** nothing — needs a polish brief, not a tech blocker. ~½ to 2 days depending on scope.
+**Blocked by:** **the design-direction decision** on the parked `design/aviate-vs-vwfndr` branch. Most polish work is design-neutral (spacing, empty/loading states) but the typography hierarchy, surface tinting, motion vocabulary, and Recap visual density all flow from picking Aviate vs vwfndr. Do **TRUSTED-UI**, **EXPORT-UI**, **TRUST-FROM-TXN**, **EXCL-FROM-SPEND** first — they're pure utility and flavor-agnostic. ~½ to 2 days for the design-neutral subset; full pass needs the direction call first.
+
+### TRUSTED-UI — Trusted Merchants management screen
+**What:** `MerchantTrustRuleEntity` and `MerchantTrustRuleDao` have shipped since v0.13.x — the data model + insert path are done. What's missing is a dedicated screen to list / edit / delete trust rules. Currently the only way to manage trust rules is via the Settings deep-link modal that's stub-implemented; spec calls for a full list view with per-merchant scope, "always confirm" toggle, and last-fired timestamp.
+**Why:** users have no visibility into which auto-confirm rules they've accumulated. A user adding "Always trust Swiggy" can never see or revoke it without dev tooling. Pre-1.0 trust requirement.
+**Touchpoints:** `settings/TrustRulesScreen.kt` (currently a placeholder), `SettingsViewModel`, possibly a `MerchantTrustRuleDao.observeAll()` flow.
+**Reference:** [rupee-android-screens.md §20](rupee-android-screens.md).
+**Blocked by:** nothing. ~1–2 days. Pure UI on existing data.
+
+### EXPORT-UI — Export to CSV / JSON
+**What:** PRD §14 lists data-export as an MVP capability but no UI affordance exists today. Surface a Settings entry that lets the user save a date-windowed export of `canonical_transactions` (+ joined merchant/category) as CSV or JSON to local storage, then offer the share-sheet. JSON export should also include `raw_capture_events` for the same window so power users can debug ingestion themselves.
+**Why:** MVP gap. Also unblocks "I want to see my data outside the app" trust requests and gives us a pre-baked diagnostic payload when users report bugs.
+**Touchpoints:** new `diagnostics/Exporter.kt` (CSV + JSON formatters — the JSON path can lean on `DumpOutcomeExporter` plumbing that already exists for diagnostics), Settings entry, `FileProvider` share intent (already declared in manifest).
+**Blocked by:** nothing. ~1–2 days.
+
+### TRUST-FROM-TXN — "Always trust this merchant" from txn detail
+**What:** Today adding a trust rule requires diving into Settings. The transaction-detail sheet on the Transactions tab has a Merchant field and a Notes field — add a "Always auto-confirm from {merchant}" toggle row that writes a `MerchantTrustRuleEntity` on enable and deletes it on disable. Same affordance on the Inbox confirmation surface.
+**Why:** the friction of opening Settings → Trust Rules → Add → pick merchant is enough that users never make a trust rule even when they obviously want one. This is the "Walnut-style fast-path" referenced in [axio-takeaways.md Item 6](axio-takeaways.md).
+**Touchpoints:** Transactions detail sheet in `MainActivity.kt`, Inbox review UI, `MerchantTrustRuleDao.upsert/delete`.
+**Blocked by:** nothing. ~½ day. Pairs nicely with **TRUSTED-UI** in the same PR.
+
+### EXCL-FROM-SPEND — Account "exclude from spend totals" toggle
+**What:** `AccountEntity.excludeFromSpendTotals` and `CreditCardEntity` equivalents already exist as columns but the toggle is buried in the Cards & EMIs modal and absent for bank/cash accounts. Surface a per-account toggle in the same Settings pass as TRUSTED-UI.
+**Why:** users with savings-account drains (loan EMIs auto-debited from a different account) want to exclude that account from "May spend" totals without losing the rows. Currently they have to manually mark each transaction.
+**Touchpoints:** `settings/SettingsScreen.kt` accounts modal, `AccountDao.setExcludeFromSpend(...)`.
+**Blocked by:** nothing. ~½ day.
+
+### CRED-ICICI-AUDIT — Audit hardcoded SPEND in CRED / ICICI parsers
+**What:** Per [Recently shipped — gravedigging audit](#) notes, "CRED/ICICI parsers still hardcode SPEND for some paths — fine for card alerts, audit if a real card-credit notification slips through." Concrete audit: enumerate every `parse()` return in `CredNotificationParser` and `IciciNotificationParser`, check each against a real-world card-credit dump (refund, reversal, statement credit, EMI conversion reversal), patch any that miscategorise.
+**Why:** silent miscategorisation of a credit-side notification as SPEND inflates the user's spend total and confuses Insights. Hard to catch by inspection because the offending notification is rare.
+**Touchpoints:** `ingestion/CredNotificationParser.kt`, `ingestion/IciciNotificationParser.kt`, regression cases in `NotificationParserParseTest`.
+**Blocked by:** nothing. ~½ day audit + however long the fixes take per parser hole.
 
 ### L4 — remove `fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4)`
 **What:** Drop the destructive-migration fallback in `RupeeApplication.kt:25`. Anyone on v1-v4 has long passed the upgrade window; this is just data-loss-risk for any real release.
@@ -179,6 +227,43 @@ notification slips through.
 **Blocked by:** ideally T1 (in-memory Room tests) — enrichment is a state-mutation feature that's hard to ship safely without DB-level regression coverage.
 **Source:** user-requested via 2026-05-19 conversation; not yet captured against an Axio takeaway.
 
+### UI/UX family — design-direction-dependent
+
+All four items below are blocked by the **design-direction decision** on
+the parked `design/aviate-vs-vwfndr` branch. Each direction implies a
+different answer:
+- *Aviate* makes Recap a destination, leans into narrative copy, wants
+  identity-coded badges.
+- *vwfndr* de-emphasises Recap, exposes confidence as a numeric readout
+  on every row, treats loading states as instrument warm-up.
+
+Pick a direction before sprinting on these.
+
+#### INBOX-WHY — "Why was this in Inbox?" badges
+**What:** Every Inbox item today just says "needs review." Surface the actual reason as a small chip on the row — `LOW CONFIDENCE`, `NO MERCHANT`, `AMOUNT ONLY`, `NEW SENDER`, `MASKED DIGITS MISSING`. Read from `parsed_signals.parserKey` + the existing confidence tier + presence/absence of merchant/maskedDigits fields.
+**Why:** PRD calls for "every inferred transaction should be explainable." Today the user has no signal for *why* the parser couldn't fully resolve — they just see an unreviewed row and have to guess.
+**Touchpoints:** Inbox tab in `MainActivity.kt`, `InboxItemWithCandidate` already exposes the joined fields. No data change.
+**Reference:** [rupee-android-screens.md §21](rupee-android-screens.md).
+
+#### MANUAL-FAST — Manual entry speed pass (20-second goal)
+**What:** Spec target for manual entry is 20 seconds. Levers: (a) category autocomplete from the user's recent 30-day picks, (b) "similar to last Swiggy / Uber" suggestion when amount + merchant match a recent pattern, (c) swipe-to-account pre-selection so card vs cash is one gesture not a dropdown.
+**Why:** manual entry is the fallback when ingestion misses something — friction here is *the* failure mode for trust.
+**Touchpoints:** the manual-entry sheet in `MainActivity.kt`, possibly a new `RecentPicksRepository` (small in-memory cache over `CanonicalTransactionDao`).
+**Reference:** [rupee-android-screens.md §12](rupee-android-screens.md).
+
+#### RECAP-PERSIST — Persisted monthly Recap snapshots
+**What:** Recap is computed-on-read today. PRD describes a "story-like highlights" surface (biggest category, most expensive day, variance vs last month, fixed vs discretionary). Persist a `MonthlyRecap` snapshot row per closed month so the surface loads instantly and we can build "share my month" later. Also unblocks the **Aviate Wrapped-style shareable artifact** if that direction wins.
+**Why:** Recap is too expensive to recompute on every open as transaction count grows; also blocks any cross-month comparison that requires a stable historical snapshot.
+**Touchpoints:** new `MonthlyRecapEntity` + DAO, scheduled job on month-close (WorkManager already exists in tree), `RecapViewModel` reads from DAO with fallback to live compute.
+**Reference:** PRD §14, §21; CONTEXT.md "Known Gaps" already lists `monthly_recaps` as defined-but-unimplemented.
+
+#### COLDSTART — Cold-start hydration / loading states
+**What:** First open of Home / Inbox / Transactions flashes empty before flows hydrate. Add a quick skeleton (Aviate: soft shimmer; vwfndr: viewfinder warm-up mark) and only swap in real content once the flow has emitted at least once. Pair with empty states (no income captured yet, etc.) — both surfaces need the same "we're alive but not ready" affordance.
+**Why:** the empty-flash reads as "broken" to first-time users. Fast fix, high perceptual value.
+**Touchpoints:** the three tab composables in `MainActivity.kt`, plus an empty-state composable that swaps in when the flow emits an empty list.
+
+---
+
 ### S4-5 — Adaptive confidence from user behaviour (Item 13)
 **What:** `ingestion_signal_stats` table keyed `(package, parserKey, cleanedMerchant)`. Confirm counts up, dismiss counts down. Bootstrap mode for first 14 days lowers MEDIUM threshold from 0.6 → 0.5 to be more liberal at onboarding. Auto-promote to `MerchantTrustRule` after 3 confirms in a 7+ day window.
 **Why:** the app learns the user's actual transaction patterns instead of relying on hardcoded confidence floors. User asked for this explicitly.
@@ -189,9 +274,17 @@ notification slips through.
 
 ## Watching — known gaps, no sprint yet
 
+### UI/UX — post-MVP, not blocked on design direction
+- **CAL-INTER — Calendar interactions.** Spec ([rupee-android-screens.md §18.2–§18.3](rupee-android-screens.md)) calls for tap-day → show txns for that day, swipe-month → next/previous, tap-due-item → detail screen. The heatmap renders; the gestures don't. Half a day.
+- **PERM-REOPEN — Permission re-enable shortcut.** [rupee-prd.md §21.1](rupee-prd.md) describes an in-app shortcut for users who denied notification access and later want to re-enable. Today they have to dig through system settings. `PermissionStateChecker.kt` knows the state; surface a "Notifications denied — turn on" affordance on the Home top strip or Settings when the check returns false. ~½ day.
+
+### Architecture — post-MVP, depends on rule engine
+- **PATTERN-TELEM — Pattern telemetry / OTA-readiness.** Per [axio-competitor-analysis.md §3.7](axio-competitor-analysis.md), once **S2** ships JSON rules with `pattern_UID`, we'd want to log which patterns fire in production (counts, last-fired timestamp) so the rule corpus can be tuned from real data. Useless without S2; trivial to add once S2 exists.
+- **MISSED-TXN — Missed-transaction detector via balance reconciliation.** [axio-takeaways.md Item 8](axio-takeaways.md). `ParsedSignalEntity.balanceAfterMinor` column already exists but no reconcile logic. Walnut catches the "you said balance is X but txns sum to Y" gap. Needs reliable balance extraction across providers first (multi-sprint effort tied to S2). Sprint 4+ with low priority.
+
 ### From `docs/notification-ingestion-deep-dive.md` §9
-- **§9.3 `extractedJson TEXT NULL` on `RawCaptureEventEntity`.** Persist structured Bundle fields so we can re-parse old events when parser v2 ships. ~1-2 KB/notif storage cost. Not urgent — current `body` field has the combinedBody which is enough for re-parsing 95% of cases.
-- ~~**§9.9 Post-ship parse-rate counter.**~~ Promoted to **T3 — Ingestion health surface in the Debug screen** in the **Next** section above (2026-05-19).
+- **§9.3 `extractedJson TEXT NULL` on `RawCaptureEventEntity`.** Persist structured Bundle fields so we can re-parse old events when parser v2 ships. ~1-2 KB/notif storage cost. Not urgent — current `body` field has the combinedBody which is enough for re-parsing 95% of cases. *(2026-05-21: less urgent once **EXT-COMBINED** lands, since `combinedBody` will already cover the title/subText fields that today get dropped.)*
+- ~~**§9.9 Post-ship parse-rate counter.**~~ Promoted to **T3 — Ingestion health surface in the Debug screen** — shipped in v0.14.2 (PR #51, 2026-05-21).
 
 ### From `docs/rupee-settings-debug.md` §6 (deferred-by-design)
 - **Merge with existing transaction.** Repository contract: `mergeInboxIntoTransaction(inboxItemId, targetTransactionId)`. Two-step soft-confirm currently exists in UI but no full search-then-select picker. (M1's `mergedFromExistingCanonicalId` column landed v0.14.0 — surfaces the merge in analytics, but the UI picker remains TODO.)
