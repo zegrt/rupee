@@ -28,8 +28,8 @@ Each item should have: *what*, *why it matters*, *touchpoints*, *blocked by*.
   ship as side-by-side installable APKs from one repo via Gradle product
   flavors. Real wallet logic (Room / ViewModels / ingestion) is untouched
   and dormant during the evaluation. Decision is pending. Picking a
-  direction blocks **POLISH-1** and the **RECAP-PERSIST** / **INBOX-WHY**
-  items below. See `DESIGN_NOTES.md` (root) + `design-research/DESIGN_NOTES.md`
+  direction is the gate between **Sprint 1** and **Sprint 2** of the MVP
+  plan below. See `DESIGN_NOTES.md` (root) + `design-research/DESIGN_NOTES.md`
   for what each direction does, what would change behind the screen, and
   trade-offs.
 
@@ -139,14 +139,26 @@ notification slips through.
 
 ---
 
-## Next — pick one of these to start
+## MVP sprint plan
 
-### EMI-AUTO — EMI auto-detection from notifications
-**What:** Today `EmiPlanEntity` is populated only by manual entry through the Cards & EMIs screen. EMI debit notifications parse as SPEND. Extend the EMI parser to upsert into `emi_plans` directly when amount + merchant + due-date all extract confidently — same shape as the BILL_DUE → credit_cards side-effect that's already wired.
-**Why:** the only "Track basic EMI obligations" gap on the MVP checklist in [rupee-roadmap.md §3](rupee-roadmap.md). Everything else on the MVP list ships today.
-**Touchpoints:** `EmiNotificationParser` (already exists, extracts amount + merchantishly + dueDateIso), `NotificationSignalNormalizer.applyBillDueToCard` is the structural mirror — copy the shape for `applyEmiToPlan`. New repo method + DAO upsert.
-**Blocked by:** nothing. ~1-2 days.
-**Open design Q:** route confirmed EMIs to Inbox first vs auto-add to `emi_plans`? Recommend Inbox (EMIs are commitments — user should verify before they show up on Home's upcoming-dues strip).
+Everything below is scoped to land before a 1.0 cut. Three working
+sprints + a release sprint. Anything not on this list lives in
+**Slotted** (post-1.0) or **Watching**.
+
+**EMI auto-detection is intentionally post-release.** The manual EMI
+entry path in `Cards & EMIs` already covers the MVP feature checklist;
+auto-detection from notifications is a quality upgrade that doesn't
+gate 1.0. See Slotted → **EMI-AUTO**.
+
+**Design-direction gate.** The Aviate-vs-vwfndr decision on the parked
+`design/aviate-vs-vwfndr` branch sits between Sprint 1 and Sprint 2.
+Sprint 0/1 work is flavor-agnostic; Sprint 2 polish presumes the call.
+
+---
+
+## Sprint 0 — Release blockers *(≈1 day, single PR)*
+
+Pure correctness. Has to land before any real 1.0 cut.
 
 ### SEED-SERVICE — proper seeding service (replace hardcoded IDs)
 **What:** `LocalFinanceRepository.completeInitialSetup` hardcodes seed IDs (`account-bank-1`, `card-1`, `account-cash`) and a single 2026-03 budget period. Works for one tester; breaks for a clean install in any other month. Replace with UUID generation + current-month budget.
@@ -154,17 +166,28 @@ notification slips through.
 **Touchpoints:** `LocalFinanceRepository.completeInitialSetup`, possibly `OnboardingViewModel` if budget period needs surfacing.
 **Blocked by:** nothing. ~half-day.
 
-### POLISH-1 — Home / Inbox / Settings polish pass
-**What:** Designer-driven visual review pass on the three most-trafficked surfaces. Specific items emerge from walkthrough; common rough spots based on past testing:
-- spacing inconsistencies (margins, padding) between Home / Inbox / Settings
-- typography hierarchy on Home (greeting vs month vs budget number)
-- empty states (Inbox empty, no transactions yet, no income captured)
-- loading states on first cold start before flows hydrate
-- snackbar / toast styling
-- Recap surface visual density
-**Why:** pre-1.0 product polish; the v0.13.8 onboarding pass cleaned Welcome / Permissions / Profile screens but Home / Inbox / Settings haven't had a focused visual review since.
-**Touchpoints:** mostly `MainActivity.kt` composables. Could prompt an L5-flavoured decomposition pass as a side effect.
-**Blocked by:** **the design-direction decision** on the parked `design/aviate-vs-vwfndr` branch. Most polish work is design-neutral (spacing, empty/loading states) but the typography hierarchy, surface tinting, motion vocabulary, and Recap visual density all flow from picking Aviate vs vwfndr. Do **EXPORT-UI**, **TRUST-FROM-TXN**, **EXCL-FROM-SPEND** first — they're pure utility and flavor-agnostic. ~½ to 2 days for the design-neutral subset; full pass needs the direction call first.
+### CRED-ICICI-AUDIT — Audit hardcoded SPEND in CRED / ICICI parsers
+**What:** Per [Recently shipped — gravedigging audit](#) notes, "CRED/ICICI parsers still hardcode SPEND for some paths — fine for card alerts, audit if a real card-credit notification slips through." Concrete audit: enumerate every `parse()` return in `CredNotificationParser` and `IciciNotificationParser`, check each against a real-world card-credit dump (refund, reversal, statement credit, EMI conversion reversal), patch any that miscategorise.
+**Why:** silent miscategorisation of a credit-side notification as SPEND inflates the user's spend total and confuses Insights. Hard to catch by inspection because the offending notification is rare.
+**Touchpoints:** `ingestion/CredNotificationParser.kt`, `ingestion/IciciNotificationParser.kt`, regression cases in `NotificationParserParseTest`.
+**Blocked by:** nothing. ~½ day audit + however long the fixes take per parser hole.
+
+### L4 — remove `fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4)`
+**What:** Drop the destructive-migration fallback in `RupeeApplication.kt:44`. Anyone on v1-v4 has long passed the upgrade window; this is just data-loss-risk for any real release.
+**Why:** release blocker. Captured in [gravedigging-2026-05-18.md §L4](gravedigging-2026-05-18.md) as "deferred indefinitely until release prep" — promoting here so it doesn't get forgotten.
+**Touchpoints:** one line in `RupeeApplication.kt`. ~5 minutes.
+**Blocked by:** "we're committing to never supporting v1-v4 upgrades again" — true today.
+
+---
+
+## Sprint 1 — Utility wins + design call *(≈3-4 days)*
+
+Three flavor-agnostic utility wins users will feel, plus the
+design-direction decision itself. After this sprint we have the
+visual language locked for Sprint 2 polish.
+
+**Decision (no code):** pick Aviate vs vwfndr off the parked branch.
+Closing this unblocks Sprint 2.
 
 ### EXPORT-UI — Export to CSV / JSON
 **What:** PRD §14 lists data-export as an MVP capability but no UI affordance exists today. Surface a Settings entry that lets the user save a date-windowed export of `canonical_transactions` (+ joined merchant/category) as CSV or JSON to local storage, then offer the share-sheet. JSON export should also include `raw_capture_events` for the same window so power users can debug ingestion themselves.
@@ -184,23 +207,69 @@ notification slips through.
 **Touchpoints:** need a new account-management entry in Settings (currently only Cards & EMIs is exposed). Calls `repository.setAccountExcludeFromExpenseTotals(accountId, exclude)`.
 **Blocked by:** nothing. ~½ day for the toggle row; ~1 day if we add a proper "Accounts" Settings screen alongside it.
 
-### CRED-ICICI-AUDIT — Audit hardcoded SPEND in CRED / ICICI parsers
-**What:** Per [Recently shipped — gravedigging audit](#) notes, "CRED/ICICI parsers still hardcode SPEND for some paths — fine for card alerts, audit if a real card-credit notification slips through." Concrete audit: enumerate every `parse()` return in `CredNotificationParser` and `IciciNotificationParser`, check each against a real-world card-credit dump (refund, reversal, statement credit, EMI conversion reversal), patch any that miscategorise.
-**Why:** silent miscategorisation of a credit-side notification as SPEND inflates the user's spend total and confuses Insights. Hard to catch by inspection because the offending notification is rare.
-**Touchpoints:** `ingestion/CredNotificationParser.kt`, `ingestion/IciciNotificationParser.kt`, regression cases in `NotificationParserParseTest`.
-**Blocked by:** nothing. ~½ day audit + however long the fixes take per parser hole.
+### S1.3 (pilot) — Evidence-stacked confidence scoring, one parser
+**What:** Pilot the additive-tally pattern on one parser to validate the design before migrating the other eight. Recommend `GenericUpiNotificationParser` (loosest current scoring → biggest tuning win). Each evidence signal contributes points (canonical verb +3, masked digits +2, UPI ref +2, named merchant +2, amount-only +1, soft anti-signals −5); single global threshold decides MEDIUM vs HIGH.
+**Why:** today every parser hardcodes its own confidence values (0.76 / 0.55 / etc.) — two very different bodies score the same number. Tuning is per-parser edits in nine files. Move *one* parser to the tally; if it feels right, Sprint 2 migrates the rest.
+**Touchpoints:** `NotificationParseResult.parseConfidence`, `ingestion/GenericUpiNotificationParser.kt`, new shared `EvidenceTally` helper, `NotificationDecisionEngineTest`.
+**Blocked by:** nothing. Time-box to 1 day so it doesn't bleed into Sprint 2.
 
-### L4 — remove `fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4)`
-**What:** Drop the destructive-migration fallback in `RupeeApplication.kt:25`. Anyone on v1-v4 has long passed the upgrade window; this is just data-loss-risk for any real release.
-**Why:** release blocker. Captured in [gravedigging-2026-05-18.md §L4](gravedigging-2026-05-18.md) as "deferred indefinitely until release prep" — promoting here so it doesn't get forgotten.
-**Touchpoints:** one line in `RupeeApplication.kt`. ~5 minutes.
-**Blocked by:** "we're committing to never supporting v1-v4 upgrades again" — true today.
+---
 
-### S1.3 — Evidence-stacked confidence scoring
-**What:** Replace every parser's hardcoded confidence brackets (`0.62 / 0.55 / 0.15` etc.) with an additive evidence tally. Each parser contributes points per signal found (canonical verb +3, masked digits +2, UPI ref +2, named merchant +2, amount-only +1, soft anti-signals −5). Single global threshold decides MEDIUM vs HIGH.
-**Why:** today two very different bodies score the same `0.62` — one with strong evidence, one with weak. Tuning is per-parser edits in nine files. With a tally, tuning is one knob.
-**Touchpoints:** `NotificationParseResult.parseConfidence`, all 9 parsers in `ingestion/`, `NotificationDecisionEngineTest`.
-**Blocked by:** nothing. Can do one parser at a time — start with `GenericNotificationParser` + `GenericUpiNotificationParser` (the two with the loosest current scoring).
+## Sprint 2 — Design integration + polish *(≈1 week)*
+
+Apply the chosen design language to the most-trafficked surfaces. Three
+items in here read differently in each flavor (chip copy, skeletons,
+typography), so the Sprint 1 design call is the gate.
+
+### POLISH-1 — Home / Inbox / Settings polish pass
+**What:** Designer-driven visual review pass on the three most-trafficked surfaces. Specific items emerge from walkthrough; common rough spots based on past testing:
+- spacing inconsistencies (margins, padding) between Home / Inbox / Settings
+- typography hierarchy on Home (greeting vs month vs budget number)
+- empty states (Inbox empty, no transactions yet, no income captured)
+- snackbar / toast styling
+- Recap surface visual density
+**Why:** pre-1.0 product polish; the v0.13.8 onboarding pass cleaned Welcome / Permissions / Profile screens but Home / Inbox / Settings haven't had a focused visual review since.
+**Touchpoints:** mostly `MainActivity.kt` composables. Could prompt an L5-flavoured decomposition pass as a side effect.
+**Blocked by:** Sprint 1 design call. ~2 days to apply the chosen language.
+
+### COLDSTART — Cold-start hydration / loading skeletons
+**What:** First open of Home / Inbox / Transactions flashes empty before flows hydrate. Add a quick skeleton (Aviate: soft shimmer; vwfndr: viewfinder warm-up mark) and only swap in real content once the flow has emitted at least once. Pair with empty states (no income captured yet, etc.) — both surfaces need the same "we're alive but not ready" affordance.
+**Why:** the empty-flash reads as "broken" to first-time users. Fast fix, high perceptual value.
+**Touchpoints:** the three tab composables in `MainActivity.kt`, plus an empty-state composable that swaps in when the flow emits an empty list.
+**Blocked by:** Sprint 1 design call (skeleton style differs per flavor). ~½ day.
+
+### INBOX-WHY-COPY — Refine per-reason chip copy
+**What:** The reason-chip slot already exists (`row.reasonLabel` renders inside a tinted Surface at `MainActivity.kt:1837`). Today the label distinguishes mainly SUGGESTED vs INBOX. Expand to read from `parsed_signals.parserKey` + confidence tier + presence/absence of merchant/maskedDigits and emit specific reasons (`LOW CONFIDENCE`, `NO MERCHANT`, `AMOUNT ONLY`, `NEW SENDER`, `MASKED DIGITS MISSING`).
+**Why:** PRD calls for "every inferred transaction should be explainable." Today users see a chip but it doesn't tell them what specifically tripped the gate.
+**Touchpoints:** the `reasonLabel` derivation in `HomeViewModel`. No UI rebuild needed.
+**Blocked by:** nothing structurally; ride with Sprint 2 polish. ~½ day.
+
+### MANUAL-FAST — Manual entry speed pass (20-second goal)
+**What:** Spec target for manual entry is 20 seconds. Levers: (a) category autocomplete from the user's recent 30-day picks, (b) "similar to last Swiggy / Uber" suggestion when amount + merchant match a recent pattern, (c) swipe-to-account pre-selection so card vs cash is one gesture not a dropdown.
+**Why:** manual entry is the fallback when ingestion misses something — friction here is *the* failure mode for trust.
+**Touchpoints:** the manual-entry sheet in `MainActivity.kt`, possibly a new `RecentPicksRepository` (small in-memory cache over `CanonicalTransactionDao`).
+**Reference:** [rupee-android-screens.md §12](rupee-android-screens.md).
+**Blocked by:** nothing. ~1 day.
+
+### CAL-INTER — Swipe-month navigation on Calendar
+**What:** Tap-day-to-show-txns is wired (`CalendarScreen.kt:76`). Add gesture-based **month** navigation — the ViewModel has `displayMonth: MutableStateFlow<YearMonth>` driven by chevron buttons only; wrap the calendar grid in `HorizontalPager` or use `detectHorizontalDragGestures` bound to `displayMonth`.
+**Why:** chevron-only feels dated next to the iOS / Android system calendars. Half a day for a meaningful UX win.
+**Touchpoints:** `calendar/CalendarScreen.kt`, `CalendarViewModel.displayMonth`.
+
+### S1.3 (rest) — Migrate remaining 8 parsers to evidence tally
+**What:** If the Sprint 1 pilot validated the additive-tally pattern, migrate the other 8 parsers. Each takes ~1-2 hours including its `NotificationParserParseTest` updates. Total ~1-2 days. **Skip if the pilot felt wrong** — the cost of keeping 9 hardcoded confidence floors is bounded.
+**Blocked by:** Sprint 1 pilot result.
+
+---
+
+## Sprint 3 — Release prep *(≈half week)*
+
+- Refresh the dump-replay harness baseline (T2) against the post-Sprint-2
+  state — every regression test reflects the new ingestion + UI behaviour.
+- Stage-roll the chosen design on team devices for 24h.
+- Final pass over `CHANGELOG.md` / release notes.
+- 1.0 version bump (`versionName = "1.0.0"`, `versionCode = 39+`),
+  signed release APK, tag.
 
 ---
 
@@ -240,39 +309,18 @@ notification slips through.
 **Blocked by:** ideally T1 (in-memory Room tests) — enrichment is a state-mutation feature that's hard to ship safely without DB-level regression coverage.
 **Source:** user-requested via 2026-05-19 conversation; not yet captured against an Axio takeaway.
 
-### UI/UX family — design-direction-dependent
+### EMI-AUTO — EMI auto-detection from notifications *(post-1.0)*
+**What:** Today `EmiPlanEntity` is populated only by manual entry through the Cards & EMIs screen. EMI debit notifications parse as SPEND. Extend the EMI parser to upsert into `emi_plans` directly when amount + merchant + due-date all extract confidently — same shape as the `applyBillDueToCard` side-effect that's already wired in `NotificationSignalNormalizer`.
+**Why:** quality upgrade — manual EMI entry already covers the MVP feature checklist. Auto-detection is a polish item that's better landed after 1.0 ships with real-user EMI corpora to validate against.
+**Touchpoints:** `EmiNotificationParser` (already exists, extracts amount + merchantishly + dueDateIso), new `applyEmiToPlan(...)` in `NotificationSignalNormalizer` mirroring `applyBillDueToCard`. New repo method + `EmiPlanDao.upsertPlan`.
+**Blocked by:** nothing technical. Deferred to post-1.0 because EMIs are commitments — the right confidence threshold should be tuned against real-user data, not synthetic dumps.
+**Open design Q:** route confirmed EMIs to Inbox first vs auto-add to `emi_plans`? Recommend Inbox (EMIs are commitments — user should verify before they show up on Home's upcoming-dues strip).
 
-All four items below are blocked by the **design-direction decision** on
-the parked `design/aviate-vs-vwfndr` branch. Each direction implies a
-different answer:
-- *Aviate* makes Recap a destination, leans into narrative copy, wants
-  identity-coded badges.
-- *vwfndr* de-emphasises Recap, exposes confidence as a numeric readout
-  on every row, treats loading states as instrument warm-up.
-
-Pick a direction before sprinting on these.
-
-#### INBOX-WHY-COPY — Refine the reason copy on Inbox chips *(scope reduced 2026-05-22)*
-**What:** The reason-chip *slot* already exists — `row.reasonLabel` renders in a tinted Surface at `MainActivity.kt:1837`. What's pending is the per-reason copy: today the label distinguishes mainly SUGGESTED vs INBOX. Expand to read from `parsed_signals.parserKey` + confidence tier + presence/absence of merchant/maskedDigits and emit specific reasons (`LOW CONFIDENCE`, `NO MERCHANT`, `AMOUNT ONLY`, `NEW SENDER`, `MASKED DIGITS MISSING`).
-**Why:** PRD calls for "every inferred transaction should be explainable." Today users see a chip but it doesn't tell them what specifically tripped the gate.
-**Touchpoints:** the `reasonLabel` derivation in `HomeViewModel` (or wherever `ReviewRow` is composed). No UI rebuild needed.
-
-#### MANUAL-FAST — Manual entry speed pass (20-second goal)
-**What:** Spec target for manual entry is 20 seconds. Levers: (a) category autocomplete from the user's recent 30-day picks, (b) "similar to last Swiggy / Uber" suggestion when amount + merchant match a recent pattern, (c) swipe-to-account pre-selection so card vs cash is one gesture not a dropdown.
-**Why:** manual entry is the fallback when ingestion misses something — friction here is *the* failure mode for trust.
-**Touchpoints:** the manual-entry sheet in `MainActivity.kt`, possibly a new `RecentPicksRepository` (small in-memory cache over `CanonicalTransactionDao`).
-**Reference:** [rupee-android-screens.md §12](rupee-android-screens.md).
-
-#### RECAP-PERSIST — Persisted monthly Recap snapshots
+### RECAP-PERSIST — Persisted monthly Recap snapshots *(post-1.0; design-direction-sensitive)*
 **What:** Recap is computed-on-read today. PRD describes a "story-like highlights" surface (biggest category, most expensive day, variance vs last month, fixed vs discretionary). Persist a `MonthlyRecap` snapshot row per closed month so the surface loads instantly and we can build "share my month" later. Also unblocks the **Aviate Wrapped-style shareable artifact** if that direction wins.
-**Why:** Recap is too expensive to recompute on every open as transaction count grows; also blocks any cross-month comparison that requires a stable historical snapshot.
+**Why:** Recap is too expensive to recompute on every open as transaction count grows; also blocks any cross-month comparison that requires a stable historical snapshot. Not gating 1.0 because the live-compute version is acceptable at current data volumes.
 **Touchpoints:** new `MonthlyRecapEntity` + DAO, scheduled job on month-close (WorkManager already exists in tree), `RecapViewModel` reads from DAO with fallback to live compute.
-**Reference:** PRD §14, §21; CONTEXT.md "Known Gaps" already lists `monthly_recaps` as defined-but-unimplemented.
-
-#### COLDSTART — Cold-start hydration / loading states
-**What:** First open of Home / Inbox / Transactions flashes empty before flows hydrate. Add a quick skeleton (Aviate: soft shimmer; vwfndr: viewfinder warm-up mark) and only swap in real content once the flow has emitted at least once. Pair with empty states (no income captured yet, etc.) — both surfaces need the same "we're alive but not ready" affordance.
-**Why:** the empty-flash reads as "broken" to first-time users. Fast fix, high perceptual value.
-**Touchpoints:** the three tab composables in `MainActivity.kt`, plus an empty-state composable that swaps in when the flow emits an empty list.
+**Reference:** PRD §14, §21; the planned `monthly_recaps` table in *Schema entities planned but not yet defined* below.
 
 ---
 
@@ -285,9 +333,6 @@ Pick a direction before sprinting on these.
 ---
 
 ## Watching — known gaps, no sprint yet
-
-### UI/UX — post-MVP, not blocked on design direction
-- **CAL-INTER — Swipe-month navigation on Calendar.** *(scope reduced 2026-05-22)* Tap-day-to-show-txns is already wired (`CalendarScreen.kt:76` calls `onSelectDate(cell.date)`, ViewModel toggles `selectedDate`, the screen conditionally renders the day's transactions). What's missing is gesture-based **month** navigation — the ViewModel has a `displayMonth: MutableStateFlow<YearMonth>` but only chevron buttons drive it. Add `HorizontalPager` or detectHorizontalDragGestures bound to `displayMonth`. ~½ day.
 
 ### Architecture — post-MVP, depends on rule engine
 - **PATTERN-TELEM — Pattern telemetry / OTA-readiness.** Per [axio-competitor-analysis.md §3.7](axio-competitor-analysis.md), once **S2** ships JSON rules with `pattern_UID`, we'd want to log which patterns fire in production (counts, last-fired timestamp) so the rule corpus can be tuned from real data. Useless without S2; trivial to add once S2 exists.
