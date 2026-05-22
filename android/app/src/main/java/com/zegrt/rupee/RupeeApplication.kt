@@ -41,7 +41,13 @@ class RupeeApplication : Application() {
                 MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
                 MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11,
             )
-            .fallbackToDestructiveMigrationFrom(true, 1, 2, 3, 4)
+            // L4 (2026-05-22): removed `.fallbackToDestructiveMigrationFrom(
+            // true, 1, 2, 3, 4)`. Any user on schema v1-v4 stopped opening
+            // the app months before v0.14.0 shipped. Keeping the fallback
+            // around made a release-day crash dump (or any future Room
+            // schema-checksum mismatch) silently wipe user data instead of
+            // surfacing as a migration error we can investigate. Per
+            // gravedigging-2026-05-18.md §L4.
             .build()
     }
 
