@@ -98,6 +98,7 @@ import com.zegrt.rupee.onboarding.OnboardingViewModel
 import com.zegrt.rupee.onboarding.OnboardingViewModelFactory
 import com.zegrt.rupee.onboarding.PermissionCardState
 import com.zegrt.rupee.onboarding.PermissionStateChecker
+import com.zegrt.rupee.ui.SkeletonRowStack
 import com.zegrt.rupee.budgets.BudgetsScreen
 import com.zegrt.rupee.budgets.BudgetsUiState
 import com.zegrt.rupee.budgets.BudgetsViewModel
@@ -1244,6 +1245,7 @@ private fun HomeSummaryTab(
         RecentActivityCard(
             recents = dashboard.recentTransactions,
             hasAny = dashboard.hasAnyTransactions,
+            isLoading = uiState.isSeeding,
         )
     }
 }
@@ -1554,6 +1556,7 @@ private fun QuickActionsRow(
 private fun RecentActivityCard(
     recents: List<HomeRecentRow>,
     hasAny: Boolean,
+    isLoading: Boolean = false,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1564,7 +1567,13 @@ private fun RecentActivityCard(
         Column(modifier = Modifier.padding(20.dp)) {
             Text("Recent activity", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.height(12.dp))
-            if (!hasAny) {
+            if (isLoading && !hasAny) {
+                // Brief first-emission window — the dashboard flow hasn't
+                // hydrated yet. Show skeleton placeholders so the user doesn't
+                // see the "we haven't seen anything yet" copy flash on top of
+                // what's actually a healthy fresh install.
+                SkeletonRowStack(count = 3)
+            } else if (!hasAny) {
                 Text(
                     "Rupee will start filling this in once it sees transaction notifications. Make sure notification access is granted.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -1777,7 +1786,8 @@ private fun ReviewTab(
     InspectionSection(
         title = "Review",
         hasItems = uiState.reviewRows.isNotEmpty(),
-        emptyLabel = "Nothing to review.",
+        emptyLabel = "Inbox is clear. New transactions that need a second look land here.",
+        isLoading = uiState.isSeeding,
     ) {
         uiState.reviewRows.forEach { row ->
             ReviewRowCard(
@@ -1818,7 +1828,8 @@ private fun TransactionsTab(
     InspectionSection(
         title = "Transactions",
         hasItems = uiState.recentTransactions.isNotEmpty(),
-        emptyLabel = "No canonical transactions yet.",
+        emptyLabel = "Confirmed transactions show up here. Try a manual entry or wait for Rupee to pick one up from a notification.",
+        isLoading = uiState.isSeeding,
     ) {
         uiState.recentTransactions.forEach { row ->
             TransactionRow(
@@ -2248,6 +2259,7 @@ private fun InspectionSection(
     title: String,
     hasItems: Boolean,
     emptyLabel: String,
+    isLoading: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
@@ -2257,10 +2269,14 @@ private fun InspectionSection(
         Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.height(16.dp))
-            if (hasItems) {
-                content()
-            } else {
-                Text(emptyLabel, style = MaterialTheme.typography.bodyMedium)
+            when {
+                // First-emission window: render skeleton placeholders instead
+                // of the empty-state copy. Without this the surface flashes
+                // "Nothing to review." for the beat it takes the flow to
+                // hydrate, which reads as a broken empty state.
+                hasItems -> content()
+                isLoading -> SkeletonRowStack(count = 3)
+                else -> Text(emptyLabel, style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
