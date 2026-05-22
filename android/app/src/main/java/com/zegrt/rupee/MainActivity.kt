@@ -1483,7 +1483,10 @@ private fun BucketProgressCard(rows: List<CategoryBudgetRow>) {
 private fun WeeklySpendCard(dashboard: HomeDashboard) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        // 24.dp brings this in line with the other content cards. Used to be
+        // 20.dp which was the visual odd-one-out next to the BucketProgress /
+        // RecentActivity cards. Sprint 2 POLISH-1.
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
@@ -1494,7 +1497,7 @@ private fun WeeklySpendCard(dashboard: HomeDashboard) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text("This week", style = MaterialTheme.typography.labelLarge)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -1504,24 +1507,35 @@ private fun WeeklySpendCard(dashboard: HomeDashboard) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(dashboard.weekRangeLabel, style = MaterialTheme.typography.bodySmall)
-                dashboard.monthlyIncomeLabel?.let { incomeLabel ->
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        "Received this month $incomeLabel",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
             }
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-            ) {
-                Text(
-                    "Spent",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                )
+            // The right-edge pill used to be a static "Spent" decoration —
+            // no information value. Repurpose it: when the user has any
+            // monthly income captured, surface it as a primary-tinted pill
+            // here ("+₹X this month"). Folds the prior "Received this month
+            // $incomeLabel" body text into this slot so income lives in
+            // exactly one place on the card.
+            dashboard.monthlyIncomeLabel?.let { incomeLabel ->
+                Spacer(modifier = Modifier.width(12.dp))
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    ) {
+                        Text(
+                            "Received",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            incomeLabel,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
             }
         }
     }
