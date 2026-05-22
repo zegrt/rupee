@@ -75,7 +75,7 @@ class CredNotificationParser : NotificationParser {
 
         return NotificationParseResult(
             parserKey = "notification_cred",
-            parserVersion = "v2",
+            parserVersion = "v3",
             providerHint = "cred",
             transactionKind = transactionKind,
             candidateType = candidateType,
@@ -146,14 +146,32 @@ class CredNotificationParser : NotificationParser {
         maskedDigits: String?,
         merchant: String?,
     ): Double {
-        return when {
-            transactionKind == ParsedTransactionKind.SPEND && amountMinor != null && merchant != null -> 0.88
-            transactionKind == ParsedTransactionKind.BILL_DUE && amountMinor != null && maskedDigits != null -> 0.91
-            transactionKind == ParsedTransactionKind.PAYMENT && amountMinor != null && maskedDigits != null -> 0.86
-            transactionKind == ParsedTransactionKind.INCOME && amountMinor != null -> 0.82
-            transactionKind != ParsedTransactionKind.UNKNOWN && amountMinor != null -> 0.76
-            else -> 0.35
-        }
+        // S1.3 (rest) — migrated from the per-kind 6-tier `when`. The kind
+        // itself becomes additive evidence (known vs UNKNOWN) so the tally
+        // still scores high-confidence kinds correctly without a giant
+        // ladder. Weights:
+        //   amount      = 1   (the gate floor; without it nothing matters)
+        //   merchant    = 2   (named payee)
+        //   maskedDigits= 2   (account-ending — strongest specificity for card flows)
+        //   known-kind  = 2   (SPEND / BILL_DUE / PAYMENT / INCOME — anything
+        //                       other than UNKNOWN means the routing ladder
+        //                       upstream made a confident kind call)
+        //
+        // Tier landings vs the old per-kind floors:
+        //   SPEND   + amount + merchant + known-kind = 5 → 0.85 (was 0.88, HIGH preserved)
+        //   BILL_DUE+ amount + digits   + known-kind = 5 → 0.85 (was 0.91, HIGH preserved)
+        //   PAYMENT + amount + digits   + known-kind = 5 → 0.85 (was 0.86, HIGH preserved)
+        //   INCOME  + amount             + known-kind = 3 → 0.62 (was 0.82, MEDIUM preserved
+        //                                                          — 0.82 was edge-MEDIUM)
+        //   any non-UNKNOWN + amount only            = 3 → 0.62 (was 0.76, MEDIUM preserved)
+        //   UNKNOWN + amount                         = 1 → 0.30 (was 0.35, LOW preserved)
+        val isKnownKind = transactionKind != ParsedTransactionKind.UNKNOWN
+        return EvidenceTally()
+            .addIf(amountMinor != null, "amount", 1)
+            .addIf(merchant != null, "merchant", 2)
+            .addIf(maskedDigits != null, "maskedDigits", 2)
+            .addIf(isKnownKind, "knownKind", 2)
+            .score()
     }
 
     companion object {

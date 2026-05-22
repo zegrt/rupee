@@ -17,17 +17,20 @@ class GenericNotificationParser : NotificationParser {
         val direction = NotificationParsingUtils.classifyDirection(rawEvent.body)
         val isIncome = direction == NotificationParsingUtils.MoneyDirection.IN
 
-        // Amount + masked digits is enough signal to surface an Inbox candidate
-        // even when no merchant is in the body (Kotak-style "Amount debited
-        // from XX4129. Check out details." has no payee — that lives in the
-        // bank app). 0.62 clears the MEDIUM threshold so it stops getting
-        // silently dropped as LOW.
-        val confidence = when {
-            amountMinor != null && merchant != null -> 0.62
-            amountMinor != null && maskedDigits != null -> 0.62
-            amountMinor != null -> 0.55
-            else -> 0.15
-        }
+        // S1.3 (rest) — migrated from the prior 4-tier `when`. The Generic
+        // parser is the fallback: weak by design. Weights amount=2,
+        // merchant=1, digits=1 preserve every tier landing the previous
+        // ladder produced — amount+merchant and amount+digits both score 3
+        // points (0.62, exact match) so the central MEDIUM threshold still
+        // catches the Kotak-style "Amount debited from XX4129" body. Triple-
+        // signal lands at 0.78, slightly inflated within MEDIUM tier (no
+        // tier promotion since the Generic parser's 0.78 is still below the
+        // HIGH=0.85 threshold).
+        val confidence = EvidenceTally()
+            .addIf(amountMinor != null, "amount", 2)
+            .addIf(merchant != null, "merchant", 1)
+            .addIf(maskedDigits != null, "maskedDigits", 1)
+            .score()
 
         val kind = when {
             amountMinor == null -> ParsedTransactionKind.UNKNOWN

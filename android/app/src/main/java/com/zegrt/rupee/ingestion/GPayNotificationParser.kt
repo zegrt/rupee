@@ -35,9 +35,19 @@ class GPayNotificationParser : NotificationParser {
             else -> TransactionCandidateType.SPEND
         }
 
+        // S1.3 (rest) — migrated from the prior `if (amount + merchant) 0.8 else 0.6` ternary.
+        // GPay has no masked-digits or network-ref to lean on, so the tally is
+        // just (amount, merchant) with weights tuned to keep the existing tier
+        // landings: amount+merchant stays MEDIUM (was 0.80 → now 0.78), amount-
+        // only stays MEDIUM (was 0.60 → now 0.62), nothing drops to LOW.
+        val confidence = EvidenceTally()
+            .addIf(amountMinor != null, "amount", 3)
+            .addIf(merchant != null, "merchant", 1)
+            .score()
+
         return NotificationParseResult(
             parserKey = "notification_gpay",
-            parserVersion = "v2",
+            parserVersion = "v3",
             providerHint = "gpay",
             transactionKind = kind,
             candidateType = candidateType,
@@ -45,7 +55,7 @@ class GPayNotificationParser : NotificationParser {
             currencyCode = if (amountMinor != null) "INR" else null,
             merchantRaw = merchant,
             mode = Mode.UPI,
-            parseConfidence = if (amountMinor != null && merchant != null) 0.8 else 0.6,
+            parseConfidence = confidence,
             fromEntityType = AccountType.BANK,
             fromEntityHint = "gpay",
             toEntityName = MerchantNameUtils.cleanForEntity(merchant),
