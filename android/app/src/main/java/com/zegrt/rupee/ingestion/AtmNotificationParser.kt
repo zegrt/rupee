@@ -54,16 +54,19 @@ class AtmNotificationParser : NotificationParser {
         val maskedDigits = NotificationParsingUtils.extractMaskedDigits(body)
         val location = extractLocation(body)
 
-        // Three signals available: amount, masked digits, location. ATM
-        // bodies almost always include the first two; location is bonus.
-        // HIGH confidence requires amount + digits since "Rs.5000 cash
-        // withdrawal at ATM" alone (no account number) could be a typed
-        // ATM-related promo body that slipped the gate.
-        val confidence = when {
-            amountMinor != null && maskedDigits != null -> 0.85
-            amountMinor != null -> 0.65
-            else -> 0.40
-        }
+        // S1.3 (rest) — migrated from the prior 3-tier `when`. ATM has
+        // three signals (amount, masked digits, location); weights are
+        // amount=3, digits=2, location=1. Tier landings preserved:
+        //   amount + digits          = 5 = 0.85 (HIGH, was 0.85 — exact)
+        //   amount + digits + locn   = 6 = 0.90 (HIGH, was 0.85 — within tier)
+        //   amount + locn            = 4 = 0.78 (MEDIUM, was 0.65 — within tier)
+        //   amount alone             = 3 = 0.62 (MEDIUM, was 0.65 — close)
+        //   nothing                  = 0 = 0.30 (LOW, was 0.40 — within tier)
+        val confidence = EvidenceTally()
+            .addIf(amountMinor != null, "amount", 3)
+            .addIf(maskedDigits != null, "maskedDigits", 2)
+            .addIf(!location.isNullOrBlank(), "location", 1)
+            .score()
 
         // Merchant is synthesised — ATM withdrawals don't have a payee in
         // the conventional sense. Surface the location when present so the
@@ -86,7 +89,7 @@ class AtmNotificationParser : NotificationParser {
 
         return NotificationParseResult(
             parserKey = "notification_atm",
-            parserVersion = "v1",
+            parserVersion = "v2",
             providerHint = "atm",
             transactionKind = kind,
             candidateType = candidateType,

@@ -553,8 +553,11 @@ class NotificationParserParseTest {
         assertEquals("notification_atm", result.parserKey)
         assertEquals(ParsedTransactionKind.SPEND, result.transactionKind)
         assertEquals(TransactionCandidateType.CASH_WITHDRAWAL, result.candidateType)
-        // amount + maskedDigits both present → HIGH tier (0.85)
-        assertEquals(0.85, result.parseConfidence, 0.0001)
+        // amount + maskedDigits + location ("HDFC Bank ATM Delhi") all
+        // present → max-evidence HIGH tier (0.90 after S1.3 (rest) migration
+        // to EvidenceTally; was 0.85 with the old hardcoded ladder that
+        // didn't credit location separately).
+        assertEquals(0.90, result.parseConfidence, 0.0001)
     }
 
     @Test

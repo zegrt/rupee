@@ -26,9 +26,21 @@ package com.zegrt.rupee.ingestion
  * tier its rows land in for the existing dump corpus — only how tunable
  * the scoring becomes.
  *
- * Pilot is `GenericUpiNotificationParser` (per backlog Sprint 1).
- * Sprint 2 migrates the other parsers if the pattern feels right; if
- * not, the per-parser `when` ladders stay where they are.
+ * Pilot (Sprint 1, v0.14.3): `GenericUpiNotificationParser`.
+ * Migration (Sprint 2, v0.14.5): the other 8 parsers — `AtmNotificationParser`,
+ * `CredNotificationParser`, `EmiNotificationParser`, `GPayNotificationParser`,
+ * `GenericNotificationParser`, `IciciNotificationParser`,
+ * `KotakNotificationParser`, `PaytmNotificationParser`,
+ * `PhonePeNotificationParser`. Each parser declares its own weights; the
+ * central `pointsToConfidence` table is the single tuning surface that
+ * applies to all of them.
+ *
+ * **Per-parser weights are intentionally varied** — a parser with no
+ * named-merchant signal (Kotak, ATM) leans harder on amount + digits, while
+ * a payee-rich parser (GPay, Paytm, PhonePe) weights merchant as its
+ * strongest signal. The point of the tally isn't to enforce a single
+ * weight table; it's to make tuning visible (the band table) and make the
+ * shape of each parser's evidence explicit.
  */
 internal class EvidenceTally {
 

@@ -47,9 +47,18 @@ class PaytmNotificationParser : NotificationParser {
             else -> Mode.UPI
         }
 
+        // S1.3 (rest) — migrated from the prior `if (amount + merchant) 0.76
+        // else 0.52` ternary. Weights tuned to preserve tier landings:
+        // amount+merchant stays MEDIUM (was 0.76 → now 0.78), amount-only or
+        // merchant-only stays LOW (was 0.52 → now 0.55).
+        val confidence = EvidenceTally()
+            .addIf(amountMinor != null, "amount", 2)
+            .addIf(merchant != null, "merchant", 2)
+            .score()
+
         return NotificationParseResult(
             parserKey = "notification_paytm",
-            parserVersion = "v2",
+            parserVersion = "v3",
             providerHint = "paytm",
             transactionKind = transactionKind,
             candidateType = candidateType,
@@ -57,7 +66,7 @@ class PaytmNotificationParser : NotificationParser {
             currencyCode = if (amountMinor != null) "INR" else null,
             merchantRaw = merchant,
             mode = mode,
-            parseConfidence = if (amountMinor != null && merchant != null) 0.76 else 0.52,
+            parseConfidence = confidence,
             fromEntityType = AccountType.BANK,
             fromEntityHint = "paytm",
             toEntityName = MerchantNameUtils.cleanForEntity(merchant),

@@ -40,9 +40,18 @@ class PhonePeNotificationParser : NotificationParser {
             else -> TransactionCandidateType.UNKNOWN
         }
 
+        // S1.3 (rest) — migrated from the prior `if (amount + merchant) 0.78
+        // else 0.55` ternary. amount=2 + merchant=2 lands exactly on 0.78 for
+        // the two-signal case and exactly on 0.55 for the one-signal case;
+        // tier preservation is bit-for-bit.
+        val confidence = EvidenceTally()
+            .addIf(amountMinor != null, "amount", 2)
+            .addIf(merchant != null, "merchant", 2)
+            .score()
+
         return NotificationParseResult(
             parserKey = "notification_phonepe",
-            parserVersion = "v2",
+            parserVersion = "v3",
             providerHint = "phonepe",
             transactionKind = transactionKind,
             candidateType = candidateType,
@@ -50,7 +59,7 @@ class PhonePeNotificationParser : NotificationParser {
             currencyCode = if (amountMinor != null) "INR" else null,
             merchantRaw = merchant,
             mode = Mode.UPI,
-            parseConfidence = if (amountMinor != null && merchant != null) 0.78 else 0.55,
+            parseConfidence = confidence,
             fromEntityType = AccountType.BANK,
             fromEntityHint = "phonepe",
             toEntityName = MerchantNameUtils.cleanForEntity(merchant),

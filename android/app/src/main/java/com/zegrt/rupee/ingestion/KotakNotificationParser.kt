@@ -60,11 +60,16 @@ class KotakNotificationParser : NotificationParser {
         val direction = NotificationParsingUtils.classifyDirection(rawEvent.body)
         val isIncome = direction == NotificationParsingUtils.MoneyDirection.IN
 
-        val confidence = when {
-            amountMinor != null && maskedDigits != null -> 0.75
-            amountMinor != null -> 0.65
-            else -> 0.4
-        }
+        // S1.3 (rest) — migrated from the prior 3-tier `when`. Kotak's
+        // notification never carries a payee (the merchant lives in the
+        // Kotak app, not the push), so the tally is amount + masked-digits
+        // only. Weights amount=3, digits=1 preserve tier landings:
+        // amount+digits 0.75 → 0.78 (MEDIUM unchanged), amount-alone 0.65 →
+        // 0.62 (MEDIUM unchanged), nothing 0.40 → 0.30 (LOW unchanged).
+        val confidence = EvidenceTally()
+            .addIf(amountMinor != null, "amount", 3)
+            .addIf(maskedDigits != null, "maskedDigits", 1)
+            .score()
 
         val kind = when {
             amountMinor == null -> ParsedTransactionKind.UNKNOWN
@@ -79,7 +84,7 @@ class KotakNotificationParser : NotificationParser {
 
         return NotificationParseResult(
             parserKey = "notification_kotak",
-            parserVersion = "v2",
+            parserVersion = "v3",
             providerHint = "kotak",
             transactionKind = kind,
             candidateType = candidateType,

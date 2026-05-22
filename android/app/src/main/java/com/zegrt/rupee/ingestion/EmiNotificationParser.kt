@@ -32,15 +32,22 @@ class EmiNotificationParser : NotificationParser {
         // confidence so the decision engine auto-creates the SUGGESTED txn.
         val hasDebitVerb = DEBIT_VERBS.any { it in lower }
 
-        val confidence = when {
-            amountMinor != null && merchant != null && hasDebitVerb -> 0.88
-            amountMinor != null && merchant != null -> 0.72
-            else -> 0.50
-        }
+        // S1.3 (rest) — migrated from the prior 3-tier `when`. Weights:
+        // amount=1, merchant=2, debit-verb=2. The triple-signal case scores
+        // 5 = 0.85, dropping from the old 0.88 but still HIGH tier (the
+        // decision engine auto-creates as SUGGESTED at ≥0.85). amount+
+        // merchant lands at 3 = 0.62, was 0.72 (both MEDIUM). The merchant-
+        // alone and amount-alone branches drop to 0.55 / 0.30, both LOW —
+        // matching the old `else 0.50` floor.
+        val confidence = EvidenceTally()
+            .addIf(amountMinor != null, "amount", 1)
+            .addIf(merchant != null, "merchant", 2)
+            .addIf(hasDebitVerb, "debitVerb", 2)
+            .score()
 
         return NotificationParseResult(
             parserKey = "notification_emi",
-            parserVersion = "v1",
+            parserVersion = "v2",
             providerHint = null,
             transactionKind = ParsedTransactionKind.EMI,
             candidateType = TransactionCandidateType.EMI_DUE,
