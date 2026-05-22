@@ -514,22 +514,23 @@ class HomeViewModel(
      * `HomeTransactionRow.alwaysTrust` on the next emission so the UI reflects
      * DB truth without extra wiring.
      *
-     * Uses the txn's current persisted merchant + category, not any unsaved
-     * draft values, so toggling doesn't silently capture mid-edit garbage.
+     * Reads the txn's persisted merchant + category (not the unsaved
+     * draft) so toggling doesn't silently capture mid-edit garbage. Flip
+     * direction is derived from the row's currently-rendered `alwaysTrust`;
+     * `setMerchantTrust` is idempotent (covered by
+     * `MerchantTrustRepositoryTest`) so an out-of-date row at worst causes
+     * a redundant no-op insert/delete.
      */
     fun toggleTransactionAlwaysTrust(id: String) {
         viewModelScope.launch {
             val txn = repository.getTransactionById(id) ?: return@launch
             val merchant = txn.merchantName?.takeIf { it.isNotBlank() } ?: return@launch
-            val rules = repository.getMerchantTrustRulesSnapshot()
-            val cleaned = cleanMerchant(merchant)
-            val alreadyTrusted = rules.any {
-                it.merchantPattern.equals(cleaned, ignoreCase = true)
-            }
+            val rowAlwaysTrust = uiState.value.recentTransactions
+                .firstOrNull { it.id == id }?.alwaysTrust ?: false
             repository.setMerchantTrust(
                 merchant = merchant,
                 autoCategoryId = txn.categoryId,
-                trust = !alreadyTrusted,
+                trust = !rowAlwaysTrust,
             )
         }
     }
