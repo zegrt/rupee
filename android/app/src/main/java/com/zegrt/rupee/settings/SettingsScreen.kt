@@ -190,8 +190,12 @@ fun SettingsScreen(
                     Text("Accounts", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     val excludedExpense = state.accounts.count { it.excludeFromExpenseTotals }
                     val excludedIncome = state.accounts.count { it.excludeFromIncomeTotals }
+                    val totalAccounts = state.accounts.size
                     val excludedDetail = when {
-                        excludedExpense == 0 && excludedIncome == 0 -> "All ${state.accounts.size} accounts contribute to totals"
+                        totalAccounts == 0 -> "No accounts yet"
+                        excludedExpense == 0 && excludedIncome == 0 ->
+                            if (totalAccounts == 1) "Your account contributes to totals"
+                            else "All $totalAccounts accounts contribute to totals"
                         excludedExpense > 0 && excludedIncome > 0 ->
                             "$excludedExpense hidden from spend · $excludedIncome from income"
                         excludedExpense > 0 -> "$excludedExpense hidden from spend totals"
