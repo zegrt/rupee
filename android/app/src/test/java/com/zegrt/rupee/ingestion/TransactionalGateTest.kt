@@ -119,6 +119,16 @@ class TransactionalGateTest {
     }
 
     @Test
+    fun `accept GPay UPI Autopay native phrasing (GATE-AUTOPAY-VOCAB)`() {
+        // The 2026-05-22 Nothing-A015 dump showed every native GPay autopay
+        // (Spotify, Netflix, Hotstar, SIP, utility recurrence) being
+        // rejected as NO_TRANSACTIONAL_VERB. None of the existing
+        // auto-debit verbs catch the noun-form GPay phrasing.
+        val body = "Payment to SPOTIFY INDIA PVT LTD was successful. Payment for Autopay of ₹199 to SPOTIFY INDIA PVT LTD was successful."
+        assertAccept(body)
+    }
+
+    @Test
     fun `reject CRED Cash credit-line withdrawal promo (CRED-PROMO-BODY-GATE)`() {
         // The 2026-05-22 Nothing-A015 dump captured this body. Before the
         // negative-keyword + Indian-numbering fixes, this cleared the gate

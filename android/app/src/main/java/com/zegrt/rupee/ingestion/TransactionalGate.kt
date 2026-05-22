@@ -88,6 +88,16 @@ object TransactionalGate {
         "nach mandate", "nach debit",
         "ecs debit", "ecs mandate",
         "standing instruction",
+        // GPay UPI Autopay native phrasing (Spotify / Netflix / Hotstar /
+        // SIP / utility recurrences). Body looks like "Payment to SPOTIFY
+        // INDIA PVT LTD was successful. Payment for Autopay of ₹X to
+        // MERCHANT was successful." None of the existing auto-debit verbs
+        // catch it — there's no `debited` / `auto-debit` token in the
+        // GPay shape. The CRED-wrapped variant ("UPI autopay of ₹139 ...
+        // debited successfully") already passes via `debited`; these
+        // additions specifically rescue the native-GPay phrasing.
+        // Added 2026-05-22 (GATE-AUTOPAY-VOCAB) from the Nothing-A015 dump.
+        "autopay", "payment to ", "payment for ",
         // Credit-side
         "credited", " credit ", "received ", "deposited", "refunded",
         // Variants of "refund" that the bare "refunded" verb above misses:
