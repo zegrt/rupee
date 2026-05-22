@@ -204,24 +204,37 @@ object DumpReplayHarness {
      * Compare a current run against a baseline. Returns null when the run is
      * within tolerance; otherwise a human-readable failure message.
      *
-     * Asymmetric drift policy: `acceptedDropTolerance` controls how many
-     * fewer "accepted by gate" bodies the new run can have vs baseline
-     * (regressions, fail-loudly). Improvements (more accepted) are always
-     * allowed.
+     * Asymmetric drift policy:
+     * - `acceptedDropTolerance` controls how many fewer "accepted by gate"
+     *   bodies the new run can have vs baseline. Improvements (more accepted)
+     *   are always allowed.
+     * - `autoCreatedDropTolerance` controls how many fewer `AUTO_CREATED`
+     *   tier landings the new run can have. The S1.3 tier-promotion work
+     *   shifted bodies from INBOX_PENDING → AUTO_CREATED on purpose;
+     *   tightening this catches accidental demotions back to INBOX.
+     *
+     * Defaults are deliberately tight (tolerance 1 / 0) — the corpus is
+     * settled as of Sprint 2's DUMP-REPLAY-REBASELINE pass. Loosen explicitly
+     * when an intended scoring change moves bodies around.
      */
     fun compareToBaseline(
         current: ReplayResult,
         baseline: Baseline,
-        acceptedDropTolerance: Int = 5,
+        acceptedDropTolerance: Int = 1,
+        autoCreatedDropTolerance: Int = 0,
         errorTolerance: Int = 0,
     ): String? {
         val problems = mutableListOf<String>()
         if (current.replayErrors > errorTolerance) {
             problems += "replay raised ${current.replayErrors} exceptions (baseline ${baseline.replayErrors}, tolerance $errorTolerance)"
         }
-        val drop = baseline.accepted - current.accepted
-        if (drop > acceptedDropTolerance) {
-            problems += "gate-accepted bodies dropped: baseline=${baseline.accepted}, current=${current.accepted}, drop=$drop (tolerance $acceptedDropTolerance)"
+        val acceptedDrop = baseline.accepted - current.accepted
+        if (acceptedDrop > acceptedDropTolerance) {
+            problems += "gate-accepted bodies dropped: baseline=${baseline.accepted}, current=${current.accepted}, drop=$acceptedDrop (tolerance $acceptedDropTolerance)"
+        }
+        val autoDrop = baseline.autoCreated - current.autoCreated
+        if (autoDrop > autoCreatedDropTolerance) {
+            problems += "AUTO_CREATED bodies dropped: baseline=${baseline.autoCreated}, current=${current.autoCreated}, drop=$autoDrop (tolerance $autoCreatedDropTolerance)"
         }
         return if (problems.isEmpty()) null else problems.joinToString("; ")
     }
@@ -234,6 +247,7 @@ object DumpReplayHarness {
      */
     data class Baseline(
         val accepted: Int,
+        val autoCreated: Int,
         val replayErrors: Int,
     )
 }

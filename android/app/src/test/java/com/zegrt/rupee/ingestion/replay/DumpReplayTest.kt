@@ -54,25 +54,37 @@ class DumpReplayTest {
 
     companion object {
         /**
-         * Baselines captured 2026-05-20 against the t2-dump-replay-harness
-         * branch (post-v0.14.1, with the H4 ordering fix + v0.14.0 vocab
-         * adds + single-X masked-digit regex). `accepted` is the number of
-         * gate-accepted bodies (the union of AUTO_CREATED + INBOX_PENDING +
-         * IGNORED — i.e. anything that reached the parser layer).
+         * Baselines rebaselined 2026-05-23 against post-Sprint-2 main
+         * (Sprint 3 DUMP-REPLAY-REBASELINE pass). `accepted` is the union
+         * of AUTO_CREATED + INBOX_PENDING + IGNORED — anything that
+         * reached the parser layer. `autoCreated` is broken out
+         * separately because Sprint 1's S1.3 pilot + Sprint 2's S1.3
+         * (rest) deliberately promoted bodies from INBOX_PENDING into
+         * AUTO_CREATED. We want a regression to that promotion to fail.
          *
-         * A drop of more than the default tolerance (5) from these counts
-         * on a future PR signals a regression. Increases are always
-         * allowed; bump the baseline in the same PR if a real improvement.
+         * Default tolerances live in `compareToBaseline`: accepted drift
+         * ≤1, autoCreated drift = 0, replay errors = 0. Improvements
+         * (more accepted, more auto-created) always pass.
          *
          * v0.13.3 dump: 504 total → 472 gate-rejected, 32 accepted
-         *   (0 auto-created, 21 inbox-pending, 11 ignored).
-         * v0.14.0 dump: 916 total → 171 skipped (listener-filtered in
-         *   prod), 731 gate-rejected, 14 accepted (0 auto-created,
-         *   11 inbox-pending, 3 ignored). The 11 INBOX_PENDING here are
-         *   the bodies the v0.14.0 H4 FK regression was eating; with
-         *   v0.14.1's write-order fix they now route to Inbox properly.
+         *   (6 AUTO_CREATED, 15 INBOX_PENDING, 11 IGNORED).
+         *   Was 0/21/11 pre-Sprint-2 — 6 bodies moved from inbox to auto
+         *   thanks to the CRED/ICICI HIGH-tier promotions in S1.3-rest.
+         * v0.14.0 dump: 916 total → 171 listener-filtered (skipped),
+         *   731 gate-rejected, 14 accepted (5 AUTO_CREATED,
+         *   6 INBOX_PENDING, 3 IGNORED). Same shift: was 0/11/3
+         *   pre-Sprint-2; 5 bodies promoted by the ICICI/CRED tier
+         *   work.
          */
-        private val BASELINE_V0_13_3 = Baseline(accepted = 32, replayErrors = 0)
-        private val BASELINE_V0_14_0 = Baseline(accepted = 14, replayErrors = 0)
+        private val BASELINE_V0_13_3 = Baseline(
+            accepted = 32,
+            autoCreated = 6,
+            replayErrors = 0,
+        )
+        private val BASELINE_V0_14_0 = Baseline(
+            accepted = 14,
+            autoCreated = 5,
+            replayErrors = 0,
+        )
     }
 }
