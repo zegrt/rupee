@@ -431,6 +431,37 @@ class NotificationParserParseTest {
     }
 
     @Test
+    fun `cred refund classifies as INCOME not SPEND (CRED-ICICI-AUDIT)`() {
+        // Pre-Sprint-0 the kind ladder ran isCardSpend BEFORE isIncome, so a
+        // refund body containing "transaction" / "credited" was getting
+        // routed to SPEND — the user's spend total inflated by the refund
+        // amount. The reorder puts isIncome first; direction classifier
+        // catches "credited" as IN and the SPEND verbs become irrelevant.
+        val result = cred.parse(
+            event(
+                pkg = "com.dreamplug.androidapp",
+                body = "Refund transaction of Rs.500 credited to your HDFC card xx1234 via CRED",
+            )
+        )
+        assertEquals(ParsedTransactionKind.INCOME, result.transactionKind)
+        assertEquals(TransactionCandidateType.INCOME, result.candidateType)
+    }
+
+    @Test
+    fun `cred chargeback classifies as INCOME not SPEND (CRED-ICICI-AUDIT)`() {
+        // Same shape as refund — "transaction" + credit verb. Pinning a
+        // second body so any future ladder reorder that breaks the refund
+        // path also breaks this.
+        val result = cred.parse(
+            event(
+                pkg = "com.dreamplug.androidapp",
+                body = "Chargeback of Rs.2,500 reversed on your HDFC card xx1234 via CRED",
+            )
+        )
+        assertEquals(ParsedTransactionKind.INCOME, result.transactionKind)
+    }
+
+    @Test
     fun `gpay receiver 'sent you' body classifies as INCOME end to end`() {
         // The exact bug from the field: friend sends money, friend's GPay
         // notification reads "<sender> sent you ₹10", parser used to route as
