@@ -2,10 +2,12 @@
 
 **Purpose:** durable, in-repo backlog. Anything Claude promised to do "next sprint" or "later" lives here, not just in conversation context. This file is the single source of truth for what's deferred — if it's not here, it doesn't exist.
 
-**Last updated:** 2026-05-22 (full code-vs-docs audit; corrected several
-items previously claimed as "pending" that are actually already in code —
-EXT-COMBINED, TRUSTED-UI, INBOX-WHY, PERM-REOPEN — and rescoped three
-partially-shipped items)
+**Last updated:** 2026-05-23 (alpha rename + deep-audit follow-up).
+Reframed the 1.0 target to a much more honest **alpha** milestone — see
+the new "Path to alpha" section below for the mobile-stage progression
+(pre-alpha → alpha → closed beta → open beta → RC → 1.0). Added six
+Watching items surfaced by the 2026-05-23 audit pass, slotted
+NOTIF-CHANNELS post-alpha, and folded BABYPROOF-INPUTS into Sprint 3.
 
 ---
 
@@ -22,10 +24,10 @@ Each item should have: *what*, *why it matters*, *touchpoints*, *blocked by*.
 
 ## In flight
 
-- *(Nothing actively in flight as of 2026-05-22 end-of-day; Sprints 0/1/2
-  all merged, v0.14.5 cut. Sprint 3 (release prep) is the next runnable
-  sprint; the design revamp stays post-1.0 — see
-  [REVAMP](#revamp--full-design-overhaul-aviate-vs-vwfndr-post-10) in Slotted.)*
+- *(Nothing actively in flight as of 2026-05-23; Sprints 0/1/2 all merged,
+  v0.14.5 cut. Sprint 3 (alpha prep) is the next runnable sprint. The
+  design revamp stays post-alpha — see [REVAMP](#revamp--full-design-overhaul-aviate-vs-vwfndr-post-alpha)
+  in Slotted.)*
 
 ---
 
@@ -133,33 +135,49 @@ notification slips through.
 
 ---
 
-## MVP sprint plan
+## Path to alpha
 
-Everything below is scoped to land before a 1.0 cut. Three working
-sprints + a release sprint. Anything not on this list lives in
-**Slotted** (post-1.0) or **Watching**.
+We were earlier calling the next milestone "1.0" — that was wrong. A real
+1.0 means *public-launch quality*: tens of thousands of installs survived,
+crash-free rate ≥ 99.5%, support load survivable. We're not close. We're
+finishing **alpha** — the milestone where the app is feature-complete
+enough to put in front of a small closed group of real testers who can
+report bugs we don't anticipate.
 
-**Design revamp (Aviate vs vwfndr) is intentionally post-release.** The
+The mobile-app stage progression we're now tracking against:
+
+| Stage | What it means | Where we are |
+|---|---|---|
+| **Pre-alpha** | Building the core. Bugs everywhere. Internal only. | v0.0.x → v0.14.5 (now) |
+| **Alpha** | Feature-complete for a defined scope. Closed-group testing. Known bugs OK if logged. | **Sprint 3 → v0.15.0-alpha** |
+| **Closed beta** | Hand-picked external testers (~50). Stability over features. | post-alpha sprints |
+| **Open beta** | Public sign-up on Play Console. Polish + performance + locale. | longer arc |
+| **Release candidate** | Bug fixes only. Frozen feature set. | end of beta |
+| **1.0 / GA** | Public release. Marketing surface. Support readiness. | the actual finish line |
+
+Everything in the Sprint 3 section below is scoped to land before the
+alpha cut. Everything in **Slotted** is captured intent for post-alpha
+work — most of it will happen during the closed-beta / open-beta arcs.
+**Watching** is "we know it's a gap but nobody's scheduled it."
+
+**Design revamp (Aviate vs vwfndr) is intentionally post-alpha.** The
 exploration branch (`design/aviate-vs-vwfndr`) stays parked. Sprint 2's
-polish work targets the **current** warm Clay / Sage / Paper Material 3
-theme — every item below is now flavor-agnostic. The big visual
-overhaul is captured as `REVAMP` in Slotted and lives behind a 1.0
-shipping decision.
+polish work targeted the current warm Clay / Sage / Paper Material 3
+theme — every Sprint 0/1/2 item shipped was flavor-agnostic. The big
+visual overhaul is captured as `REVAMP` in Slotted and waits behind the
+alpha cut + a positioning call.
 
-**EMI auto-detection is intentionally post-release.** The manual EMI
-entry path in `Cards & EMIs` already covers the MVP feature checklist;
-auto-detection from notifications is a quality upgrade that doesn't
-gate 1.0. See Slotted → **EMI-AUTO**.
-
-*(Earlier revisions of this file gated Sprint 2 on the Aviate-vs-vwfndr
-decision. That decision is now deferred to post-1.0; Sprint 2 below
-polishes the existing theme.)*
+**EMI auto-detection is intentionally post-alpha.** The manual EMI
+entry path in `Cards & EMIs` already covers the alpha feature
+checklist; auto-detection from notifications is a quality upgrade that
+needs real-user EMI corpora to tune confidence thresholds against.
+See Slotted → **EMI-AUTO**.
 
 ---
 
 ## Sprint 0 — Release blockers *(shipped 2026-05-22, v0.14.4)*
 
-Pure correctness. Has to land before any real 1.0 cut.
+Pure correctness. Had to land before the alpha cut.
 
 *All six items below merged into main. Listed for traceability — the
 work is done.*
@@ -211,8 +229,8 @@ work is done.*
 Four flavor-agnostic utility wins users will feel.
 
 *All four items below merged into main. The Aviate-vs-vwfndr design
-call that earlier revisions paired with this sprint moved to post-1.0
-— see [REVAMP](#revamp--full-design-overhaul-aviate-vs-vwfndr-post-10)
+call that earlier revisions paired with this sprint moved to post-alpha
+— see [REVAMP](#revamp--full-design-overhaul-aviate-vs-vwfndr-post-alpha)
 in Slotted.*
 
 ### EXPORT-UI — Export to CSV / JSON
@@ -245,7 +263,7 @@ in Slotted.*
 
 *(Previously gated on the Aviate-vs-vwfndr design call; rescoped 2026-05-22
 to target the current warm Clay / Sage / Paper Material 3 theme. The big
-visual revamp moved to `REVAMP` in Slotted as a post-1.0 item.)*
+visual revamp moved to `REVAMP` in Slotted as a post-alpha item.)*
 
 *All six items below merged into main across PRs #66 (INBOX-WHY-COPY),
 #67 (CAL-INTER), #68 (COLDSTART), #69 (S1.3 rest), #70 (MANUAL-FAST),
@@ -293,18 +311,160 @@ Sprint 3 (release prep), then v1.0.*
 
 ---
 
-## Sprint 3 — Release prep *(≈half week)*
+## Sprint 3 — Alpha prep *(≈1 week)*
 
-- Refresh the dump-replay harness baseline (T2) against the post-Sprint-2
-  state — every regression test reflects the new ingestion + UI behaviour.
-- Stage-roll the chosen design on team devices for 24h.
-- Final pass over `CHANGELOG.md` / release notes.
-- 1.0 version bump (`versionName = "1.0.0"`, `versionCode = 39+`),
-  signed release APK, tag.
+This is the sprint that earns the **alpha** tag. Four items.
+
+### BABYPROOF-INPUTS — type-limit + picker pass across every input
+**What:** Every `OutlinedTextField` / `TextField` in the app gets the
+right input type, validator, and picker affordance. Four shared
+composables to build, then a sweep replacing every offending site.
+
+The four primitives:
+- `CurrencyInputField` — ₹ prefix, two-decimal cap, Indian-grouping
+  `visualTransformation` (`1,00,000` not `100,000`), digit-only filter,
+  `KeyboardType.Decimal`. Returns minor units as `Long`. Replaces 6+
+  amount inputs.
+- `DateField` — clickable field that opens a Material 3
+  `DatePickerDialog`, displays selected date, returns `LocalDate`.
+  Replaces 2 EMI/card "type yyyy-MM-dd" sites that today silently
+  accept garbage.
+- `ProviderDropdown` — `ExposedDropdownMenuBox` seeded with the
+  providers our parsers know about (SBI / ICICI / Axis / HDFC / Kotak
+  / Yes / Federal / Jupiter / Fi / Niyo + "Other"). Replaces 2 onboarding
+  text fields.
+- `AccountPicker` — `ExposedDropdownMenuBox` over the user's accounts
+  + cards. Used in the manual-entry sheet (currently missing entirely
+  — manual entries can't pick an account today) and on the Inbox /
+  Transactions edit sheet if we want to allow account re-routing.
+
+Concrete sweep (from the 2026-05-23 input audit):
+- Onboarding: bank provider, card provider, starting cash balance.
+- Manual entry: amount → CurrencyInputField; **add** account picker.
+- Inbox review: amount draft → CurrencyInputField.
+- Budgets: monthly + per-category limits → CurrencyInputField.
+- EMI draft: monthly amount, tenure months (integer 0–120), next due
+  date → DateField, notes.
+- Card draft: amount due, due date → DateField.
+
+**Why:** "I typed a date and the app accepted garbage" is the kind of
+trust-damaging bug early alpha testers will surface and lose faith
+over. Babyproofing closes that whole class. The Material 3 toolkit
+already has all the pieces — this is just wiring.
+**Touchpoints:** `MainActivity.kt` (manual entry, inbox review, txn
+detail), `cards/CardsEmisScreen.kt`, `budgets/BudgetsScreen.kt`,
+`onboarding/*`, new `ui/Inputs.kt` for the four primitives.
+**Blocked by:** nothing. ~2–3 days, mostly mechanical.
+
+### DUMP-REPLAY-REBASELINE
+**What:** Re-bake the dump-replay harness baseline against the
+post-Sprint-2 state. Sprint 0/1/2 deliberately changed which bodies
+get accepted (Indian-numbering fix, autopay vocab, CRED reorder, the
+per-parser tier promotions from S1.3 rest). The current baselines have
+loose tolerance to absorb those; tightening them now gives future
+regressions a sharper alarm.
+**Touchpoints:** `DumpReplayTest.kt` baselines, `DumpReplayHarness.kt`
+if any tolerance constants need to drop.
+**Blocked by:** BABYPROOF-INPUTS shouldn't change parser behaviour, so
+these can run in either order; rebaseline last so any incidental
+parser-test changes are captured.
+
+### ALPHA-STAGE-ROLL
+**What:** Side-load v0.15.0-alpha.1 onto team devices, run it through
+24h of real notification traffic (your real SMS bridge, your real bank
+apps), keep a written log of every weirdness. Goal isn't zero bugs —
+it's *known* bugs.
+**Why:** Synthetic dumps catch shape regressions. Only real-device
+soak catches battery drain, alarm timing, push-arrival sequencing
+issues, and the very long tail of "this notification looks fine on
+paper but Compose renders it weird because of `<br/>`" edge cases.
+
+### ALPHA-CUT — version bump + tag
+**What:** Update `versionName = "0.15.0-alpha.1"`, `versionCode = 42`.
+Write a real CHANGELOG.md (it doesn't exist yet — Sprint 3 is the right
+moment to start one). Build signed release APK. Git-tag `v0.15.0-alpha.1`.
+**Why:** Tags are what give us the ability to roll back if alpha
+testing finds something catastrophic.
+**Touchpoints:** `android/app/build.gradle.kts`, new `CHANGELOG.md` at
+repo root, git tag.
 
 ---
 
 ## Slotted — captured intent, design pending
+
+*Everything in this section is **post-alpha**. Most will happen during
+the closed-beta / open-beta arcs. The "post-1.0" markers that earlier
+revisions used were aspirational; rewritten as "post-alpha" here
+because the realistic phasing puts most of these items years before a
+true 1.0 cut.*
+
+### NOTIF-CHANNELS — auto-confirmed silent notif + interactive review notif *(post-alpha)*
+**What:** Post one of two notification shapes depending on what the
+parser did with an incoming transaction:
+
+- **Auto-confirmed** (parser cleared HIGH tier → `SUGGESTED` row
+  auto-created): `IMPORTANCE_LOW` channel `auto_confirmed`. Silent, no
+  peek, sits in the shade. Title: `₹450 · Swiggy`. Body:
+  `Auto-confirmed. Tap to edit.` One inline action: `Categorize`.
+  Group all daily auto-confirms under a summary notif
+  (`5 auto-confirmed spends today (₹3,420)`).
+- **Needs review** (parser landed in Inbox via MEDIUM tier or
+  AMBIGUOUS_*): `IMPORTANCE_DEFAULT` channel `needs_review`. Peeks
+  once, plays sound once, then collapses. Title: `Review ₹450 at
+  Swiggy`. Two inline actions: `Confirm spend`, `Not a transaction`.
+  Body tap opens the in-app Inbox focused on the row. When the user
+  taps an action from the shade, the notif updates with a 3-second
+  `Undo` action before fully cancelling.
+
+**What NOT to use:** full-screen intents (Android-14 restricted,
+hostile UX for non-urgent surfaces), `IMPORTANCE_HIGH` (sound + peek
+for every spend is muted-within-a-week territory), bubbles (wrong
+shape), more than 3 inline actions, an "I'll deal with this later"
+action (swipe-to-dismiss already does that).
+
+**Why:** Closes the trust gap on auto-confirm — today the parser
+silently writes a SUGGESTED row and the user has to open the app to
+know it happened. The asymmetry (small for auto, big for inbox) is
+correct: auto-confirmed has no decision to make; inbox has one.
+
+**UX heuristic backstop** *(Nielsen, well-worn for a reason)*:
+- **#1 Visibility of system status** — silent notif on auto-confirm
+  proves the parser exists.
+- **#2 Match between system and real world** — concrete copy
+  (`₹450 at Swiggy`) beats abstract (`Was this a transaction?`).
+- **#3 User control** — per-channel mute is non-negotiable; the two
+  channels are what lets a power user silence auto-confirmed while
+  keeping needs-review.
+- **#5 Error prevention** — the 3s `Undo` window on shade-action taps
+  catches accidental "Not a transaction" mis-taps.
+- **Notification fatigue** (not Nielsen but real) — every push raises
+  the cost of the next one; quiet hours (11pm–7am) suppress
+  `auto_confirmed` and batch them as a morning summary.
+
+**Touchpoints:** new `notifications/IngestionNotifier.kt` builds the
+two `NotificationCompat.Builder` shapes. New
+`notifications/NotificationActionReceiver.kt` (BroadcastReceiver) routes
+shade actions into `repository.confirmInboxItem` /
+`dismissInboxItem`. New `notifications/NotificationChannelManager.kt`
+registers both channels at app start. Settings entry deep-linking to
+the per-channel page (the standard Android long-press → channel mute
+covers 90% of customisation).
+
+**Implementation cost:** ~2 days for the happy path + a 3rd day for
+grouping, summary notif, quiet-hours scheduling. Real cost is the
+test matrix: Android 13+ post-notifications permission, Android
+12-and-below grace, channel-mute regressions, BroadcastReceiver
+lifecycle when the app is killed.
+
+**Why post-alpha not Sprint 3:** Adds new permission surface
+(`POST_NOTIFICATIONS` already requested, but channel discoverability
+needs UX) and a new BroadcastReceiver that lives outside the
+notification listener's process — both warrant some closed-beta
+soak before we ship to a wider audience.
+
+**Blocked by:** nothing technical. Should be among the first
+post-alpha items because it's design-direction-agnostic (works on
+either Aviate or vwfndr, or the current theme).
 
 ### S2 — JSON-driven rule engine
 **What:** Walnut-style per-package rule table (regex sets indexed by `packageName`) loaded from JSON. `pattern_UID`, `sort_UID`, `obsolete` versioning. OTA-tunable.
@@ -344,14 +504,14 @@ Sprint 3 (release prep), then v1.0.*
 **Blocked by:** ideally T1 (in-memory Room tests) — enrichment is a state-mutation feature that's hard to ship safely without DB-level regression coverage.
 **Source:** user-requested via 2026-05-19 conversation; not yet captured against an Axio takeaway.
 
-### EMI-AUTO — EMI auto-detection from notifications *(post-1.0)*
+### EMI-AUTO — EMI auto-detection from notifications *(post-alpha)*
 **What:** Today `EmiPlanEntity` is populated only by manual entry through the Cards & EMIs screen. EMI debit notifications parse as SPEND. Extend the EMI parser to upsert into `emi_plans` directly when amount + merchant + due-date all extract confidently — same shape as the `applyBillDueToCard` side-effect that's already wired in `NotificationSignalNormalizer`.
-**Why:** quality upgrade — manual EMI entry already covers the MVP feature checklist. Auto-detection is a polish item that's better landed after 1.0 ships with real-user EMI corpora to validate against.
+**Why:** quality upgrade — manual EMI entry already covers the alpha feature checklist. Auto-detection is a polish item that's better landed after closed-beta surfaces real-user EMI corpora to validate confidence thresholds against.
 **Touchpoints:** `EmiNotificationParser` (already exists, extracts amount + merchantishly + dueDateIso), new `applyEmiToPlan(...)` in `NotificationSignalNormalizer` mirroring `applyBillDueToCard`. New repo method + `EmiPlanDao.upsertPlan`.
-**Blocked by:** nothing technical. Deferred to post-1.0 because EMIs are commitments — the right confidence threshold should be tuned against real-user data, not synthetic dumps.
+**Blocked by:** nothing technical. Deferred to post-alpha because EMIs are commitments — the right confidence threshold should be tuned against real-user data, not synthetic dumps.
 **Open design Q:** route confirmed EMIs to Inbox first vs auto-add to `emi_plans`? Recommend Inbox (EMIs are commitments — user should verify before they show up on Home's upcoming-dues strip).
 
-### LEDGER-IMPORT — Reverse of EXPORT-UI (read CSV/JSON back into the ledger) *(post-1.0)*
+### LEDGER-IMPORT — Reverse of EXPORT-UI (read CSV/JSON back into the ledger) *(post-alpha)*
 **What:** Sprint 1's `EXPORT-UI` is one-way only — CSV / JSON come out, nothing goes back in. Add a Settings → Import path that reads either format and inserts rows into `canonical_transactions`. Schema validation, foreign-key remap (merchant/category/account *names* → IDs, auto-creating if missing), conflict resolution against `dedupeFingerprint`, atomic Room transaction so a malformed file doesn't half-write.
 **Why:** new-phone restore is the only currently-impossible workflow — export buys you a backup file but you can't get it back into the app. Power-user bulk-edit (Excel round-trip) is the secondary use case.
 **Touchpoints:** new `diagnostics/LedgerImporter.kt` (mirror of `LedgerExporter` but with `parseCsv`/`parseJson` + a `Result<ImportSummary>` return shape), new `LocalFinanceRepository.importLedgerSnapshot(...)` that wraps the insert in `withTransaction`, new Settings card. UI needs a confirmation step ("This will add 412 rows. 17 look like duplicates of existing transactions — skip / overwrite / both?") because there's no undo from the user side.
@@ -360,11 +520,11 @@ Sprint 3 (release prep), then v1.0.*
 - Conflict policy: skip / overwrite / keep-both / per-row prompt. Recommend skip-on-dedupeFingerprint-match by default with an "overwrite duplicates" checkbox.
 - Schema versioning: the export's `schemaVersion: 1` lets the importer reject future-format files cleanly. Need a clear error when v1 sees v2.
 - Merchant/category creation: auto-create unknown names, or reject the import until the user pre-creates them? Auto-create is friendlier but pollutes the merchant trust corpus.
-**Blocked by:** nothing technical. Deferred to post-1.0 because export already covers the "I want my data outside the app" trust requirement, and import is meaningful only after new-phone-restore becomes a real user request.
+**Blocked by:** nothing technical. Deferred to post-alpha because export already covers the "I want my data outside the app" trust requirement, and import is meaningful only after new-phone-restore becomes a real tester request during closed beta.
 
-### REVAMP — Full design overhaul (Aviate vs vwfndr) *(post-1.0)*
-**What:** The Sprint 0 / Sprint 1 / Sprint 2 work hardens the wallet on its current warm Clay / Sage / Paper Material 3 theme. **After 1.0 ships**, pick one of the two design directions explored on the `design/aviate-vs-vwfndr` branch and rebuild the visual layer top-to-bottom in that language. This is a style-beat-sized investment, not a polish pass — closer in shape to "Spotify's next-version redesign" than to spacing tweaks.
-**Why post-1.0:** the exploration produced two fully-mocked APKs (`Rupee · Calm` aviate flavor, `RPEE™` vwfndr flavor) that read as completely different products. Picking one is a *positioning* decision (emotional / shareable vs instrument / signed-receipt), not a code task — and it shouldn't gate getting a working wallet into the user's hands. Live with the current theme through 1.0, then revamp.
+### REVAMP — Full design overhaul (Aviate vs vwfndr) *(post-alpha)*
+**What:** The Sprint 0 / Sprint 1 / Sprint 2 work hardens the wallet on its current warm Clay / Sage / Paper Material 3 theme. **After alpha ships and survives some closed-beta soak**, pick one of the two design directions explored on the `design/aviate-vs-vwfndr` branch and rebuild the visual layer top-to-bottom in that language. This is a style-beat-sized investment, not a polish pass — closer in shape to "Spotify's next-version redesign" than to spacing tweaks.
+**Why post-alpha:** the exploration produced two fully-mocked APKs (`Rupee · Calm` aviate flavor, `RPEE™` vwfndr flavor) that read as completely different products. Picking one is a *positioning* decision (emotional / shareable vs instrument / signed-receipt), not a code task — and it shouldn't gate getting a working wallet into testers' hands. Live with the current theme through alpha and at least early closed beta, then revamp.
 **What the revamp would involve:**
 - Pick the direction (decision, not code). See `DESIGN_NOTES.md` for the trade-off in plain English.
 - Replace `ui/theme/Color.kt` + `Type.kt` + `Shape.kt` + `Theme.kt` with the winning flavor's set.
@@ -373,11 +533,11 @@ Sprint 3 (release prep), then v1.0.*
 - Behind-the-screen items from `DESIGN_NOTES.md` that the chosen direction needs (era windowing + calm score for Aviate; signed receipts + per-source pipeline visibility for vwfndr) get sequenced as their own follow-up sprint.
 **Touchpoints:** branch `design/aviate-vs-vwfndr` (parked at `2dc967e`), `DESIGN_NOTES.md`, every Composable that currently uses `MaterialTheme.colorScheme.*` on the current palette.
 **Cost:** 1-2 weeks once a direction is picked. Roughly the same as building either flavor on the branch did, plus the data-wiring work that was deferred when those flavors were mocked-only.
-**Blocked by:** 1.0 shipping cleanly. Then a positioning call.
+**Blocked by:** alpha shipping cleanly + at least one closed-beta cycle's worth of real-tester usage. Then a positioning call.
 
-### RECAP-PERSIST — Persisted monthly Recap snapshots *(post-1.0; deeper-recap design is REVAMP-sensitive)*
+### RECAP-PERSIST — Persisted monthly Recap snapshots *(post-alpha; deeper-recap design is REVAMP-sensitive)*
 **What:** Recap is computed-on-read today. PRD describes a "story-like highlights" surface (biggest category, most expensive day, variance vs last month, fixed vs discretionary). Persist a `MonthlyRecap` snapshot row per closed month so the surface loads instantly and we can build "share my month" later. Also unblocks the **Aviate Wrapped-style shareable artifact** if that direction wins.
-**Why:** Recap is too expensive to recompute on every open as transaction count grows; also blocks any cross-month comparison that requires a stable historical snapshot. Not gating 1.0 because the live-compute version is acceptable at current data volumes.
+**Why:** Recap is too expensive to recompute on every open as transaction count grows; also blocks any cross-month comparison that requires a stable historical snapshot. Not gating alpha because the live-compute version is acceptable at current data volumes.
 **Touchpoints:** new `MonthlyRecapEntity` + DAO, scheduled job on month-close (WorkManager already exists in tree), `RecapViewModel` reads from DAO with fallback to live compute.
 **Reference:** PRD §14, §21; the planned `monthly_recaps` table in *Schema entities planned but not yet defined* below.
 
@@ -393,7 +553,25 @@ Sprint 3 (release prep), then v1.0.*
 
 ## Watching — known gaps, no sprint yet
 
-### Architecture — post-MVP, depends on rule engine
+### Code-quality & reliability — surfaced in the 2026-05-23 audit
+Filtered findings from a deep code audit (false positives dropped after
+spot-verification against the actual lines). None are alpha blockers
+on their own; collectively they're the work the closed-beta arc will
+need to land before open beta.
+
+- **CAST-SAFETY — drop `Array<Any?>` + `@Suppress("UNCHECKED_CAST")` from VM flow combinators.** `HomeViewModel.dashboardData` and `viewSelection` (~lines 305–370) and `SettingsViewModel`'s combine chain pack heterogeneous flows into `arrayOf<Any?>()` then unpack each slot with `as` casts. A typo in the array indices would only surface at runtime in the UI with a `ClassCastException`. The fix is mechanical: replace with intermediate typed data classes so the compiler enforces shape. ~1 day. **Sprint-sized once it's prioritised; in Watching for now because nothing has actually misfired.**
+
+- **MONEY-MATH-LEGACY — `GenericNotificationParser.extractAmountMinor` still uses `Double * 100 → Long`.** [GenericNotificationParser.kt:68](android/app/src/main/java/com/zegrt/rupee/ingestion/GenericNotificationParser.kt#L68) is the last hold-out — every other parser routes through `NotificationParsingUtils.extractAmountMinor` which uses `BigDecimal.movePointRight(2).toLong()` (correct). Edge amounts like `₹19.99` can round to `1999.99` * 100 = `199999L` instead of `199999L` — usually fine, sometimes off by one. **One-off PR. ~10 min. Backport the BigDecimal pattern.**
+
+- **TRUST-WRITE-RACE — `setMerchantTrust` reads-then-conditionally-writes.** [LocalFinanceRepository.kt:641-651](android/app/src/main/java/com/zegrt/rupee/data/repository/LocalFinanceRepository.kt#L641-L651) reads `getRulesForUser`, searches for a match in memory, then either upserts or deletes. Two rapid taps from the new TRUST-FROM-TXN toggle could race: tap 1 reads "no rule", tap 2 reads "no rule", both insert → unique-constraint violation, OR tap 1 deletes, tap 2 tries to delete the same row → no-op but lost intent. Fix: wrap the lookup+write pair in `database.withTransaction { ... }`, or change `MerchantTrustRuleDao` to expose an idempotent upsert-by-pattern. **~1 hour PR.**
+
+- **DATE-PARSE-LOGGING — three `runCatching { … }.getOrNull()` sites swallow ISO-8601 parse failures.** [HomeViewModel.kt formatOccurredAt fallback](android/app/src/main/java/com/zegrt/rupee/home/HomeViewModel.kt), `RecurringDetectionEngine`, and `DuesAlertManager` all parse `occurredAt` / due dates with `runCatching` and fall back to `.take(10)` or null on failure. If the DB ever ends up with a malformed timestamp (migration bug, third-party writer), the UI silently drops the row from upcoming-dues and recurring detection with zero error surface. Fix: add `Log.w("Rupee", ...)` before the `getOrNull()` so the parse failure shows up in logcat / a future health surface. **~1 hour PR.**
+
+- **MIGRATION-SKIP-TEST — no instrumented test exercises the full v8→v11 ladder in one go.** Room applies migrations sequentially, so any gap in `MIGRATION_8_9` / `9_10` / `10_11` is silent unless a test asserts the v8 fixture survives all three. We have per-migration tests via `MigrationTestHelper`; we don't have a chained "open a v8 DB, end up at v11, verify every column exists" test. **~½ day to add. Catches future migration drift.**
+
+- **REPO-VM-TEST-COVERAGE — load-bearing repository methods + the `HomeViewModel` flow combinators have no unit tests.** `LocalFinanceRepository.confirmInboxItem` / `setMerchantTrust` / `deleteTransaction` / the export snapshot path are only covered by integration via `DumpReplayTest`. `HomeViewModel`'s 8-flow combine is only exercised by running the UI. The `Array<Any?>` casts above are dangerous *specifically because* nothing tests them. Closed-beta blocker if we want to ship to non-internal testers safely. **~2-3 days, prioritise repo confirm/merge/delete first.**
+
+### Architecture — post-alpha, depends on rule engine
 - **PATTERN-TELEM — Pattern telemetry / OTA-readiness.** Per [axio-competitor-analysis.md §3.7](axio-competitor-analysis.md), once **S2** ships JSON rules with `pattern_UID`, we'd want to log which patterns fire in production (counts, last-fired timestamp) so the rule corpus can be tuned from real data. Useless without S2; trivial to add once S2 exists.
 - **MISSED-TXN — Missed-transaction detector via balance reconciliation.** [axio-takeaways.md Item 8](axio-takeaways.md). Walnut catches the "you said balance is X but txns sum to Y" gap. We currently track `currentBalanceMinor` on `AccountEntity` but **don't extract** `balanceAfterMinor` from notifications and **don't reconcile** the running sum against it. Needs (a) parsers emitting `balanceAfterMinor` reliably across providers, (b) a new column on `ParsedSignalEntity` (or `CanonicalTransactionEntity`) to store it, (c) a reconcile job that diff'ses transactions-sum vs latest reported balance and raises a "missed something" surface. Multi-sprint; tied to S2 for breadth of provider coverage. Low priority.
 
@@ -402,17 +580,18 @@ Sprint 3 (release prep), then v1.0.*
 - ~~**§9.9 Post-ship parse-rate counter.**~~ Promoted to **T3 — Ingestion health surface in the Debug screen** — shipped in v0.14.2 (PR #51, 2026-05-21).
 
 ### From `docs/rupee-settings-debug.md` §6 (deferred-by-design)
-- **Merge with existing transaction.** Repository contract: `mergeInboxIntoTransaction(inboxItemId, targetTransactionId)`. Two-step soft-confirm currently exists in UI but no full search-then-select picker. (M1's `mergedFromExistingCanonicalId` column landed v0.14.0 — surfaces the merge in analytics, but the UI picker remains TODO.)
-- **Recategorize on Transactions detail sheet.** Edit form has Merchant + Notes; add CategoryDropdown row mirroring Inbox review.
+- **Merge with existing transaction (UI picker).** Repository contract `mergeInboxIntoTransaction(inboxItemId, targetTransactionId)` exists and the merge column landed in v0.14.0; what's missing is a full search-then-select picker for "find an existing transaction to merge this Inbox row into." The two-step soft-confirm in the existing Inbox is the workaround.
+- ~~**Recategorize on Transactions detail sheet.**~~ Shipped — `CategoryDropdown` is in the `TransactionDetailSheet` ([MainActivity.kt:2234](android/app/src/main/java/com/zegrt/rupee/MainActivity.kt#L2234)).
 - ~~**Dedicated PhonePe / Paytm parsers**~~ — shipped earlier; PhonePe and Paytm have dedicated parsers in `ingestion/`.
-- **Custom bucket progress cards on Home.** Needs per-bucket budgets seeded + `transaction_bucket_assignments` DAO.
+- **Custom bucket progress cards on Home.** `TransactionBucketAssignmentEntity` *is* defined (audited 2026-05-23) but unwired — no DAO, no observer, no Home composable. Needs the DAO + observer chain into `HomeViewModel.DashboardData`, plus per-bucket budget seeding through `BudgetsScreen`.
 
 ### Schema entities planned but not yet defined
-*(Audited 2026-05-22 — none of these have an `@Entity` annotation in
-`data/local/entity/`. The "defined but unimplemented" framing was stale;
-none are defined yet.)* From `CONTEXT.md` "Known Gaps":
-- `canonical_transaction_source_links` — multi-source provenance audit trail.
-- `dedupe_groups`, `dedupe_group_members` — current code uses flat `dedupeFingerprint` field on `CanonicalTransactionEntity` (pragmatic shortcut, not the long-term shape).
+*(Re-audited 2026-05-23. Six tables remain undefined; one previously
+listed entry — `transaction_bucket_assignments` — is now defined as
+`TransactionBucketAssignmentEntity` but is unwired, see Custom bucket
+progress cards above.)* From `CONTEXT.md` "Known Gaps":
+- `canonical_transaction_source_links` — multi-source provenance audit trail. Pairs with **S6**.
+- `dedupe_groups`, `dedupe_group_members` — current code uses flat `dedupeFingerprint` field on `CanonicalTransactionEntity` (pragmatic shortcut, not the long-term shape). Pairs with **S2.1** + **S6**.
 - `alert_rules`, `alert_events` — current `DuesAlertManager` uses SharedPrefs dedupe, not these tables.
 - `monthly_recaps` — current Recap is computed on read (`RecapViewModel`). See **RECAP-PERSIST** in Slotted.
 - `emi_transaction_links` — link auto-detected EMI debits back to their plan. Pairs with **EMI-AUTO**.

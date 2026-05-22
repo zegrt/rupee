@@ -4,6 +4,11 @@ Date: March 27, 2026
 Status: Draft v1
 Author: Codex
 
+> **Milestone-rename note (2026-05-23).** Anywhere this spec says "v1" or
+> "MVP," read it as **"alpha"** for current planning. The screen content
+> still describes the right scope; only the milestone label moved.
+> Source of truth for active scope: [rupee-backlog.md](rupee-backlog.md).
+
 ## 1. Purpose
 
 This document defines the Android-first screen structure and product flows for Rupee v1.
