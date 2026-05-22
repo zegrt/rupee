@@ -20,9 +20,11 @@ import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class SettingsUiState(
     val displayName: String = "",
@@ -163,12 +165,17 @@ class SettingsViewModel(
                 return@launch
             }
             val uri = runCatching {
-                LedgerExporter.export(
-                    context = context,
-                    snapshot = snapshot,
-                    format = format,
-                    versionName = BuildConfig.VERSION_NAME,
-                )
+                // File write goes off Main so a large ledger (or slow
+                // external storage) doesn't ANR. The repository snapshot
+                // upstream already runs on IO; this matches.
+                withContext(Dispatchers.IO) {
+                    LedgerExporter.export(
+                        context = context,
+                        snapshot = snapshot,
+                        format = format,
+                        versionName = BuildConfig.VERSION_NAME,
+                    )
+                }
             }.onFailure { Log.w(EXPORT_TAG, "Ledger export write failed", it) }.getOrNull()
             if (uri == null) {
                 message.value = "Couldn't write ${format.extension.uppercase()} export"

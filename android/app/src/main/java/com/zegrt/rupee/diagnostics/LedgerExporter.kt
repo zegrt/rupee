@@ -65,10 +65,13 @@ object LedgerExporter {
         versionName: String,
     ): Uri {
         val dir = File(context.getExternalFilesDir(null), DIR_NAME).apply { mkdirs() }
-        // Tidy stale exports so the directory has at most one file per
-        // format. The user can re-share the live one; older ones are
-        // off-device by now in the recipient's downloads.
-        dir.listFiles { _, name -> name.startsWith("rupee-ledger-") }?.forEach { it.delete() }
+        // Tidy stale exports of the same format so the directory has at most
+        // one file per format. Critically, we DON'T sweep the other format's
+        // file — exporting CSV right after JSON used to delete the JSON
+        // before any share-target lazy-loaded the URI.
+        dir.listFiles { _, name ->
+            name.startsWith("rupee-ledger-") && name.endsWith(".${format.extension}")
+        }?.forEach { it.delete() }
         val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US)
             .apply { timeZone = TimeZone.getDefault() }
             .format(Date())
