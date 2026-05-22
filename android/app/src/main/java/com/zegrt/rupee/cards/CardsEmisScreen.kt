@@ -26,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.zegrt.rupee.ui.CurrencyInputField
+import com.zegrt.rupee.ui.DateField
 
 @Composable
 fun CardsEmisScreen(
@@ -88,28 +90,33 @@ fun EmiDraftSheet(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
-            OutlinedTextField(
+            CurrencyInputField(
                 value = draft.monthlyRupees,
-                onValueChange = { v -> onUpdate { copy(monthlyRupees = v.filter { it.isDigit() }, error = null) } },
-                label = { Text("Monthly amount (₹)") },
+                onValueChange = { v -> onUpdate { copy(monthlyRupees = v, error = null) } },
+                label = "Monthly amount",
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                allowPaise = false,
             )
+            // Tenure is an integer count, not a currency. Cap at 120 months
+            // (10 years) — anything longer is almost certainly a typo.
             OutlinedTextField(
                 value = draft.tenureMonths,
-                onValueChange = { v -> onUpdate { copy(tenureMonths = v.filter { it.isDigit() }, error = null) } },
-                label = { Text("Months remaining (optional)") },
+                onValueChange = { v ->
+                    val cleaned = v.filter { it.isDigit() }.take(3)
+                    val capped = cleaned.toIntOrNull()?.coerceAtMost(120)?.toString() ?: cleaned
+                    onUpdate { copy(tenureMonths = capped, error = null) }
+                },
+                label = { Text("Months remaining (optional, max 120)") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             )
-            OutlinedTextField(
+            DateField(
                 value = draft.nextDueDate,
                 onValueChange = { v -> onUpdate { copy(nextDueDate = v, error = null) } },
-                label = { Text("Next due date — yyyy-MM-dd (optional)") },
+                label = "Next due date (optional)",
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
+                optional = true,
             )
             OutlinedTextField(
                 value = draft.notes,
@@ -195,20 +202,18 @@ fun CardDueDraftSheet(
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
             )
-            OutlinedTextField(
+            CurrencyInputField(
                 value = draft.amountRupees,
-                onValueChange = { v -> onUpdate { copy(amountRupees = v.filter { it.isDigit() }, error = null) } },
-                label = { Text("Amount due (₹)") },
+                onValueChange = { v -> onUpdate { copy(amountRupees = v, error = null) } },
+                label = "Amount due",
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                allowPaise = false,
             )
-            OutlinedTextField(
+            DateField(
                 value = draft.dueDate,
                 onValueChange = { v -> onUpdate { copy(dueDate = v, error = null) } },
-                label = { Text("Due date — yyyy-MM-dd") },
+                label = "Due date",
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
             )
             draft.error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
