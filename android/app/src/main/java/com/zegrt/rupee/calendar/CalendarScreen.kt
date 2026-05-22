@@ -3,6 +3,7 @@ package com.zegrt.rupee.calendar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,9 +23,13 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -52,29 +57,58 @@ fun CalendarScreen(
         }
         Text(state.totalLabel, style = MaterialTheme.typography.bodyMedium)
 
-        Row(modifier = Modifier.fillMaxWidth()) {
-            WEEKDAYS.forEach { d ->
-                Text(
-                    d,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
+        // Swipe-month navigation. Wraps the weekday header + grid only —
+        // not the title row, not the bottom sheet — so the chevrons and the
+        // sheet's own drag-to-dismiss keep working. Threshold of 60dp is
+        // ~half a calendar cell on a typical phone; below that we treat
+        // the gesture as a tap that missed and reset without changing
+        // months. iOS / Google Calendar both feel close to this threshold.
+        val density = LocalDensity.current
+        val swipeThresholdPx = with(density) { 60.dp.toPx() }
+        val dragOffset = remember { mutableFloatStateOf(0f) }
 
-        state.days.chunked(7).forEach { week ->
+        Column(
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { dragOffset.floatValue = 0f },
+                    onDragEnd = {
+                        val total = dragOffset.floatValue
+                        dragOffset.floatValue = 0f
+                        when {
+                            total > swipeThresholdPx -> onPrev()
+                            total < -swipeThresholdPx -> onNext()
+                        }
+                    },
+                    onDragCancel = { dragOffset.floatValue = 0f },
+                    onHorizontalDrag = { _, delta -> dragOffset.floatValue += delta },
+                )
+            },
+        ) {
             Row(modifier = Modifier.fillMaxWidth()) {
-                week.forEach { cell ->
-                    DayCell(
-                        cell = cell,
-                        modifier = Modifier
-                            .weight(1f)
-                            .aspectRatio(1f)
-                            .padding(2.dp),
-                        onClick = { onSelectDate(cell.date) },
+                WEEKDAYS.forEach { d ->
+                    Text(
+                        d,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f),
                     )
+                }
+            }
+
+            state.days.chunked(7).forEach { week ->
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    week.forEach { cell ->
+                        DayCell(
+                            cell = cell,
+                            modifier = Modifier
+                                .weight(1f)
+                                .aspectRatio(1f)
+                                .padding(2.dp),
+                            onClick = { onSelectDate(cell.date) },
+                        )
+                    }
                 }
             }
         }
