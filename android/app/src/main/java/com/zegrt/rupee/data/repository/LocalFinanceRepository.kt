@@ -114,6 +114,14 @@ class LocalFinanceRepository(
         )
     }
 
+    suspend fun setAccountExcludeFromIncomeTotals(accountId: String, exclude: Boolean) {
+        val account = database.accountDao().getAccountById(accountId) ?: return
+        val now = Instant.now().toString()
+        database.accountDao().upsertAccounts(
+            listOf(account.copy(excludeFromIncomeTotals = exclude, updatedAt = now)),
+        )
+    }
+
     suspend fun setCardExcludeFromExpenseTotals(cardId: String, exclude: Boolean) {
         val card = database.creditCardDao().getCardById(cardId) ?: return
         val now = Instant.now().toString()
