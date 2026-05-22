@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import com.zegrt.rupee.ui.CurrencyInputField
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -119,12 +120,11 @@ private fun MonthlyHero(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                OutlinedTextField(
+                CurrencyInputField(
                     value = monthly.draftRupees,
                     onValueChange = onDraftChange,
-                    label = { Text("Limit (₹)") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    label = "Limit",
+                    allowPaise = false,
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(modifier = Modifier.width(4.dp))
@@ -171,12 +171,11 @@ private fun CategoryBudgetCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                OutlinedTextField(
+                CurrencyInputField(
                     value = row.draftRupees,
                     onValueChange = onDraftChange,
-                    label = { Text("Limit (₹)") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    label = "Limit",
+                    allowPaise = false,
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(modifier = Modifier.width(4.dp))

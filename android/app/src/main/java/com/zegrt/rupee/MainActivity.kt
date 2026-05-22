@@ -100,6 +100,10 @@ import com.zegrt.rupee.onboarding.OnboardingViewModel
 import com.zegrt.rupee.onboarding.OnboardingViewModelFactory
 import com.zegrt.rupee.onboarding.PermissionCardState
 import com.zegrt.rupee.onboarding.PermissionStateChecker
+import com.zegrt.rupee.ui.CurrencyInputField
+import com.zegrt.rupee.ui.DefaultBankProviders
+import com.zegrt.rupee.ui.DefaultCardProviders
+import com.zegrt.rupee.ui.ProviderDropdown
 import com.zegrt.rupee.ui.SkeletonRowStack
 import com.zegrt.rupee.budgets.BudgetsScreen
 import com.zegrt.rupee.budgets.BudgetsUiState
@@ -508,13 +512,12 @@ private fun ProfileScreen(
             singleLine = true,
         )
         Spacer(modifier = Modifier.height(12.dp))
-        OutlinedTextField(
+        CurrencyInputField(
             value = uiState.profileForm.monthlyBudgetInput,
-            onValueChange = { v -> onMonthlyBudgetChange(v.filter { it.isDigit() || it == '.' || it == ',' }) },
+            onValueChange = onMonthlyBudgetChange,
+            label = "Monthly budget",
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Monthly budget (₹)") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            allowPaise = false,
         )
         uiState.profileError?.let {
             Text(
@@ -603,13 +606,13 @@ private fun SetupScreen(
                 singleLine = true,
             )
             Spacer(modifier = Modifier.height(12.dp))
-            OutlinedTextField(
+            ProviderDropdown(
                 value = uiState.setupForm.bankProviderName,
                 onValueChange = onBankProviderNameChange,
+                options = DefaultBankProviders,
+                label = "Bank provider",
+                placeholder = "SBI / Kotak",
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Bank provider") },
-                placeholder = { Text("SBI / Kotak") },
-                singleLine = true,
             )
         }
         Spacer(modifier = Modifier.height(12.dp))
@@ -623,13 +626,13 @@ private fun SetupScreen(
                 singleLine = true,
             )
             Spacer(modifier = Modifier.height(12.dp))
-            OutlinedTextField(
+            ProviderDropdown(
                 value = uiState.setupForm.creditCardProviderName,
                 onValueChange = onCreditCardProviderNameChange,
+                options = DefaultCardProviders,
+                label = "Card provider",
+                placeholder = "ICICI",
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Card provider") },
-                placeholder = { Text("ICICI") },
-                singleLine = true,
             )
         }
         Spacer(modifier = Modifier.height(12.dp))
@@ -639,13 +642,13 @@ private fun SetupScreen(
         )
         if (uiState.setupForm.wantsCashAccount) {
             Spacer(modifier = Modifier.height(12.dp))
-            OutlinedTextField(
+            CurrencyInputField(
                 value = uiState.setupForm.cashBalanceInput,
                 onValueChange = onCashBalanceChange,
+                label = "Starting cash balance",
+                placeholder = "500",
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Starting cash balance") },
-                placeholder = { Text("500") },
-                singleLine = true,
+                allowPaise = true,
             )
         }
         Spacer(modifier = Modifier.height(24.dp))
@@ -1715,13 +1718,12 @@ private fun ManualEntrySheet(
                 label = { Text(if (draft.type == ManualEntryType.INCOME) "Source / payer" else "Merchant / payee") },
                 singleLine = true,
             )
-            OutlinedTextField(
+            CurrencyInputField(
                 value = draft.amountRupees,
-                onValueChange = { v -> onUpdate { copy(amountRupees = v.filter { it.isDigit() || it == '.' }) } },
+                onValueChange = { v -> onUpdate { copy(amountRupees = v) } },
+                label = "Amount",
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Amount (₹)") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                allowPaise = true,
             )
             Text("Mode", style = MaterialTheme.typography.labelMedium)
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1951,13 +1953,12 @@ private fun ReviewRowCard(
                     singleLine = true,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
+                CurrencyInputField(
                     value = row.amountDraftRupees,
                     onValueChange = onAmountChange,
+                    label = "Amount",
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Amount (₹)") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    allowPaise = true,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 CategoryDropdown(
