@@ -2140,7 +2140,10 @@ private fun TransactionDetailSheet(
                 // Always-trust toggle — mirrors the Inbox confirmation surface
                 // but persists immediately (the txn is already confirmed). The
                 // toggle reads DB truth via row.alwaysTrust, which the VM
-                // joins from the trust-rule flow.
+                // joins from the trust-rule flow. Copy uses the *persisted*
+                // merchant (not merchantDraft) because the rule will be
+                // created against the persisted name — showing the draft here
+                // would lie about which name gets trusted.
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2151,7 +2154,7 @@ private fun TransactionDetailSheet(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            "Always trust ${row.merchantDraft.ifBlank { row.merchant }}",
+                            "Always trust ${row.merchant}",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
                         )
