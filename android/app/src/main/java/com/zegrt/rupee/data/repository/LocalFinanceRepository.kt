@@ -581,6 +581,40 @@ class LocalFinanceRepository(
         database.merchantTrustRuleDao().deleteRule(id)
     }
 
+    /**
+     * One-shot snapshot read of a canonical transaction by ID. Used by the
+     * Transactions edit sheet's always-trust toggle which needs the persisted
+     * merchant / category rather than any draft state.
+     */
+    suspend fun getTransactionById(id: String): CanonicalTransactionEntity? =
+        database.canonicalTransactionDao().getTransactionById(id)
+
+    /**
+     * Single entry point for "make this merchant trusted/untrusted" used by the
+     * Transactions edit sheet. Looks up the existing rule for the cleaned form
+     * of [merchant] (the same form `addMerchantTrustRule` stores) and either
+     * inserts or deletes to match [trust].
+     *
+     * - No rule + trust=true → insert (idempotent).
+     * - Existing rule + trust=false → delete.
+     * - Otherwise no-op.
+     *
+     * Returns nothing; callers observe the resulting state via
+     * [observeMerchantTrustRules].
+     */
+    suspend fun setMerchantTrust(merchant: String, autoCategoryId: String?, trust: Boolean) {
+        val pattern = MerchantNameUtils.clean(merchant).takeIf { it != "Unnamed" }
+            ?: merchant.trim()
+        if (pattern.isBlank()) return
+        val existing = database.merchantTrustRuleDao().getRulesForUser(USER_ID)
+            .firstOrNull { it.merchantPattern.equals(pattern, ignoreCase = true) }
+        when {
+            trust && existing == null -> addMerchantTrustRule(merchant, autoCategoryId)
+            !trust && existing != null -> removeMerchantTrustRule(existing.id)
+            else -> Unit
+        }
+    }
+
     suspend fun getMerchantTrustRulesSnapshot(): List<MerchantTrustRuleEntity> =
         database.merchantTrustRuleDao().getRulesForUser(USER_ID)
 

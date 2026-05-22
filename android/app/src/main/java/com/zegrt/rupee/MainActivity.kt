@@ -391,6 +391,7 @@ private fun RupeeApp(
             onDebugRunParseTest = { debugViewModel.runParseTest() },
             onCloseTransaction = homeViewModel::closeTransactionDetail,
             onDeleteTransaction = homeViewModel::deleteTransaction,
+            onTransactionToggleAlwaysTrust = homeViewModel::toggleTransactionAlwaysTrust,
             onPostMockNotification = { debugViewModel.postMockNotification(context) },
             onDebugUpdateMockTitle = debugViewModel::updateMockTitle,
             onDebugUpdateMockBody = debugViewModel::updateMockBody,
@@ -777,6 +778,7 @@ private fun RupeeHome(
     onDebugRunParseTest: () -> Unit,
     onCloseTransaction: () -> Unit,
     onDeleteTransaction: (String) -> Unit,
+    onTransactionToggleAlwaysTrust: (String) -> Unit,
     onPostMockNotification: () -> Unit,
     onDebugUpdateMockTitle: (String) -> Unit,
     onDebugUpdateMockBody: (String) -> Unit,
@@ -922,6 +924,7 @@ private fun RupeeHome(
             onTypeChange = { onTransactionTypeDraftChange(selectedTxn.id, it) },
             onSave = { onSaveTransaction(selectedTxn.id) },
             onDelete = { onDeleteTransaction(selectedTxn.id) },
+            onToggleAlwaysTrust = { onTransactionToggleAlwaysTrust(selectedTxn.id) },
         )
     }
 
@@ -2055,6 +2058,7 @@ private fun TransactionDetailSheet(
     onTypeChange: (com.zegrt.rupee.data.local.entity.CanonicalTransactionType) -> Unit,
     onSave: () -> Unit,
     onDelete: () -> Unit,
+    onToggleAlwaysTrust: () -> Unit,
 ) {
     var editing by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -2133,6 +2137,37 @@ private fun TransactionDetailSheet(
                     categories = categories,
                     onSelect = onCategoryChange,
                 )
+                // Always-trust toggle — mirrors the Inbox confirmation surface
+                // but persists immediately (the txn is already confirmed). The
+                // toggle reads DB truth via row.alwaysTrust, which the VM
+                // joins from the trust-rule flow. Copy uses the *persisted*
+                // merchant (not merchantDraft) because the rule will be
+                // created against the persisted name — showing the draft here
+                // would lie about which name gets trusted.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onToggleAlwaysTrust)
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Always trust ${row.merchant}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            "Future notifications from this merchant skip the Inbox and land as Confirmed.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = row.alwaysTrust,
+                        onCheckedChange = { onToggleAlwaysTrust() },
+                    )
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(onClick = {
                         onSave()

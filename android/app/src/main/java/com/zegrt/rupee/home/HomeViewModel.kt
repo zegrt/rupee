@@ -11,6 +11,7 @@ import com.zegrt.rupee.data.local.entity.CanonicalTransactionType
 import com.zegrt.rupee.data.local.entity.CategoryEntity
 import com.zegrt.rupee.data.local.entity.CreditCardEntity
 import com.zegrt.rupee.data.local.entity.EmiPlanEntity
+import com.zegrt.rupee.data.local.entity.MerchantTrustRuleEntity
 import com.zegrt.rupee.data.local.entity.RecurringPatternEntity
 import com.zegrt.rupee.data.local.entity.Mode
 import com.zegrt.rupee.data.local.dao.InboxItemWithCandidate
@@ -70,6 +71,7 @@ data class HomeTransactionRow(
     val subline: String,
     val amountLabel: String,
     val notes: String,
+    val merchant: String,
     val merchantDraft: String,
     val notesDraft: String,
     val categoryId: String?,
@@ -79,6 +81,12 @@ data class HomeTransactionRow(
     // Draft of the type for the edit form's segmented toggle. Equal to the
     // persisted type unless the user has changed it in the current edit session.
     val typeDraft: CanonicalTransactionType = CanonicalTransactionType.EXPENSE,
+    // True when a `MerchantTrustRuleEntity` matches this row's merchant (by
+    // cleaned-name comparison). Drives the Transactions edit sheet's "Always
+    // trust {merchant}" toggle state — toggling fires an immediate
+    // repository.setMerchantTrust call rather than the staged confirm-time
+    // path the Inbox uses.
+    val alwaysTrust: Boolean = false,
 )
 
 data class HomeRecentRow(
@@ -164,6 +172,10 @@ private data class DashboardData(
     // the previous parallel-flow setup (inbox + recent-candidates) which
     // husked when the candidate window rotated past an inbox row.
     val inboxItems: List<InboxItemWithCandidate>,
+    // Active merchant trust rules. Joined here so HomeTransactionRow.alwaysTrust
+    // reflects current DB truth; the Transactions edit sheet's toggle reads
+    // and flips this directly.
+    val trustRules: List<MerchantTrustRuleEntity> = emptyList(),
     val suggestedTxns: List<CanonicalTransactionEntity>,
     val budget: BudgetEntity?,
     val monthlySpent: Long,
@@ -275,13 +287,15 @@ class HomeViewModel(
             arrayOf<Any?>(suggested, b, m, w, inc)
         },
         obligationsBundle,
-    ) { entities, periods, dues ->
+        repository.observeMerchantTrustRules(),
+    ) { entities, periods, dues, trustRules ->
         @Suppress("UNCHECKED_CAST")
         DashboardData(
             user = entities[0] as UserEntity?,
             categories = entities[1] as List<CategoryEntity>,
             transactions = entities[2] as List<CanonicalTransactionEntity>,
             inboxItems = entities[3] as List<InboxItemWithCandidate>,
+            trustRules = trustRules,
             suggestedTxns = periods[0] as List<CanonicalTransactionEntity>,
             budget = periods[1] as BudgetEntity?,
             monthlySpent = periods[2] as Long,
@@ -492,6 +506,35 @@ class HomeViewModel(
         }
     }
 
+    /**
+     * Toggle the "Always trust this merchant" rule from the Transactions edit
+     * sheet. Unlike the Inbox row (which stages the intent until Confirm fires),
+     * here the transaction is already confirmed — the rule is persisted
+     * immediately. The flow-joined trust-rule list in `DashboardData` flips
+     * `HomeTransactionRow.alwaysTrust` on the next emission so the UI reflects
+     * DB truth without extra wiring.
+     *
+     * Reads the txn's persisted merchant + category (not the unsaved
+     * draft) so toggling doesn't silently capture mid-edit garbage. Flip
+     * direction is derived from the row's currently-rendered `alwaysTrust`;
+     * `setMerchantTrust` is idempotent (covered by
+     * `MerchantTrustRepositoryTest`) so an out-of-date row at worst causes
+     * a redundant no-op insert/delete.
+     */
+    fun toggleTransactionAlwaysTrust(id: String) {
+        viewModelScope.launch {
+            val txn = repository.getTransactionById(id) ?: return@launch
+            val merchant = txn.merchantName?.takeIf { it.isNotBlank() } ?: return@launch
+            val rowAlwaysTrust = uiState.value.recentTransactions
+                .firstOrNull { it.id == id }?.alwaysTrust ?: false
+            repository.setMerchantTrust(
+                merchant = merchant,
+                autoCategoryId = txn.categoryId,
+                trust = !rowAlwaysTrust,
+            )
+        }
+    }
+
     fun closeTransactionDetail() {
         selectedTransactionId.value = null
     }
@@ -558,6 +601,11 @@ class HomeViewModel(
         val reviewRows = buildReviewRows(data, selection)
 
         val categoryLabelById = data.categories.associate { it.id to it.name }
+        // Pre-clean trust-rule patterns once so the alwaysTrust lookup below
+        // doesn't recompute for every transaction.
+        val trustPatterns: Set<String> = data.trustRules
+            .map { it.merchantPattern.lowercase() }
+            .toSet()
         val transactionRows = data.transactions
             .filter { it.status != CanonicalTransactionStatus.IGNORED }
             .take(20)
@@ -577,6 +625,7 @@ class HomeViewModel(
                     amountLabel = if (income) "+${formatRowAmount(transaction.amountMinor)}"
                     else formatRowAmount(transaction.amountMinor),
                     notes = transaction.notes.orEmpty(),
+                    merchant = cleanedMerchant,
                     merchantDraft = selection.transactionMerchantDrafts[transaction.id]
                         ?: cleanedMerchant,
                     notesDraft = selection.transactionNotesDrafts[transaction.id]
@@ -586,6 +635,7 @@ class HomeViewModel(
                     categoryLabel = transaction.categoryId?.let { categoryLabelById[it] },
                     isIncome = income,
                     typeDraft = selection.transactionTypeDrafts[transaction.id] ?: transaction.type,
+                    alwaysTrust = cleanedMerchant.lowercase() in trustPatterns,
                 )
             }
 
