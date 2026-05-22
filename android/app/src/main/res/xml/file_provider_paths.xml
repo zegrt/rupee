@@ -6,4 +6,10 @@
     <external-files-path
         name="notif_dumps"
         path="notif-dumps/" />
+    <!-- User-initiated ledger exports (CSV / JSON of canonical transactions).
+         Separate path from notif-dumps so we don't inadvertently share dump
+         files when the user only wanted their own data. -->
+    <external-files-path
+        name="ledger_exports"
+        path="ledger-exports/" />
 </paths>

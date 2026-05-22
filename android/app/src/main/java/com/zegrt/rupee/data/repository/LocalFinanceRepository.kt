@@ -29,6 +29,7 @@ import com.zegrt.rupee.data.local.entity.RecurringPatternEntity
 import com.zegrt.rupee.data.local.entity.SyncStatus
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
 import com.zegrt.rupee.data.local.entity.UserEntity
+import com.zegrt.rupee.diagnostics.LedgerExportSnapshot
 import com.zegrt.rupee.ingestion.MerchantNameUtils
 import com.zegrt.rupee.ingestion.NotificationSignalNormalizer
 import com.zegrt.rupee.recurring.RecurringDetectionEngine
@@ -105,6 +106,26 @@ class LocalFinanceRepository(
     fun observeAccounts(): Flow<List<AccountEntity>> = database.accountDao().observeActiveAccounts()
 
     fun observeCards(): Flow<List<CreditCardEntity>> = database.creditCardDao().observeActiveCards()
+
+    /**
+     * Snapshot bundle for the user-facing ledger export (CSV / JSON in
+     * Settings → Export data). Pulls every non-IGNORED transaction plus the
+     * lookup tables the exporter needs to resolve merchant / category /
+     * account / card names from IDs.
+     *
+     * Returned all-at-once because joining across four tables for an export
+     * is brittle and the dataset for a single user fits comfortably in
+     * memory. Background-dispatched so a large ledger doesn't stall the UI.
+     */
+    suspend fun getLedgerExportSnapshot(): LedgerExportSnapshot = withContext(Dispatchers.IO) {
+        LedgerExportSnapshot(
+            transactions = database.canonicalTransactionDao().getAllTransactionsForExport(USER_ID),
+            accountsById = database.accountDao().observeActiveAccounts().first().associateBy { it.id },
+            cardsById = database.creditCardDao().observeActiveCards().first().associateBy { it.id },
+            categoriesById = database.categoryDao().observeActiveCategories().first()
+                .associateBy { it.id },
+        )
+    }
 
     suspend fun setAccountExcludeFromExpenseTotals(accountId: String, exclude: Boolean) {
         val account = database.accountDao().getAccountById(accountId) ?: return

@@ -386,6 +386,8 @@ private fun RupeeApp(
             onOpenNotificationSettings = openNotificationSettings,
             onRequestPostNotifications = requestPostNotifications,
             onSendFeedback = sendFeedback,
+            onExportLedgerCsv = { settingsViewModel.exportLedger(context, com.zegrt.rupee.diagnostics.LedgerExporter.Format.CSV) },
+            onExportLedgerJson = { settingsViewModel.exportLedger(context, com.zegrt.rupee.diagnostics.LedgerExporter.Format.JSON) },
             onDebugReset = debugViewModel::resetAllData,
             onDebugSendSample = debugViewModel::sendSample,
             onDebugUpdateParseTitle = debugViewModel::updateParseTitle,
@@ -775,6 +777,8 @@ private fun RupeeHome(
     onOpenNotificationSettings: () -> Unit,
     onRequestPostNotifications: () -> Unit,
     onSendFeedback: () -> Unit,
+    onExportLedgerCsv: () -> Unit,
+    onExportLedgerJson: () -> Unit,
     onDebugReset: () -> Unit,
     onDebugSendSample: (SampleNotification) -> Unit,
     onDebugUpdateParseTitle: (String) -> Unit,
@@ -872,6 +876,8 @@ private fun RupeeHome(
                             showRecap = true
                         },
                         onSendFeedback = onSendFeedback,
+                        onExportLedgerCsv = onExportLedgerCsv,
+                        onExportLedgerJson = onExportLedgerJson,
                         onOpenDebug = {
                             onDebugRefreshNotificationDumpSize()
                             showDebug = true
