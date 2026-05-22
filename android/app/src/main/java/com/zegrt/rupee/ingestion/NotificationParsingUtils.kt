@@ -1,8 +1,23 @@
 package com.zegrt.rupee.ingestion
 
 internal object NotificationParsingUtils {
+    // Currency amounts accept both Western and Indian comma-groupings:
+    //
+    //   Western:  1,234        12,345        1,234,567
+    //   Indian:   2,80,000     12,34,567     1,00,00,000
+    //
+    // The crucial difference is Indian grouping uses **2-digit** groups after
+    // the first 3 (1 lakh = 1,00,000), where Western grouping always uses 3.
+    // The previous regex required exactly `,\d{3}` which silently truncated
+    // `₹2,80,000` → `₹2` because the second comma had only 2 trailing digits.
+    // That promo-body bug is captured in CRED-PROMO-BODY-GATE; the fix is
+    // categorical and rescues *every* amount ≥ ₹1,00,000.
+    //
+    // `{2,3}` matches both groupings without false-positives — a truly
+    // malformed `12,3,456` still fails (`,3` is 1 digit, won't match).
+    // Added 2026-05-22 from the Nothing-A015 dump audit.
     private val amountRegex = Regex(
-        """(?:rs\.?|inr|₹)\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)""",
+        """(?:rs\.?|inr|₹)\s*([0-9]+(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?)""",
         RegexOption.IGNORE_CASE,
     )
 
