@@ -4,6 +4,13 @@ Date: March 27, 2026
 Status: Draft v1
 Author: Codex
 
+> **Milestone-rename note (2026-05-23).** Anywhere this PRD says "MVP" or
+> "v1.0," read it as **"alpha"** for current planning. We're tracking
+> against pre-alpha → alpha → closed beta → open beta → RC → 1.0; the
+> v1-spec MVP scope still describes the right *content* for the alpha
+> milestone — only the label moved. Source of truth for active scope:
+> [rupee-backlog.md](rupee-backlog.md).
+
 ## 1. Product Summary
 
 Rupee is an Android-first personal finance app for India that tracks spending with minimal manual entry.

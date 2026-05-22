@@ -1,5 +1,12 @@
 # Rupee
 
+> **Stage: pre-alpha (v0.14.5).** The next milestone is **alpha** (v0.15.0-alpha.1)
+> — feature-complete enough for a small closed-tester group, not a public
+> launch. The path forward is alpha → closed beta → open beta → release
+> candidate → 1.0. Anywhere this repo's older docs say "MVP" or "1.0," read
+> it as "alpha" for current purposes; the source of truth for active scope
+> is [docs/rupee-backlog.md](./docs/rupee-backlog.md).
+
 Rupee is an Android-first personal finance app for India.
 
 The idea is simple:
@@ -94,10 +101,12 @@ The current preview build:
 - does not request SMS access
 - can be built locally as a debug APK
 
-APK output:
-
-- [rupee-0.14.0-release.apk](./android/app/build/outputs/apk/release/rupee-0.14.0-release.apk) (signed; for friends/family)
-- [rupee-0.14.0-debug.apk](./android/app/build/outputs/apk/debug/rupee-0.14.0-debug.apk) (for personal dogfooding — includes the notification-dump tool that bootstraps the parser corpus)
+APK output is regenerated per release into `android/app/build/outputs/apk/`.
+The current local build target is **v0.14.5** (pre-alpha). The signed
+release APK is for friends/family; the debug APK includes the
+notification-dump tool that bootstraps the parser corpus. The exact
+file names follow `rupee-{versionName}-{release,debug}.apk` — see
+the latest `versionName` in [android/app/build.gradle.kts](./android/app/build.gradle.kts).
 
 ## Main Docs
 

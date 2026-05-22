@@ -4,6 +4,14 @@ Date: March 27, 2026
 Status: Draft v1
 Author: Codex
 
+> **Milestone-rename note (2026-05-23).** Everywhere this doc says "MVP"
+> or "1.0," read it as **"alpha"** in current discussions. The mobile-app
+> stage progression we now track against is pre-alpha → alpha → closed
+> beta → open beta → release candidate → 1.0; what this v1 spec called
+> "MVP" maps onto the alpha milestone. The cut-line definitions in
+> §3, §4, and §6 still describe the right scope for that milestone — only
+> the name moved. **Source of truth for active scope:** [rupee-backlog.md](rupee-backlog.md).
+
 ## 1. Purpose
 
 This roadmap turns the Rupee PRD, architecture, schema, and Android screen spec into an executable engineering plan.

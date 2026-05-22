@@ -115,20 +115,27 @@ References:
 - [Android Screen Spec](docs/rupee-android-screens.md)
 - [Engineering Roadmap](docs/rupee-roadmap.md)
 
-## Immediate Next Work (post-MVP / user-testing follow-ups)
+## Immediate Next Work (path to alpha)
 
-1. **Onboarding revisit** — fresh-install Welcome → Permissions → Setup → Home flow hasn't been walked end-to-end on a clean device; eyeball each screen and fix anything that looks broken
-2. **Gateway-merchant stripper** — bodies routed through Razorpay/PayU/BillDesk produce merchant strings like `"PAYTM-12345-RZRPAY-MERCH-XYZ"`. UI clamps with ellipsis now (v0.11.0); the data-level fix is a small alias/lookup layer that recognizes known gateway prefixes and either flags as "Unknown merchant" or maps to the underlying merchant
-3. **Expanded parser coverage** — SBI, HDFC (plain, non-CRED), Axis, Kotak, Yes, Amazon Pay, Slice, Jupiter, Fi, Niyo, BHIM standalone, Mobikwik, ride-share receipts. Generic UPI / Generic fallback catches some today but with low confidence
-4. **Cloud backup / restore** — none today. Tester data is gone on uninstall. Surfaced upfront in Settings → Privacy & data
-5. **Empty-state review (12)** — visually check Home / Calendar / Inbox / Recap on a first-run device with zero data
-6. **Hide the Debug pill behind `BuildConfig.DEBUG`** before any external test build (intentionally still visible per current dev preference; Reset is type-WIPE gated as of v0.11.0)
-7. **Bottom-nav migration** — chip row works but Material3 `NavigationBar` is the spec; cosmetic
-8. **Inbox merge guardrails extras** — picker filter by "same-merchant suggestion" + "amount within 20%"; an undo affordance
-9. **Bucket-level budgeting** — needs transaction-to-bucket tagging first (probably category → bucket mapping + a per-tx override). Currently surfaced as "coming soon" in Budgets page
-10. **Richer dedupe** — replace the flat `dedupeFingerprint` with `dedupe_groups` / `dedupe_group_members` once we observe fuzzy multi-source collisions
-11. **Schema gap (low priority)** — `canonical_transaction_source_links`, `alert_rules` / `alert_events`, `monthly_recaps`, `emi_transaction_links`, `budget_category_assignments` (recurring_patterns shipped in v0.9.1)
-12. **Auto-detection of EMIs and credit-card statement events from notifications** — partially covered by `EmiNotificationParser`; card-statement-detection parser is still missing
+**Source of truth for active scope:** [docs/rupee-backlog.md](docs/rupee-backlog.md).
+This section used to duplicate the backlog and drifted; from 2026-05-23
+onward the backlog file is canonical. Summary of where we are:
+
+- **Stage:** pre-alpha. Current shipped build is **v0.14.5** (Sprint 2 closed).
+- **Next milestone:** alpha (v0.15.0-alpha.1) — Sprint 3 covers it.
+- **Sprint 3 (alpha prep):** `BABYPROOF-INPUTS`, `DUMP-REPLAY-REBASELINE`,
+  `ALPHA-STAGE-ROLL`, `ALPHA-CUT`. See backlog § "Sprint 3 — Alpha prep."
+- **Post-alpha (Slotted):** `NOTIF-CHANNELS`, `EMI-AUTO`, `LEDGER-IMPORT`,
+  `REVAMP`, `RECAP-PERSIST`, and the S-series (S2 rule engine, S2.1 chain
+  dedupe, S3 refund linking, S4-5 adaptive confidence, S6 enrichment).
+- **Watching (code-quality):** six audit findings from 2026-05-23 —
+  `CAST-SAFETY`, `MONEY-MATH-LEGACY`, `TRUST-WRITE-RACE`,
+  `DATE-PARSE-LOGGING`, `MIGRATION-SKIP-TEST`, `REPO-VM-TEST-COVERAGE`.
+
+The mobile-app stage progression we're tracking against is **pre-alpha →
+alpha → closed beta → open beta → release candidate → 1.0**. Earlier docs
+in this repo use "MVP" / "1.0" interchangeably for what we now call
+"alpha"; that rename happened 2026-05-23.
 
 ## Current Implementation State
 
