@@ -8,6 +8,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.zegrt.rupee.BuildConfig
+import com.zegrt.rupee.data.local.entity.AccountEntity
+import com.zegrt.rupee.data.local.entity.AccountType
 import com.zegrt.rupee.data.local.entity.BucketEntity
 import com.zegrt.rupee.data.local.entity.BudgetEntity
 import com.zegrt.rupee.data.local.entity.CategoryEntity
@@ -34,6 +36,7 @@ data class SettingsUiState(
     val categories: List<String> = emptyList(),
     val buckets: List<String> = emptyList(),
     val trustRules: List<TrustRuleRow> = emptyList(),
+    val accounts: List<AccountSettingsRow> = emptyList(),
     val notificationGranted: Boolean = false,
     val postNotificationsGranted: Boolean = true,
     val needsPostNotificationsPrompt: Boolean = false,
@@ -46,6 +49,15 @@ data class TrustRuleRow(
     val id: String,
     val merchantPattern: String,
     val categoryLabel: String?,
+)
+
+data class AccountSettingsRow(
+    val id: String,
+    val displayName: String,
+    val providerName: String?,
+    val typeLabel: String,
+    val excludeFromExpenseTotals: Boolean,
+    val excludeFromIncomeTotals: Boolean,
 )
 
 class SettingsViewModel(
@@ -79,7 +91,10 @@ class SettingsViewModel(
         combine(notificationGranted, postNotificationsGranted) { listener, post ->
             listener to post
         },
-    ) { entities, drafts, perms ->
+        // Accounts list — drives the new Accounts settings screen with its
+        // per-account "exclude from totals" toggles.
+        repository.observeAccounts(),
+    ) { entities, drafts, perms, accounts ->
         @Suppress("UNCHECKED_CAST")
         val user = entities[0] as UserEntity?
         @Suppress("UNCHECKED_CAST")
@@ -103,6 +118,16 @@ class SettingsViewModel(
                 categoryLabel = r.autoCategoryId?.let { categoryLabelById[it] },
             )
         }
+        val accountRows = accounts.map { a ->
+            AccountSettingsRow(
+                id = a.id,
+                displayName = a.displayName,
+                providerName = a.providerName,
+                typeLabel = accountTypeLabel(a.accountType),
+                excludeFromExpenseTotals = a.excludeFromExpenseTotals,
+                excludeFromIncomeTotals = a.excludeFromIncomeTotals,
+            )
+        }
 
         SettingsUiState(
             displayName = name,
@@ -112,6 +137,7 @@ class SettingsViewModel(
             categories = cats.map { it.name },
             buckets = buckets.map { it.name },
             trustRules = trustRules,
+            accounts = accountRows,
             notificationGranted = granted,
             postNotificationsGranted = postGranted,
             needsPostNotificationsPrompt = Build.VERSION.SDK_INT >=
@@ -147,6 +173,23 @@ class SettingsViewModel(
             repository.removeMerchantTrustRule(id)
             message.value = "Trust rule removed"
         }
+    }
+
+    fun setAccountExcludeFromExpense(accountId: String, exclude: Boolean) {
+        viewModelScope.launch {
+            repository.setAccountExcludeFromExpenseTotals(accountId, exclude)
+        }
+    }
+
+    fun setAccountExcludeFromIncome(accountId: String, exclude: Boolean) {
+        viewModelScope.launch {
+            repository.setAccountExcludeFromIncomeTotals(accountId, exclude)
+        }
+    }
+
+    private fun accountTypeLabel(type: AccountType): String = when (type) {
+        AccountType.BANK -> "Bank"
+        AccountType.CASH -> "Cash"
     }
 
     /**
