@@ -119,6 +119,18 @@ class TransactionalGateTest {
     }
 
     @Test
+    fun `reject CRED Cash credit-line withdrawal promo (CRED-PROMO-BODY-GATE)`() {
+        // The 2026-05-22 Nothing-A015 dump captured this body. Before the
+        // negative-keyword + Indian-numbering fixes, this cleared the gate
+        // via `withdraw ` (added for ATM bodies) and the amount regex
+        // truncated ₹2,80,000 → ₹2, writing a ₹2.00 SPEND to Inbox with no
+        // merchant. The gate must now reject on "available for you" /
+        // "withdraw any amount" / "cred cash" / "start your first emi".
+        val body = "₹2,80,000 available for you — withdraw any amount from your CRED cash account before May 31st and start your first EMI in July"
+        assertRejectsOnPromo(body)
+    }
+
+    @Test
     fun `reject Truecaller spam-flagged Kotak loan offer from dump`() {
         // Entry #332 of the v0.13.3 dump.
         val body = "🚨 Spam · Dear Cyril, pre-approved Rs.65,000 Kotak Personal Loan is unlocked & can be disbursed instantly. Tap: https://1.kotak.bank.in/KOTAKB/XfhZe8 T&C"

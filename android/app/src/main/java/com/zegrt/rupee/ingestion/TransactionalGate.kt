@@ -121,6 +121,15 @@ object TransactionalGate {
         // "EMI for HDFC home loan" but don't combine with the promo verbs.
         "personal loan", "instant loan", "loan offer",
         "disbursed instantly", "approved for ₹", "approved for rs",
+        // CRED Cash / credit-line withdrawal promos. The body shape is
+        // "₹2,80,000 available for you — withdraw any amount from your CRED
+        // cash account before May 31st and start your first EMI in July."
+        // It clears the positive-verb gate via `withdraw ` (added for ATM
+        // bodies), then the Indian-grouping amount regex truncates ₹2,80,000
+        // → ₹2 and the Inbox gets a ₹2.00 SPEND with no merchant.
+        // Added 2026-05-22 from the Nothing-A015 dump (CRED-PROMO-BODY-GATE).
+        "available for you", "cred cash", "credit line",
+        "withdraw any amount", "start your first emi",
         // "Get ₹10k instantly credited" — clickbait that would otherwise pass
         // the credit-side verb check. The "instantly + amount" combo is
         // exclusively promotional.
