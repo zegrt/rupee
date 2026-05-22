@@ -14,11 +14,16 @@ NOTIF-CHANNELS post-alpha, and folded BABYPROOF-INPUTS into Sprint 3.
 ## How to read this
 
 - **In flight** — currently being shipped or actively designed.
-- **Next** — agreed direction, concrete enough to start.
-- **Slotted** — captured intent, design pending.
-- **Watching** — known gap, not prioritised yet.
+- **Sprint N** — concrete sprint with a defined item set; *every* gap we
+  know about has a sprint home. Order isn't a hard contract — sprints
+  later in the list can move forward if a tester report demands it — but
+  the placement reflects natural dependencies and a reasonable cadence.
 
-Each item should have: *what*, *why it matters*, *touchpoints*, *blocked by*.
+The 2026-05-23 doc pass dissolved the older **Slotted** / **Watching**
+sections. Items that lived there were either (a) shipped and removed,
+(b) moved into the appropriate post-alpha sprint below.
+
+Each item has: *what*, *why it matters*, *touchpoints*, *blocked by*.
 
 ---
 
@@ -390,15 +395,77 @@ repo root, git tag.
 
 ---
 
-## Slotted — captured intent, design pending
+## Post-alpha sprints
 
-*Everything in this section is **post-alpha**. Most will happen during
-the closed-beta / open-beta arcs. The "post-1.0" markers that earlier
-revisions used were aspirational; rewritten as "post-alpha" here
-because the realistic phasing puts most of these items years before a
-true 1.0 cut.*
+*Every item that lived in the old `Slotted` / `Watching` sections now has
+a sprint home below. The order reflects dependencies + a natural cadence
+through the closed-beta → open-beta → RC arcs. Sprints group items that
+share touchpoints or schema work.*
 
-### NOTIF-CHANNELS — auto-confirmed silent notif + interactive review notif *(post-alpha)*
+---
+
+## Phase A — Alpha → Closed beta *(~3 weeks of work)*
+
+The "harden it enough for ~50 real testers" arc. Stability first, then
+the two UX gaps that close out the alpha feature set, then a parser-
+coverage sprint so closed-beta testers on non-pilot banks have a useful
+experience.
+
+## Sprint 4 — Stability hardening *(≈1 week)*
+
+The six audit findings from the 2026-05-23 deep code review. Every item
+is either a class of bug we want to design out before real testers see
+it, or a test-coverage gap that lets future regressions sneak in.
+
+### CAST-SAFETY — drop `Array<Any?>` + `UNCHECKED_CAST` in VM flow combinators
+**What:** `HomeViewModel.dashboardData` and `viewSelection` (~lines 305–370)
+and `SettingsViewModel`'s combine chain pack heterogeneous flows into
+`arrayOf<Any?>()` then unpack each slot with `as` casts. A typo in the
+array indices would only surface at runtime in the UI with a
+`ClassCastException`. Replace with intermediate typed data classes so
+the compiler enforces shape.
+**Why:** the kind of bug that crashes a real tester silently mid-session.
+**Touchpoints:** `HomeViewModel.kt`, `SettingsViewModel.kt`.
+**Blocked by:** nothing. ~1 day.
+
+### TRUST-WRITE-RACE — wrap `setMerchantTrust` read+write in a transaction
+**What:** [LocalFinanceRepository.kt:641-651](android/app/src/main/java/com/zegrt/rupee/data/repository/LocalFinanceRepository.kt#L641-L651) reads `getRulesForUser`, searches for a match in memory, then either upserts or deletes. Two rapid taps from the new TRUST-FROM-TXN toggle could race. Fix: wrap the lookup+write pair in `database.withTransaction { ... }`, or add an idempotent upsert-by-pattern DAO method.
+**Why:** the trust-from-txn surface (Sprint 1 shipped) lets users toggle this fast — race conditions become real.
+**Touchpoints:** `LocalFinanceRepository.setMerchantTrust`, `MerchantTrustRuleDao`.
+**Blocked by:** nothing. ~1 hour.
+
+### MONEY-MATH-LEGACY — backport BigDecimal pattern to `GenericNotificationParser`
+**What:** [GenericNotificationParser.kt:68](android/app/src/main/java/com/zegrt/rupee/ingestion/GenericNotificationParser.kt#L68) is the last parser using `Double * 100 → Long`. Every other parser routes through `NotificationParsingUtils.extractAmountMinor` which uses `BigDecimal.movePointRight(2).toLong()`. Backport.
+**Why:** off-by-one rounding on edge amounts. Low frequency, but it's the kind of bug that's impossible to debug from logs.
+**Touchpoints:** `GenericNotificationParser.kt`.
+**Blocked by:** nothing. ~10 min.
+
+### DATE-PARSE-LOGGING — surface silent ISO-8601 parse failures
+**What:** Three `runCatching { … }.getOrNull()` sites in `HomeViewModel.formatOccurredAt`, `RecurringDetectionEngine`, and `DuesAlertManager` swallow `DateTimeParseException`. If a malformed timestamp ever lands in the DB (migration bug, third-party writer), the UI silently drops the row from upcoming-dues and recurring detection. Add `Log.w("Rupee", ...)` before the `getOrNull()`.
+**Why:** silent UI dropouts are the worst kind of bug — testers report "the upcoming-dues card isn't showing my EMI" with no failure trail.
+**Touchpoints:** the three sites above.
+**Blocked by:** nothing. ~1 hour.
+
+### MIGRATION-SKIP-TEST — chained v8 → v11 migration coverage
+**What:** We have per-migration tests via `MigrationTestHelper` (Sprint 0 / T1). We don't have a chained "open a v8 fixture DB, end up at v11, verify every column exists" test. Room applies migrations sequentially so any gap in the ladder is silent.
+**Why:** future schema work (post-alpha sprints add ~6 new entities) will land more migrations; need a guard against drift.
+**Touchpoints:** new test in the existing `androidTest` migration suite.
+**Blocked by:** nothing. ~½ day.
+
+### REPO-VM-TEST-COVERAGE — unit tests for the high-stakes repo + VM paths
+**What:** `LocalFinanceRepository.confirmInboxItem` / `setMerchantTrust` / `deleteTransaction` / `getLedgerExportSnapshot` are only covered by integration via `DumpReplayTest`. `HomeViewModel`'s 8-flow combine has zero direct tests. The `Array<Any?>` casts above are dangerous *specifically because* nothing tests them.
+**Why:** if we want to ship to non-internal testers safely, the load-bearing repo paths need to be unit-tested first.
+**Touchpoints:** new tests under `androidTest/.../data/repository/` + `test/.../home/`.
+**Blocked by:** CAST-SAFETY (once VM combinators use typed data classes the VM tests get tractable). ~2-3 days.
+
+---
+
+## Sprint 5 — Inbox / Home UX completeness *(≈1 week)*
+
+Three UX gaps users will hit during closed-beta soak. All
+design-direction-agnostic (work on the current theme; survive REVAMP).
+
+### NOTIF-CHANNELS — auto-confirmed silent notif + interactive review notif
 **What:** Post one of two notification shapes depending on what the
 parser did with an incoming transaction:
 
@@ -466,21 +533,77 @@ soak before we ship to a wider audience.
 post-alpha items because it's design-direction-agnostic (works on
 either Aviate or vwfndr, or the current theme).
 
+### INBOX-MERGE-PICKER — search-then-select transaction picker for inbox merge
+**What:** The `mergeInboxIntoTransaction(inboxItemId, targetTransactionId)` repo method exists and the `mergedFromExistingCanonicalId` column shipped in v0.14.0. What's missing is the user-facing picker: "I see a duplicate of an existing transaction — find that one to merge into." Today the workaround is the two-step soft-confirm where you pick from recent transactions only.
+**Why:** Closed-beta testers with any duplicate-prone notification setup (Truecaller + native bank, CRED + bank, etc.) will hit this fast. The right UX is a search field over the user's last-90-day transactions filtered by amount-within-20% / same-merchant-prefix.
+**Touchpoints:** new `MergePickerSheet` composable, new `repository.searchTransactionsForMerge(query, hintAmount, hintMerchant)`, plumbing into the Inbox row.
+**Blocked by:** nothing. ~1–2 days.
+
+### BUCKET-PROGRESS — per-bucket progress cards on Home + budget_category_assignments
+**What:** `TransactionBucketAssignmentEntity` is defined (audited 2026-05-23) but unwired — no DAO, no observer, no Home composable. Wire it: new `TransactionBucketAssignmentDao`, join into `HomeViewModel.DashboardData`, render per-bucket progress bars on Home alongside the existing category-budget bars. Also defines the new `BudgetCategoryAssignmentEntity` (currently budgets reference categories implicitly — the explicit link table makes per-category-per-budget allocations addressable).
+**Why:** "Coming soon" copy in the Budgets page since v0.11; needs to actually ship before open beta.
+**Touchpoints:** new DAOs, `HomeViewModel`, `BudgetsScreen`, new `BudgetCategoryAssignmentEntity`, migration adding `budget_category_assignments` table.
+**Blocked by:** nothing. ~1–1.5 days.
+
+---
+
+## Sprint 6 — Parser corpus + EMI-AUTO *(≈1 week)*
+
+The "alpha shipped, now broaden coverage" sprint. Closed-beta testers will be on banks our pilot corpus never touched — front-load the parser additions and the EMI auto-detect they unblock.
+
+### Parser corpus expansion
+**What:** Add dedicated parsers for the body shapes we know exist but haven't validated against a dump. Each one is shaped like our existing Kotak/PhonePe parsers: `canParse` package + verb gate, `parse` extracts amount/merchant/digits via shared utils, scoring via `EvidenceTally`.
+- **SBI YONO** — guessed in `notification-ingestion-deep-dive.md` §3, never confirmed.
+- **Federal Bank, Yes Bank** — same.
+- **Jupiter / Fi / Niyo** — newer fintechs, possible `RemoteViews` usage we'll need to handle in the extractor.
+- **Foreign-currency transactions** — many issuers SMS-only; the amount-extraction regex needs USD/EUR/AED prefix support and a currency-code field on `ParsedSignalEntity`.
+**Why:** at-most 30% of closed-beta testers will be on our pilot banks (ICICI/CRED/Kotak/PhonePe/Paytm/GPay). The rest fall to the generic UPI parser or generic fallback today, both of which sit at MEDIUM tier and produce a janky Inbox.
+**Touchpoints:** 4 new parser classes + registry order entries; `NotificationParserParseTest` cases for each.
+**Blocked by:** ideally one real dump per provider before writing the parser. ~½ day per parser when we have the body shape.
+
+### EMI-AUTO — EMI auto-detection from notifications (+ emi_transaction_links entity)
+**What:** Today `EmiPlanEntity` is populated only by manual entry. EMI debit notifications parse as SPEND. Extend the EMI parser to upsert into `emi_plans` when amount + merchant + due-date all extract confidently — same shape as the `applyBillDueToCard` side-effect already wired in `NotificationSignalNormalizer`. Adds the `emi_transaction_links` table to associate detected debit transactions with their plan (currently no join exists between the two).
+**Why:** quality upgrade — manual EMI entry covers the alpha feature checklist. Auto-detection needs real-user EMI corpora to tune confidence thresholds against, which is exactly what closed-beta surfaces.
+**Touchpoints:** `EmiNotificationParser` (extends existing), new `applyEmiToPlan(...)` in `NotificationSignalNormalizer`, new repo method + `EmiPlanDao.upsertPlan`, new `EmiTransactionLinkEntity` + DAO + migration.
+**Open design Q:** route confirmed EMIs to Inbox first vs auto-add to `emi_plans`? Recommend Inbox-first — EMIs are commitments and the user should verify before they show up on Home's upcoming-dues strip.
+**Blocked by:** nothing technical. ~2–3 days.
+
+---
+
+## Phase B — Closed beta → Open beta *(~4-5 weeks of work)*
+
+The cross-stream record linking arc. S2 unlocks rule-driven extraction; S2.1 + S6 + S3 share the underlying pattern "this notification is *related to* an existing record, not a fresh event." Worth shipping as a coherent multi-sprint family.
+
+## Sprint 7 — S2: JSON rule engine + extractedJson + PATTERN-TELEM *(≈2 weeks)*
+
+The foundational sprint for the S-family. Once this ships, parser tweaks no longer need an APK release.
+
 ### S2 — JSON-driven rule engine
-**What:** Walnut-style per-package rule table (regex sets indexed by `packageName`) loaded from JSON. `pattern_UID`, `sort_UID`, `obsolete` versioning. OTA-tunable.
-**Why:** parser logic currently in Kotlin classes — every rule tweak ships an APK. Rule table lets us update parsers without a release.
-**Touchpoints:** new `rule_patterns` table, replaces or sits alongside parser registry.
-**Reference:** `docs/axio-takeaways.md` Item 2.
+**What:** Walnut-style per-package rule table (regex sets indexed by `packageName`) loaded from JSON at app start. `pattern_UID`, `sort_UID`, `obsolete` versioning. OTA-tunable via a remote-config style endpoint (or a bundled-with-app JSON we update via APK at first).
+**Why:** parser logic currently in Kotlin classes — every rule tweak ships an APK. A rule table lets us update parser behaviour without a release. Reference: `axio-takeaways.md` Item 2.
+**Touchpoints:** new `rule_patterns` table, new `RuleEngine` that sits alongside (and eventually replaces) the parser registry, JSON schema for rule files.
+
+### §9.3 extractedJson — persist per-Bundle field breakdown
+**What:** Add `extractedJson TEXT NULL` to `RawCaptureEventEntity`. Stores the structured per-field breakdown (title vs subText vs textLines vs ticker) instead of just the flat `combinedBody`. Lets S2's rule engine apply field-priority rules (which most production parsers do).
+**Why:** S2 specifically needs this — without per-field separation, rules can't say "match in title only." Folds in naturally with the S2 sprint.
+**Cost:** ~1-2 KB/notif storage; small migration.
+**Touchpoints:** schema change + extractor change.
+
+### PATTERN-TELEM — pattern telemetry / OTA-readiness
+**What:** Once S2's rules carry `pattern_UID`, log which patterns fire in production (counts, last-fired timestamp) so the rule corpus can be tuned from real data. Per `axio-competitor-analysis.md` §3.7.
+**Why:** S2 is useless without telemetry — you can't tune what you can't see fire. Ships in the same sprint as S2.
+**Touchpoints:** new `pattern_telemetry` table or rolling-window counters; debug surface in the Debug screen.
+
+---
+
+## Sprint 8 — S2.1 + S6: cross-stream record linking *(≈2 weeks)*
+
+S2.1 (chain dedupe via network reference) and S6 (additive enrichment) are two sides of the same coin — both replace today's subtractive `DUPLICATE_IGNORED` flow with a "this is a related record" flow. They share enough touchpoints to ship together.
 
 ### S2.1 — Chain dedupe via network reference
-**What:** Use the v0.13.0 `networkReferenceId` column to chain duplicates across providers (e.g. HDFC bank notif + CRED mirror of the same swipe).
-**Why:** today dedupe is fingerprint+5-min-bucket; cross-package duplicates with different merchant cleaning slip through.
-**Blocked by:** S2 (rules table needs to emit network refs reliably across providers first).
-
-### S3 — Refund linking
-**What:** 5-strategy refund detection (same merchant + amount in 30d, network ref match, etc.) → link refund to original spend.
-**Why:** refunds today are either ignored or appear as separate negative entries.
-**Reference:** `docs/axio-takeaways.md` Item 5.
+**What:** Use the v0.13.0 `networkReferenceId` column to chain duplicates across providers (e.g. HDFC bank notif + CRED mirror of the same swipe). Today dedupe is fingerprint + 5-minute-bucket; cross-package duplicates with different merchant cleaning slip through.
+**Touchpoints:** `NotificationDedupeEngine.detect`, new `dedupe_groups` + `dedupe_group_members` tables (replacing the flat `dedupeFingerprint` field as the long-term shape).
+**Blocked by:** S2 (Sprint 7) — rules need to emit network refs reliably across providers first.
 
 ### S6 — Dedupe enrichment (additive instead of subtractive)
 **What:** Today's dedupe is *subtractive* — finds a duplicate, marks it `DUPLICATE_IGNORED`, throws the data away. Change to *additive* — treat the dup as a second source of evidence that fills gaps on the existing canonical transaction:
@@ -489,124 +612,118 @@ either Aviate or vwfndr, or the current theme).
 - If the original has no `networkReferenceId` but the dup has one → fill ref id
 **Why:** the 2026-05-19 dump showed PhonePe pushes (rich merchant, no account digits) and Truecaller-mirrored bank SMS (rich account digits, weak merchant) arriving for the same transaction. Each has data the other doesn't. Today we keep whichever fired first and discard the second. Enrichment captures the best of both.
 
-**Truecaller and Walnut specifically — primary enrichment sources, not dupes to discard.** The 2026-05-22 Nothing-A015 dump showed the textbook case: a single ₹3 Kotak debit fired three notifications — the native Kotak811 push (`₹3.00 sent from XX4129` → has package attribution, timestamp, masked digits, but no payee), three Truecaller SMS mirrors (`Sent Rs.3.00 from Kotak Bank AC X4129` → has explicit bank name and is the body that carries the `UPI Ref XX YYYY` token), and a Walnut SMS-bridge push (`₹3.00 at 8943068824@YESCRED` → has the recipient UPI handle that no other source carries). Today: Kotak becomes one Inbox row, Walnut becomes a second Inbox row, all three Truecaller mirrors are `DUPLICATE_IGNORED`. Under S6 these merge into a single canonical row carrying the union of the data — Kotak's package/digits + Truecaller's UPI ref + Walnut's recipient handle. Two specific notes worth pinning before implementation:
-- Truecaller's `subText` field carries the issuer name in plain text (`SMS from Kotak Mahindra Bank` in this dump) — useful for cross-validating the brand attribution we got from the native push's package name.
-- Walnut posts the merchant/handle that the native bank push never includes. Treat Walnut and Truecaller as complementary, not redundant: Truecaller mirrors the bank's SMS verbatim; Walnut parses it locally and emits a different shape.
+**Truecaller and Walnut specifically — primary enrichment sources, not dupes to discard.** The 2026-05-22 Nothing-A015 dump showed the textbook case: a single ₹3 Kotak debit fired three notifications — the native Kotak811 push (`₹3.00 sent from XX4129` → has package attribution, timestamp, masked digits, but no payee), three Truecaller SMS mirrors (`Sent Rs.3.00 from Kotak Bank AC X4129` → has explicit bank name and the `UPI Ref XX YYYY` token), and a Walnut SMS-bridge push (`₹3.00 at 8943068824@YESCRED` → has the recipient UPI handle that no other source carries). Today: Kotak becomes one Inbox row, Walnut becomes a second, all three Truecaller mirrors are `DUPLICATE_IGNORED`. Under S6 these merge into a single canonical row carrying the union of the data — Kotak's package/digits + Truecaller's UPI ref + Walnut's recipient handle.
 
-**Three structural decisions before this ships:**
+- Truecaller's `subText` field carries the issuer name in plain text — useful for cross-validating brand attribution.
+- Walnut posts the merchant/handle the native bank push never includes. Treat Walnut and Truecaller as complementary, not redundant.
+
+**Three structural decisions to settle before this ships:**
 
 1. **Field-by-field merge policy.** Per field: "first non-null wins" vs "higher-confidence parser wins" vs "newer wins." Probably different per field. `merchantName` should prefer the brand-aware parser's value. `maskedDigits` should prefer first-non-null (they don't change across sources). `networkReferenceId` is similar.
-2. **Respect user edits.** If the user manually changed the merchant to "Coffee shop" after confirming the inbox row, a later mirror with a generic merchant must NOT overwrite. Two options: a per-field `userEditedAt` timestamp, or treat any `CONFIRMED` canonical's user-facing fields as locked. The second is simpler and probably right.
-3. **Provenance trail.** For debugging "why did this transaction's merchant change," we'd want either a `merchantSource: parserKey` lookup field on the canonical row, or an audit log of field-level updates. Without provenance, enrichment becomes silent mutation.
+2. **Respect user edits.** If the user manually changed the merchant to "Coffee shop" after confirming the inbox row, a later mirror with a generic merchant must NOT overwrite. Recommended: treat any `CONFIRMED` canonical's user-facing fields as locked. Simpler than a per-field `userEditedAt`.
+3. **Provenance trail.** For debugging "why did this transaction's merchant change," we want either a `merchantSource: parserKey` lookup field on the canonical row, or an audit log of field-level updates. Without provenance, enrichment becomes silent mutation. **This is where `canonical_transaction_source_links` lives.**
 
-**Touchpoints:** `NotificationDedupeEngine.detect` (currently returns a `DedupeResult` with `duplicateCandidate`/`duplicateCanonicalTransaction`); `NotificationSignalNormalizer.normalizeLocked` (currently routes to `DUPLICATE_IGNORED` when `isDuplicate=true`); new `CanonicalTransactionEnricher` that does the field merge; possibly a small column or audit log addition.
-**Why family:** S2.1 (chain dedupe via network reference), S3 (refund linking), and S6 (enrichment) all share the underlying pattern "this notification is *related to* an existing record, not a fresh event." Worth shipping together as a "cross-stream record linking" sprint if/when prioritised together.
-**Blocked by:** ideally T1 (in-memory Room tests) — enrichment is a state-mutation feature that's hard to ship safely without DB-level regression coverage.
-**Source:** user-requested via 2026-05-19 conversation; not yet captured against an Axio takeaway.
+### MISSED-TXN — missed-transaction detector via balance reconciliation
+**What:** Walnut catches the "you said balance is X but txns sum to Y" gap. We track `currentBalanceMinor` on `AccountEntity` but don't extract `balanceAfterMinor` from notifications and don't reconcile. Now that S2 (Sprint 7) gives us reliable cross-provider extraction, we can add (a) parsers emitting `balanceAfterMinor`, (b) a new column on `ParsedSignalEntity` to store it, (c) a reconcile job that diffs transactions-sum vs latest reported balance and surfaces "missed something" on the Debug screen (and eventually as a user-facing nudge).
+**Why:** the highest-leverage trust signal we don't currently provide — telling the user *what we missed* is more valuable than telling them what we caught.
+**Blocked by:** S2 (rule-driven balance extraction) → folds here naturally.
 
-### EMI-AUTO — EMI auto-detection from notifications *(post-alpha)*
-**What:** Today `EmiPlanEntity` is populated only by manual entry through the Cards & EMIs screen. EMI debit notifications parse as SPEND. Extend the EMI parser to upsert into `emi_plans` directly when amount + merchant + due-date all extract confidently — same shape as the `applyBillDueToCard` side-effect that's already wired in `NotificationSignalNormalizer`.
-**Why:** quality upgrade — manual EMI entry already covers the alpha feature checklist. Auto-detection is a polish item that's better landed after closed-beta surfaces real-user EMI corpora to validate confidence thresholds against.
-**Touchpoints:** `EmiNotificationParser` (already exists, extracts amount + merchantishly + dueDateIso), new `applyEmiToPlan(...)` in `NotificationSignalNormalizer` mirroring `applyBillDueToCard`. New repo method + `EmiPlanDao.upsertPlan`.
-**Blocked by:** nothing technical. Deferred to post-alpha because EMIs are commitments — the right confidence threshold should be tuned against real-user data, not synthetic dumps.
-**Open design Q:** route confirmed EMIs to Inbox first vs auto-add to `emi_plans`? Recommend Inbox (EMIs are commitments — user should verify before they show up on Home's upcoming-dues strip).
+**Touchpoints (whole sprint):** `NotificationDedupeEngine.detect`, `NotificationSignalNormalizer.normalizeLocked`, new `CanonicalTransactionEnricher`, new `dedupe_groups` + `dedupe_group_members` + `canonical_transaction_source_links` tables, new column on `ParsedSignalEntity`, new reconcile job.
 
-### LEDGER-IMPORT — Reverse of EXPORT-UI (read CSV/JSON back into the ledger) *(post-alpha)*
-**What:** Sprint 1's `EXPORT-UI` is one-way only — CSV / JSON come out, nothing goes back in. Add a Settings → Import path that reads either format and inserts rows into `canonical_transactions`. Schema validation, foreign-key remap (merchant/category/account *names* → IDs, auto-creating if missing), conflict resolution against `dedupeFingerprint`, atomic Room transaction so a malformed file doesn't half-write.
-**Why:** new-phone restore is the only currently-impossible workflow — export buys you a backup file but you can't get it back into the app. Power-user bulk-edit (Excel round-trip) is the secondary use case.
-**Touchpoints:** new `diagnostics/LedgerImporter.kt` (mirror of `LedgerExporter` but with `parseCsv`/`parseJson` + a `Result<ImportSummary>` return shape), new `LocalFinanceRepository.importLedgerSnapshot(...)` that wraps the insert in `withTransaction`, new Settings card. UI needs a confirmation step ("This will add 412 rows. 17 look like duplicates of existing transactions — skip / overwrite / both?") because there's no undo from the user side.
-**Cost:** ~3–4× export, almost all of it in conflict-resolution + foreign-key remap logic. The file parsing is straightforward; making "I exported, edited the merchant column, re-imported" actually merge into the existing rows is the hard part.
-**Open design Q's before this ships:**
-- Conflict policy: skip / overwrite / keep-both / per-row prompt. Recommend skip-on-dedupeFingerprint-match by default with an "overwrite duplicates" checkbox.
-- Schema versioning: the export's `schemaVersion: 1` lets the importer reject future-format files cleanly. Need a clear error when v1 sees v2.
-- Merchant/category creation: auto-create unknown names, or reject the import until the user pre-creates them? Auto-create is friendlier but pollutes the merchant trust corpus.
-**Blocked by:** nothing technical. Deferred to post-alpha because export already covers the "I want my data outside the app" trust requirement, and import is meaningful only after new-phone-restore becomes a real tester request during closed beta.
+---
 
-### REVAMP — Full design overhaul (Aviate vs vwfndr) *(post-alpha)*
-**What:** The Sprint 0 / Sprint 1 / Sprint 2 work hardens the wallet on its current warm Clay / Sage / Paper Material 3 theme. **After alpha ships and survives some closed-beta soak**, pick one of the two design directions explored on the `design/aviate-vs-vwfndr` branch and rebuild the visual layer top-to-bottom in that language. This is a style-beat-sized investment, not a polish pass — closer in shape to "Spotify's next-version redesign" than to spacing tweaks.
-**Why post-alpha:** the exploration produced two fully-mocked APKs (`Rupee · Calm` aviate flavor, `RPEE™` vwfndr flavor) that read as completely different products. Picking one is a *positioning* decision (emotional / shareable vs instrument / signed-receipt), not a code task — and it shouldn't gate getting a working wallet into testers' hands. Live with the current theme through alpha and at least early closed beta, then revamp.
-**What the revamp would involve:**
-- Pick the direction (decision, not code). See `DESIGN_NOTES.md` for the trade-off in plain English.
+## Sprint 9 — S3: Refund linking *(≈1 week)*
+
+### S3 — Refund linking
+**What:** 5-strategy refund detection (same merchant + amount in 30d, network ref match, etc.) → link refund to original spend. Today refunds either get ignored or appear as a separate income row that the user has to mentally match against the original spend.
+**Why:** the third side of the cross-stream linking arc (after S2.1 chains and S6 merges). Same shape: "this notification is *related to* an existing record." Reference: `axio-takeaways.md` Item 5.
+**Touchpoints:** new `RefundLinker` that hangs off `NotificationSignalNormalizer`, new `refundOfTransactionId` column on `CanonicalTransactionEntity` (or use the existing `dedupe_groups` infrastructure with a `relationshipType` discriminator), UI badge on the Transactions list for linked refunds.
+**Blocked by:** S2.1 (Sprint 8) — refund-by-networkRef is the highest-confidence strategy and needs the chain-dedupe plumbing.
+
+---
+
+## Phase C — Open-beta polish *(~4-5 weeks of work)*
+
+The "we're nearly public" arc. Adaptive learning, broader ingestion, and the recap modernisation that was deferred from alpha.
+
+## Sprint 10 — S4-5: Adaptive confidence + proper alert rules *(≈2 weeks)*
+
+### S4-5 — Adaptive confidence from user behaviour
+**What:** `ingestion_signal_stats` table keyed `(package, parserKey, cleanedMerchant)`. Confirm counts up, dismiss counts down. Bootstrap mode for the first 14 days lowers the MEDIUM threshold from 0.6 → 0.5 to be more liberal at onboarding. Auto-promote to `MerchantTrustRule` after 3 confirms in a 7+ day window.
+**Why:** the app *learns* the user's actual transaction patterns instead of relying on hardcoded confidence floors. User asked for this explicitly. Reference: `axio-takeaways.md` Item 13.
+**Touchpoints:** new `ingestion_signal_stats` table + DAO, `NotificationDecisionEngine` reads stats, UI shows an "auto-trusted (3 confirms)" badge.
+
+### alert_rules / alert_events — modernise DuesAlertManager
+**What:** Today `BudgetAlertManager` + `DuesAlertManager` use SharedPreferences to dedupe alert posts. The schema spec defines `alert_rules` + `alert_events` tables; ship them here. S4-5's adaptive learning gives us the first real use case for queryable alert history ("show me all the 'we caught this' / 'we missed this' events from last month").
+**Why:** SharedPrefs dedupe was a v0.11 expedient. The proper tables unblock cross-month alert analytics and let us add new alert types (the S4-5 auto-trust promotion is a candidate) without inventing more prefs keys.
+**Touchpoints:** new `AlertRuleEntity` + `AlertEventEntity` + DAOs, refactor of `BudgetAlertManager` + `DuesAlertManager` to write to the events table.
+
+---
+
+## Sprint 11 — SMS pipeline *(≈2 weeks)*
+
+The biggest ingestion expansion. SMS is how non-CRED users on plain bank apps actually get transaction notifications.
+
+**What:** Add SMS ingestion alongside the existing notification listener. `RawCaptureSourceType.SMS` enum value already exists. Need:
+- SMS-receiver `BroadcastReceiver` + `READ_SMS` / `RECEIVE_SMS` permissions (real permission ask, with PRD §17 messaging).
+- TRAI sender-suffix gate (`-T` transactional / `-S` service / `-P` promo / `-G` government — May 2025 rule). First-stage filter is free signal.
+- 6-alpha (transactional/service) vs 6-numeric (promo) header discrimination as a second-stage filter.
+- Same `TransactionalGate` + parser registry as notifications; SMS bodies are usually a subset of what banks already push to notifications, but for users without the bank app installed this is the only channel.
+
+**Why:** every wallet competitor (Walnut/Axio, PennyWise, Truecaller) leans on SMS. Until we ship this, we're notification-only — which limits us to users who actually have their bank app installed *and* notification access granted *and* permissioned.
+
+**Touchpoints:** new `sms/SmsListenerService.kt`, new `sms/SmsExtractor.kt` (analogous to `NotificationExtractor`), permission manifest changes, onboarding step for SMS permission. Reference: research report stashed in conversation context; PennyWise AI repo for architecture lessons.
+**Blocked by:** ideally S2 (rule engine) — adding SMS as a parser source is much easier when parsers are JSON.
+
+---
+
+## Sprint 12 — RECAP-PERSIST + monthly_recaps *(≈1 week)*
+
+### RECAP-PERSIST — persisted monthly Recap snapshots
+**What:** Recap is computed-on-read today. PRD describes a "story-like highlights" surface (biggest category, most expensive day, variance vs last month, fixed vs discretionary). Persist a `MonthlyRecap` snapshot row per closed month so the surface loads instantly and we can build "share my month" later. Adds the `monthly_recaps` table.
+**Why:** Recap is too expensive to recompute on every open as transaction count grows; also blocks any cross-month comparison that needs a stable historical snapshot. Also unblocks the Aviate Wrapped-style shareable artifact *if* that direction wins in REVAMP (Sprint 14).
+**Touchpoints:** new `MonthlyRecapEntity` + DAO, scheduled `WorkManager` job on month-close, `RecapViewModel` reads from DAO with fallback to live compute. Reference: PRD §14, §21.
+**Note:** the *deeper* recap design (shareable artifact, story shape) is REVAMP-sensitive — ship the persisted snapshot here; the rendering layer lands with REVAMP in Sprint 14.
+
+---
+
+## Phase D — Release candidate → 1.0 *(~3 weeks of work)*
+
+## Sprint 13 — LEDGER-IMPORT *(≈1 week)*
+
+### LEDGER-IMPORT — read CSV/JSON back into the ledger
+**What:** Sprint 1's `EXPORT-UI` is one-way only. Add a Settings → Import path that reads either format and inserts rows into `canonical_transactions`. Schema validation, foreign-key remap (merchant/category/account *names* → IDs, auto-creating if missing), conflict resolution against `dedupeFingerprint`, atomic Room transaction so a malformed file doesn't half-write.
+**Why:** new-phone restore is the only currently-impossible workflow. Power-user bulk-edit (Excel round-trip) is the secondary use case. Becomes a real ask during open beta when testers swap devices.
+**Touchpoints:** new `diagnostics/LedgerImporter.kt` (mirror of `LedgerExporter` with `parseCsv`/`parseJson` + `Result<ImportSummary>` return shape), new `LocalFinanceRepository.importLedgerSnapshot(...)` wrapping inserts in `withTransaction`, new Settings card with a confirmation step ("This will add 412 rows. 17 look like duplicates — skip / overwrite / both?").
+**Cost:** ~3–4× export. File parsing is straightforward; making "I exported, edited the merchant column, re-imported" actually merge into existing rows is the hard part.
+**Open design Q's:** Conflict policy (recommend skip-on-`dedupeFingerprint`-match with an "overwrite duplicates" checkbox). Schema versioning (`schemaVersion: 1` lets the importer reject future-format files cleanly). Merchant/category creation (auto-create unknown names — friendlier but pollutes the trust corpus; recommend auto-create with a post-import dialog asking which to keep).
+
+---
+
+## Sprint 14 — REVAMP: design overhaul (Aviate vs vwfndr) *(≈1-2 weeks)*
+
+### REVAMP — full design overhaul
+**What:** Sprint 0/1/2 hardened the wallet on the current warm Clay/Sage/Paper Material 3 theme. **After alpha + closed-beta + open-beta + RC have all soaked**, pick one of the two design directions explored on the `design/aviate-vs-vwfndr` branch and rebuild the visual layer top-to-bottom. Style-beat-sized investment, not a polish pass — closer to "Spotify's next-version redesign" than to spacing tweaks.
+**Why now:** Picking one is a *positioning* decision (emotional/shareable vs instrument/signed-receipt), and that decision is only honest after we've seen how testers actually use the existing surface for ~3 months.
+**What's involved:**
+- Pick the direction (decision, not code). See `DESIGN_NOTES.md` for the trade-off.
 - Replace `ui/theme/Color.kt` + `Type.kt` + `Shape.kt` + `Theme.kt` with the winning flavor's set.
-- Move the winning `FlavorApp.kt` content into `MainActivity.kt`, replacing the current screens. Wire it to the real `HomeViewModel` / `LocalFinanceRepository` instead of the parked-branch mocks.
+- Move the winning `FlavorApp.kt` content into `MainActivity.kt`, replacing the current screens. Wire it to the real `HomeViewModel` / `LocalFinanceRepository` (the parked-branch flavors are mock-only).
 - Delete the loser's source set + drop the `design` Gradle dimension.
-- Behind-the-screen items from `DESIGN_NOTES.md` that the chosen direction needs (era windowing + calm score for Aviate; signed receipts + per-source pipeline visibility for vwfndr) get sequenced as their own follow-up sprint.
-**Touchpoints:** branch `design/aviate-vs-vwfndr` (parked at `2dc967e`), `DESIGN_NOTES.md`, every Composable that currently uses `MaterialTheme.colorScheme.*` on the current palette.
+- Behind-the-screen items per `DESIGN_NOTES.md` that the chosen direction needs (era windowing + calm score for Aviate; signed receipts + per-source pipeline visibility for vwfndr) sequence as their own follow-up sprint after this lands.
+**Touchpoints:** branch `design/aviate-vs-vwfndr` (parked at `2dc967e`), `DESIGN_NOTES.md`, every Composable using `MaterialTheme.colorScheme.*` on the current palette.
 **Cost:** 1-2 weeks once a direction is picked. Roughly the same as building either flavor on the branch did, plus the data-wiring work that was deferred when those flavors were mocked-only.
-**Blocked by:** alpha shipping cleanly + at least one closed-beta cycle's worth of real-tester usage. Then a positioning call.
-
-### RECAP-PERSIST — Persisted monthly Recap snapshots *(post-alpha; deeper-recap design is REVAMP-sensitive)*
-**What:** Recap is computed-on-read today. PRD describes a "story-like highlights" surface (biggest category, most expensive day, variance vs last month, fixed vs discretionary). Persist a `MonthlyRecap` snapshot row per closed month so the surface loads instantly and we can build "share my month" later. Also unblocks the **Aviate Wrapped-style shareable artifact** if that direction wins.
-**Why:** Recap is too expensive to recompute on every open as transaction count grows; also blocks any cross-month comparison that requires a stable historical snapshot. Not gating alpha because the live-compute version is acceptable at current data volumes.
-**Touchpoints:** new `MonthlyRecapEntity` + DAO, scheduled job on month-close (WorkManager already exists in tree), `RecapViewModel` reads from DAO with fallback to live compute.
-**Reference:** PRD §14, §21; the planned `monthly_recaps` table in *Schema entities planned but not yet defined* below.
 
 ---
 
-### S4-5 — Adaptive confidence from user behaviour (Item 13)
-**What:** `ingestion_signal_stats` table keyed `(package, parserKey, cleanedMerchant)`. Confirm counts up, dismiss counts down. Bootstrap mode for first 14 days lowers MEDIUM threshold from 0.6 → 0.5 to be more liberal at onboarding. Auto-promote to `MerchantTrustRule` after 3 confirms in a 7+ day window.
-**Why:** the app learns the user's actual transaction patterns instead of relying on hardcoded confidence floors. User asked for this explicitly.
-**Touchpoints:** new table + DAO, decision engine reads stats, UI shows "auto-trusted (3 confirms)" badge.
-**Reference:** `docs/axio-takeaways.md` Item 13.
+## Sprint 15 — RC + 1.0 polish *(≈1 week)*
 
----
+The actual public-launch sprint. By this point we're closing tickets, not opening them.
 
-## Watching — known gaps, no sprint yet
-
-### Code-quality & reliability — surfaced in the 2026-05-23 audit
-Filtered findings from a deep code audit (false positives dropped after
-spot-verification against the actual lines). None are alpha blockers
-on their own; collectively they're the work the closed-beta arc will
-need to land before open beta.
-
-- **CAST-SAFETY — drop `Array<Any?>` + `@Suppress("UNCHECKED_CAST")` from VM flow combinators.** `HomeViewModel.dashboardData` and `viewSelection` (~lines 305–370) and `SettingsViewModel`'s combine chain pack heterogeneous flows into `arrayOf<Any?>()` then unpack each slot with `as` casts. A typo in the array indices would only surface at runtime in the UI with a `ClassCastException`. The fix is mechanical: replace with intermediate typed data classes so the compiler enforces shape. ~1 day. **Sprint-sized once it's prioritised; in Watching for now because nothing has actually misfired.**
-
-- **MONEY-MATH-LEGACY — `GenericNotificationParser.extractAmountMinor` still uses `Double * 100 → Long`.** [GenericNotificationParser.kt:68](android/app/src/main/java/com/zegrt/rupee/ingestion/GenericNotificationParser.kt#L68) is the last hold-out — every other parser routes through `NotificationParsingUtils.extractAmountMinor` which uses `BigDecimal.movePointRight(2).toLong()` (correct). Edge amounts like `₹19.99` can round to `1999.99` * 100 = `199999L` instead of `199999L` — usually fine, sometimes off by one. **One-off PR. ~10 min. Backport the BigDecimal pattern.**
-
-- **TRUST-WRITE-RACE — `setMerchantTrust` reads-then-conditionally-writes.** [LocalFinanceRepository.kt:641-651](android/app/src/main/java/com/zegrt/rupee/data/repository/LocalFinanceRepository.kt#L641-L651) reads `getRulesForUser`, searches for a match in memory, then either upserts or deletes. Two rapid taps from the new TRUST-FROM-TXN toggle could race: tap 1 reads "no rule", tap 2 reads "no rule", both insert → unique-constraint violation, OR tap 1 deletes, tap 2 tries to delete the same row → no-op but lost intent. Fix: wrap the lookup+write pair in `database.withTransaction { ... }`, or change `MerchantTrustRuleDao` to expose an idempotent upsert-by-pattern. **~1 hour PR.**
-
-- **DATE-PARSE-LOGGING — three `runCatching { … }.getOrNull()` sites swallow ISO-8601 parse failures.** [HomeViewModel.kt formatOccurredAt fallback](android/app/src/main/java/com/zegrt/rupee/home/HomeViewModel.kt), `RecurringDetectionEngine`, and `DuesAlertManager` all parse `occurredAt` / due dates with `runCatching` and fall back to `.take(10)` or null on failure. If the DB ever ends up with a malformed timestamp (migration bug, third-party writer), the UI silently drops the row from upcoming-dues and recurring detection with zero error surface. Fix: add `Log.w("Rupee", ...)` before the `getOrNull()` so the parse failure shows up in logcat / a future health surface. **~1 hour PR.**
-
-- **MIGRATION-SKIP-TEST — no instrumented test exercises the full v8→v11 ladder in one go.** Room applies migrations sequentially, so any gap in `MIGRATION_8_9` / `9_10` / `10_11` is silent unless a test asserts the v8 fixture survives all three. We have per-migration tests via `MigrationTestHelper`; we don't have a chained "open a v8 DB, end up at v11, verify every column exists" test. **~½ day to add. Catches future migration drift.**
-
-- **REPO-VM-TEST-COVERAGE — load-bearing repository methods + the `HomeViewModel` flow combinators have no unit tests.** `LocalFinanceRepository.confirmInboxItem` / `setMerchantTrust` / `deleteTransaction` / the export snapshot path are only covered by integration via `DumpReplayTest`. `HomeViewModel`'s 8-flow combine is only exercised by running the UI. The `Array<Any?>` casts above are dangerous *specifically because* nothing tests them. Closed-beta blocker if we want to ship to non-internal testers safely. **~2-3 days, prioritise repo confirm/merge/delete first.**
-
-### Architecture — post-alpha, depends on rule engine
-- **PATTERN-TELEM — Pattern telemetry / OTA-readiness.** Per [axio-competitor-analysis.md §3.7](axio-competitor-analysis.md), once **S2** ships JSON rules with `pattern_UID`, we'd want to log which patterns fire in production (counts, last-fired timestamp) so the rule corpus can be tuned from real data. Useless without S2; trivial to add once S2 exists.
-- **MISSED-TXN — Missed-transaction detector via balance reconciliation.** [axio-takeaways.md Item 8](axio-takeaways.md). Walnut catches the "you said balance is X but txns sum to Y" gap. We currently track `currentBalanceMinor` on `AccountEntity` but **don't extract** `balanceAfterMinor` from notifications and **don't reconcile** the running sum against it. Needs (a) parsers emitting `balanceAfterMinor` reliably across providers, (b) a new column on `ParsedSignalEntity` (or `CanonicalTransactionEntity`) to store it, (c) a reconcile job that diff'ses transactions-sum vs latest reported balance and raises a "missed something" surface. Multi-sprint; tied to S2 for breadth of provider coverage. Low priority.
-
-### From `docs/notification-ingestion-deep-dive.md` §9
-- **§9.3 `extractedJson TEXT NULL` on `RawCaptureEventEntity`.** Persist structured per-Bundle-field breakdown so we can re-parse old events when a future rule-driven parser (S2) ships. The flat `combinedBody` is already stored as `body`; what's missing is the per-field separation (title vs subText vs textLines) for parsers that want to apply field-priority rules. ~1-2 KB/notif storage cost. Not urgent — `combinedBody` is enough for re-parsing in 95% of cases today.
-- ~~**§9.9 Post-ship parse-rate counter.**~~ Promoted to **T3 — Ingestion health surface in the Debug screen** — shipped in v0.14.2 (PR #51, 2026-05-21).
-
-### From `docs/rupee-settings-debug.md` §6 (deferred-by-design)
-- **Merge with existing transaction (UI picker).** Repository contract `mergeInboxIntoTransaction(inboxItemId, targetTransactionId)` exists and the merge column landed in v0.14.0; what's missing is a full search-then-select picker for "find an existing transaction to merge this Inbox row into." The two-step soft-confirm in the existing Inbox is the workaround.
-- ~~**Recategorize on Transactions detail sheet.**~~ Shipped — `CategoryDropdown` is in the `TransactionDetailSheet` ([MainActivity.kt:2234](android/app/src/main/java/com/zegrt/rupee/MainActivity.kt#L2234)).
-- ~~**Dedicated PhonePe / Paytm parsers**~~ — shipped earlier; PhonePe and Paytm have dedicated parsers in `ingestion/`.
-- **Custom bucket progress cards on Home.** `TransactionBucketAssignmentEntity` *is* defined (audited 2026-05-23) but unwired — no DAO, no observer, no Home composable. Needs the DAO + observer chain into `HomeViewModel.DashboardData`, plus per-bucket budget seeding through `BudgetsScreen`.
-
-### Schema entities planned but not yet defined
-*(Re-audited 2026-05-23. Six tables remain undefined; one previously
-listed entry — `transaction_bucket_assignments` — is now defined as
-`TransactionBucketAssignmentEntity` but is unwired, see Custom bucket
-progress cards above.)* From `CONTEXT.md` "Known Gaps":
-- `canonical_transaction_source_links` — multi-source provenance audit trail. Pairs with **S6**.
-- `dedupe_groups`, `dedupe_group_members` — current code uses flat `dedupeFingerprint` field on `CanonicalTransactionEntity` (pragmatic shortcut, not the long-term shape). Pairs with **S2.1** + **S6**.
-- `alert_rules`, `alert_events` — current `DuesAlertManager` uses SharedPrefs dedupe, not these tables.
-- `monthly_recaps` — current Recap is computed on read (`RecapViewModel`). See **RECAP-PERSIST** in Slotted.
-- `emi_transaction_links` — link auto-detected EMI debits back to their plan. Pairs with **EMI-AUTO**.
-- `budget_category_assignments` — explicit per-category-per-budget link table (today budgets reference categories implicitly).
-
-### SMS pipeline
-- TRAI `-T`/`-S`/`-P`/`-G` sender-suffix as free first-stage signal (May 2025 rule).
-- 6-alpha (transactional/service) vs 6-numeric (promo) headers.
-- Reference: research report stashed in conversation context; PennyWise AI repo for architecture lessons.
-
-### Parser corpus expansion
-- SBI YONO real-body shapes — guessed in deep-dive §3, never confirmed against a dump.
-- Federal Bank, Yes Bank — same.
-- Jupiter / Fi / Niyo — newer fintechs, possible `RemoteViews` usage.
-- Foreign-currency transactions — many issuers SMS-only.
+- **Crash-free rate audit** — final crash-rate sweep on the latest open-beta builds. 99.5% crash-free is the launch bar; anything outstanding gets a tracked-and-blocked entry.
+- **Play Store listing assets** — screenshots, feature graphic, copy. Targeted at the chosen REVAMP direction.
+- **Support readiness** — `studioxero.biz@gmail.com` feedback channel exists; need a triage / response SLA before public launch.
+- **1.0 cut** — `versionName = "1.0.0"`, `versionCode = first-three-digit-number`, signed APK, git tag `v1.0.0`, Play Store track promotion from open beta to production.
 
 ---
 
