@@ -22,9 +22,10 @@ Each item should have: *what*, *why it matters*, *touchpoints*, *blocked by*.
 
 ## In flight
 
-- *(Nothing actively in flight as of 2026-05-22; Sprint 0 and Sprint 1
-  both merged, v0.14.4 cut. Sprint 2 below is the next runnable sprint;
-  the design revamp moved to post-1.0 — see [REVAMP](#revamp--full-design-overhaul-aviate-vs-vwfndr-post-10) in Slotted.)*
+- *(Nothing actively in flight as of 2026-05-22 end-of-day; Sprints 0/1/2
+  all merged, v0.14.5 cut. Sprint 3 (release prep) is the next runnable
+  sprint; the design revamp stays post-1.0 — see
+  [REVAMP](#revamp--full-design-overhaul-aviate-vs-vwfndr-post-10) in Slotted.)*
 
 ---
 
@@ -240,14 +241,16 @@ in Slotted.*
 
 ---
 
-## Sprint 2 — Polish on the existing theme *(≈1 week)*
+## Sprint 2 — Polish on the existing theme *(shipped 2026-05-22, v0.14.5)*
 
 *(Previously gated on the Aviate-vs-vwfndr design call; rescoped 2026-05-22
 to target the current warm Clay / Sage / Paper Material 3 theme. The big
 visual revamp moved to `REVAMP` in Slotted as a post-1.0 item.)*
 
-Six items, all flavor-agnostic. Order them however; nothing here blocks
-on anything else inside the sprint.
+*All six items below merged into main across PRs #66 (INBOX-WHY-COPY),
+#67 (CAL-INTER), #68 (COLDSTART), #69 (S1.3 rest), #70 (MANUAL-FAST),
+#71 (POLISH-1). Listed for traceability — the work is done. Next:
+Sprint 3 (release prep), then v1.0.*
 
 ### POLISH-1 — Home / Inbox / Settings polish pass
 **What:** Visual review pass on the three most-trafficked surfaces in the **current** theme. Common rough spots based on past testing:
