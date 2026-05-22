@@ -356,6 +356,8 @@ private fun RupeeApp(
             onSettingsNameDraftChange = settingsViewModel::updateNameDraft,
             onSettingsSaveName = settingsViewModel::saveDisplayName,
             onSettingsRemoveTrustRule = settingsViewModel::removeTrustRule,
+            onSettingsToggleAccountExcludeExpense = settingsViewModel::setAccountExcludeFromExpense,
+            onSettingsToggleAccountExcludeIncome = settingsViewModel::setAccountExcludeFromIncome,
             onOpenEmiDraft = cardsEmisViewModel::openEmiDraft,
             onCloseEmiDraft = cardsEmisViewModel::closeEmiDraft,
             onUpdateEmiDraft = cardsEmisViewModel::updateEmiDraft,
@@ -391,6 +393,7 @@ private fun RupeeApp(
             onDebugRunParseTest = { debugViewModel.runParseTest() },
             onCloseTransaction = homeViewModel::closeTransactionDetail,
             onDeleteTransaction = homeViewModel::deleteTransaction,
+            onTransactionToggleAlwaysTrust = homeViewModel::toggleTransactionAlwaysTrust,
             onPostMockNotification = { debugViewModel.postMockNotification(context) },
             onDebugUpdateMockTitle = debugViewModel::updateMockTitle,
             onDebugUpdateMockBody = debugViewModel::updateMockBody,
@@ -742,6 +745,8 @@ private fun RupeeHome(
     onSettingsNameDraftChange: (String) -> Unit,
     onSettingsSaveName: () -> Unit,
     onSettingsRemoveTrustRule: (String) -> Unit,
+    onSettingsToggleAccountExcludeExpense: (String, Boolean) -> Unit,
+    onSettingsToggleAccountExcludeIncome: (String, Boolean) -> Unit,
     onOpenEmiDraft: () -> Unit,
     onCloseEmiDraft: () -> Unit,
     onUpdateEmiDraft: (EmiDraft.() -> EmiDraft) -> Unit,
@@ -777,6 +782,7 @@ private fun RupeeHome(
     onDebugRunParseTest: () -> Unit,
     onCloseTransaction: () -> Unit,
     onDeleteTransaction: (String) -> Unit,
+    onTransactionToggleAlwaysTrust: (String) -> Unit,
     onPostMockNotification: () -> Unit,
     onDebugUpdateMockTitle: (String) -> Unit,
     onDebugUpdateMockBody: (String) -> Unit,
@@ -792,6 +798,7 @@ private fun RupeeHome(
     var showDebug by remember { mutableStateOf(false) }
     var showTrustRules by remember { mutableStateOf(false) }
     var showCardsEmis by remember { mutableStateOf(false) }
+    var showAccounts by remember { mutableStateOf(false) }
     var showBudgets by remember { mutableStateOf(false) }
     var showRecurring by remember { mutableStateOf(false) }
     var showRecap by remember { mutableStateOf(false) }
@@ -854,6 +861,7 @@ private fun RupeeHome(
                         onRequestPostNotifications = onRequestPostNotifications,
                         onOpenTrustRules = { showTrustRules = true },
                         onOpenCardsEmis = { showCardsEmis = true },
+                        onOpenAccounts = { showAccounts = true },
                         onOpenBudgets = { showBudgets = true },
                         onOpenRecurring = {
                             onRecurringRefresh()
@@ -922,6 +930,7 @@ private fun RupeeHome(
             onTypeChange = { onTransactionTypeDraftChange(selectedTxn.id, it) },
             onSave = { onSaveTransaction(selectedTxn.id) },
             onDelete = { onDeleteTransaction(selectedTxn.id) },
+            onToggleAlwaysTrust = { onTransactionToggleAlwaysTrust(selectedTxn.id) },
         )
     }
 
@@ -952,6 +961,40 @@ private fun RupeeHome(
                     TrustRulesScreen(
                         rules = settingsState.trustRules,
                         onRemove = onSettingsRemoveTrustRule,
+                    )
+                }
+            }
+        }
+    }
+
+    if (showAccounts) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { if (showAccounts) showAccounts = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp, vertical = 24.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Accounts", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                        androidx.compose.material3.TextButton(onClick = { if (showAccounts) showAccounts = false }) { Text("Close") }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    com.zegrt.rupee.settings.AccountsScreen(
+                        accounts = settingsState.accounts,
+                        onToggleExcludeExpense = onSettingsToggleAccountExcludeExpense,
+                        onToggleExcludeIncome = onSettingsToggleAccountExcludeIncome,
                     )
                 }
             }
@@ -2055,6 +2098,7 @@ private fun TransactionDetailSheet(
     onTypeChange: (com.zegrt.rupee.data.local.entity.CanonicalTransactionType) -> Unit,
     onSave: () -> Unit,
     onDelete: () -> Unit,
+    onToggleAlwaysTrust: () -> Unit,
 ) {
     var editing by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -2133,6 +2177,37 @@ private fun TransactionDetailSheet(
                     categories = categories,
                     onSelect = onCategoryChange,
                 )
+                // Always-trust toggle — mirrors the Inbox confirmation surface
+                // but persists immediately (the txn is already confirmed). The
+                // toggle reads DB truth via row.alwaysTrust, which the VM
+                // joins from the trust-rule flow. Copy uses the *persisted*
+                // merchant (not merchantDraft) because the rule will be
+                // created against the persisted name — showing the draft here
+                // would lie about which name gets trusted.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onToggleAlwaysTrust)
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Always trust ${row.merchant}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            "Future notifications from this merchant skip the Inbox and land as Confirmed.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = row.alwaysTrust,
+                        onCheckedChange = { onToggleAlwaysTrust() },
+                    )
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Button(onClick = {
                         onSave()

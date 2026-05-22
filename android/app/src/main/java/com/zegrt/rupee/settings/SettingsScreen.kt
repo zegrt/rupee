@@ -34,6 +34,7 @@ fun SettingsScreen(
     onRequestPostNotifications: () -> Unit,
     onOpenTrustRules: () -> Unit,
     onOpenCardsEmis: () -> Unit,
+    onOpenAccounts: () -> Unit,
     onOpenBudgets: () -> Unit,
     onOpenRecurring: () -> Unit,
     onOpenRecap: () -> Unit,
@@ -166,6 +167,41 @@ fun SettingsScreen(
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Cards & EMIs", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     Text("Track credit cards, dues, and EMI plans.", style = MaterialTheme.typography.bodyMedium)
+                }
+                Text("›", style = MaterialTheme.typography.headlineSmall)
+            }
+        }
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onOpenAccounts),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Accounts", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    val excludedExpense = state.accounts.count { it.excludeFromExpenseTotals }
+                    val excludedIncome = state.accounts.count { it.excludeFromIncomeTotals }
+                    val totalAccounts = state.accounts.size
+                    val excludedDetail = when {
+                        totalAccounts == 0 -> "No accounts yet"
+                        excludedExpense == 0 && excludedIncome == 0 ->
+                            if (totalAccounts == 1) "Your account contributes to totals"
+                            else "All $totalAccounts accounts contribute to totals"
+                        excludedExpense > 0 && excludedIncome > 0 ->
+                            "$excludedExpense hidden from spend · $excludedIncome from income"
+                        excludedExpense > 0 -> "$excludedExpense hidden from spend totals"
+                        else -> "$excludedIncome hidden from income totals"
+                    }
+                    Text(excludedDetail, style = MaterialTheme.typography.bodyMedium)
                 }
                 Text("›", style = MaterialTheme.typography.headlineSmall)
             }
