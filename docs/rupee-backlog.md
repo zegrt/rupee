@@ -178,6 +178,28 @@ Pure correctness. Has to land before any real 1.0 cut.
 **Touchpoints:** one line in `RupeeApplication.kt`. ~5 minutes.
 **Blocked by:** "we're committing to never supporting v1-v4 upgrades again" — true today.
 
+### KOTAK-VERB-DRIFT — drop the per-parser verb gate in KotakNotificationParser
+**What:** `KotakNotificationParser.canParse` requires a Kotak package match (load-bearing) **and** a hit against a local `TRANSACTIONAL_VERBS` list (`sent via`, `debited`, `credited`, `paid`, `received`, `deducted`, `auto-debit`, `withdrawn`, `spent`). That local list is redundant with the central `TransactionalGate.POSITIVE_VERBS` — the gate already filtered any body without a verb before the parser runs. The list has now drifted: v0.14.1 added `"sent from"` to the central gate (for Kotak811's title-only "₹3.00 sent from XX4129" shape) but the parser-level list was not updated. Result: a real Kotak ₹3 debit in the 2026-05-22 Nothing-A015 dump cleared the central gate, then failed the parser's local verb check, and fell through to `GenericNotificationParser` — providerHint became `com.kotak811...` instead of `kotak`, mode became null instead of UPI.
+**Why:** every time we add a verb to the central gate we will have to remember to add it here too. The 2026-05-22 dump proves we already failed to. Cheap to delete.
+**Touchpoints:** `ingestion/KotakNotificationParser.kt` (drop `TRANSACTIONAL_VERBS` and the `body` check; keep package match). Update unit tests that pin the local-gate behaviour to pin the central-gate behaviour instead.
+**Caveat — read before generalising:** the audit found three *other* parsers that look superficially similar but are NOT redundant (`AtmNotificationParser`, `EmiNotificationParser`, `GenericUpiNotificationParser`). Those use verb matching as routing/disambiguation ("real ATM withdrawal" vs "Try our new ATM card", "real EMI charge" vs "EMI options available", "real UPI transaction" vs "Your UPI ID is X") — distinct from transactionality. Do not delete theirs.
+**Blocked by:** nothing. ~15 minutes.
+
+### GATE-AUTOPAY-VOCAB — add autopay verbs to TransactionalGate
+**What:** `TransactionalGate.POSITIVE_VERBS` covers `auto-debit`, `auto debit`, `autodebit`, `NACH mandate`, `ECS debit`, `standing instruction`, but **not** `autopay` or noun-form `payment to ` / `payment for `. Native GPay autopay notifications use the noun form: "Payment to SPOTIFY INDIA PVT LTD was successful. Payment for Autopay of ₹X to MERCHANT was successful." Today these are rejected as `NO_TRANSACTIONAL_VERB`.
+**Why:** any user on GPay UPI Autopay (NPCI's recurring-debit primitive used for Spotify / Netflix / Hotstar / Vi recharges / SIP / utilities) loses every recurring debit. Common enough that a single GPay user can have 4-8 autopay notifications a month.
+**Touchpoints:** `ingestion/TransactionalGate.kt` (positive verbs list), `ingestion/TransactionalGateTest.kt` (add accept cases for autopay bodies).
+**Cross-check:** the same body shape comes from CRED's UPI-autopay wrapper too ("UPI autopay of ₹139 for Spotify India Pvt Ltd has been debited successfully") — but CRED's wrapper says **debited**, so it clears the existing gate. The new vocab specifically rescues the native-GPay phrasing.
+**Blocked by:** nothing. ~10 minutes.
+
+### CRED-PROMO-BODY-GATE — stop CRED/credit-account promos from parsing as txns
+**What:** The CRED Cash credit-line promo ("₹2,80,000 available for you — withdraw any amount from your CRED cash account before May 31st and start your first EMI in July") cleared the central gate because the gate's positive-verb list includes `withdraw ` (added for ATM bodies). `CredNotificationParser.canParse` is package-OR-brand-only with no verb gate, so the parser fired, the amount regex captured `₹2` (the regex doesn't handle Indian comma-grouping `2,80,000`), and the result was written to the Inbox as a ₹2.00 SPEND with no merchant. Bug has two heads:
+  1. **Gate**: `withdraw ` is too broad — needs context, or needs a paired negative-keyword like `withdraw any amount from`, `withdraw from your.*account`, or just the `cred cash account` / `credit line` marker.
+  2. **Amount extraction**: `extractAmountMinor` only matches Western thousands grouping (`1,000`, `1,000,000`). Indian financial copy uses lakhs/crores grouping (`2,80,000`, `1,00,00,000`). Today the regex truncates silently to `₹2`, which is worse than failing — the result looks parseable.
+**Why:** the Inbox got a garbage ₹2.00 row from a promo, and the user lost trust in what's in there. Indian-numbering coverage is a categorical fix that will rescue dozens of other bodies too.
+**Touchpoints:** `ingestion/TransactionalGate.kt` (negative keywords for cash-advance/credit-line promo phrasing), `ingestion/NotificationParsingUtils.extractAmountMinor` (add `\d{1,2}(?:,\d{2})*,\d{3}` Indian-grouping alternative to the existing regex; test against `₹2,80,000`, `₹1,00,000`, `₹1,00,00,000`).
+**Blocked by:** nothing. ~½ day with tests.
+
 ---
 
 ## Sprint 1 — Utility wins + design call *(≈3-4 days)*
@@ -298,6 +320,10 @@ typography), so the Sprint 1 design call is the gate.
 - If the original has no `networkReferenceId` but the dup has one → fill ref id
 **Why:** the 2026-05-19 dump showed PhonePe pushes (rich merchant, no account digits) and Truecaller-mirrored bank SMS (rich account digits, weak merchant) arriving for the same transaction. Each has data the other doesn't. Today we keep whichever fired first and discard the second. Enrichment captures the best of both.
 
+**Truecaller and Walnut specifically — primary enrichment sources, not dupes to discard.** The 2026-05-22 Nothing-A015 dump showed the textbook case: a single ₹3 Kotak debit fired three notifications — the native Kotak811 push (`₹3.00 sent from XX4129` → has package attribution, timestamp, masked digits, but no payee), three Truecaller SMS mirrors (`Sent Rs.3.00 from Kotak Bank AC X4129` → has explicit bank name and is the body that carries the `UPI Ref XX YYYY` token), and a Walnut SMS-bridge push (`₹3.00 at 8943068824@YESCRED` → has the recipient UPI handle that no other source carries). Today: Kotak becomes one Inbox row, Walnut becomes a second Inbox row, all three Truecaller mirrors are `DUPLICATE_IGNORED`. Under S6 these merge into a single canonical row carrying the union of the data — Kotak's package/digits + Truecaller's UPI ref + Walnut's recipient handle. Two specific notes worth pinning before implementation:
+- Truecaller's `subText` field carries the issuer name in plain text (`SMS from Kotak Mahindra Bank` in this dump) — useful for cross-validating the brand attribution we got from the native push's package name.
+- Walnut posts the merchant/handle that the native bank push never includes. Treat Walnut and Truecaller as complementary, not redundant: Truecaller mirrors the bank's SMS verbatim; Walnut parses it locally and emits a different shape.
+
 **Three structural decisions before this ships:**
 
 1. **Field-by-field merge policy.** Per field: "first non-null wins" vs "higher-confidence parser wins" vs "newer wins." Probably different per field. `merchantName` should prefer the brand-aware parser's value. `maskedDigits` should prefer first-non-null (they don't change across sources). `networkReferenceId` is similar.
@@ -315,6 +341,17 @@ typography), so the Sprint 1 design call is the gate.
 **Touchpoints:** `EmiNotificationParser` (already exists, extracts amount + merchantishly + dueDateIso), new `applyEmiToPlan(...)` in `NotificationSignalNormalizer` mirroring `applyBillDueToCard`. New repo method + `EmiPlanDao.upsertPlan`.
 **Blocked by:** nothing technical. Deferred to post-1.0 because EMIs are commitments — the right confidence threshold should be tuned against real-user data, not synthetic dumps.
 **Open design Q:** route confirmed EMIs to Inbox first vs auto-add to `emi_plans`? Recommend Inbox (EMIs are commitments — user should verify before they show up on Home's upcoming-dues strip).
+
+### LEDGER-IMPORT — Reverse of EXPORT-UI (read CSV/JSON back into the ledger) *(post-1.0)*
+**What:** Sprint 1's `EXPORT-UI` is one-way only — CSV / JSON come out, nothing goes back in. Add a Settings → Import path that reads either format and inserts rows into `canonical_transactions`. Schema validation, foreign-key remap (merchant/category/account *names* → IDs, auto-creating if missing), conflict resolution against `dedupeFingerprint`, atomic Room transaction so a malformed file doesn't half-write.
+**Why:** new-phone restore is the only currently-impossible workflow — export buys you a backup file but you can't get it back into the app. Power-user bulk-edit (Excel round-trip) is the secondary use case.
+**Touchpoints:** new `diagnostics/LedgerImporter.kt` (mirror of `LedgerExporter` but with `parseCsv`/`parseJson` + a `Result<ImportSummary>` return shape), new `LocalFinanceRepository.importLedgerSnapshot(...)` that wraps the insert in `withTransaction`, new Settings card. UI needs a confirmation step ("This will add 412 rows. 17 look like duplicates of existing transactions — skip / overwrite / both?") because there's no undo from the user side.
+**Cost:** ~3–4× export, almost all of it in conflict-resolution + foreign-key remap logic. The file parsing is straightforward; making "I exported, edited the merchant column, re-imported" actually merge into the existing rows is the hard part.
+**Open design Q's before this ships:**
+- Conflict policy: skip / overwrite / keep-both / per-row prompt. Recommend skip-on-dedupeFingerprint-match by default with an "overwrite duplicates" checkbox.
+- Schema versioning: the export's `schemaVersion: 1` lets the importer reject future-format files cleanly. Need a clear error when v1 sees v2.
+- Merchant/category creation: auto-create unknown names, or reject the import until the user pre-creates them? Auto-create is friendlier but pollutes the merchant trust corpus.
+**Blocked by:** nothing technical. Deferred to post-1.0 because export already covers the "I want my data outside the app" trust requirement, and import is meaningful only after new-phone-restore becomes a real user request.
 
 ### RECAP-PERSIST — Persisted monthly Recap snapshots *(post-1.0; design-direction-sensitive)*
 **What:** Recap is computed-on-read today. PRD describes a "story-like highlights" surface (biggest category, most expensive day, variance vs last month, fixed vs discretionary). Persist a `MonthlyRecap` snapshot row per closed month so the surface loads instantly and we can build "share my month" later. Also unblocks the **Aviate Wrapped-style shareable artifact** if that direction wins.
