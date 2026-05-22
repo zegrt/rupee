@@ -30,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -86,6 +87,7 @@ import com.zegrt.rupee.home.HomeTransactionRow
 import com.zegrt.rupee.home.HomeViewModel
 import com.zegrt.rupee.home.HomeViewModelFactory
 import com.zegrt.rupee.home.ManualEntryDraft
+import com.zegrt.rupee.home.ManualEntrySuggestion
 import com.zegrt.rupee.home.ReviewSource
 import com.zegrt.rupee.onboarding.OnboardingStep
 import com.zegrt.rupee.settings.SettingsScreen
@@ -918,6 +920,7 @@ private fun RupeeHome(
         ManualEntrySheet(
             draft = uiState.manualEntry,
             categories = uiState.categories,
+            suggestions = uiState.manualEntrySuggestions,
             onClose = onCloseManualEntry,
             onUpdate = onUpdateManualEntry,
             onSubmit = onSubmitManualEntry,
@@ -1642,6 +1645,7 @@ private fun RecentRow(row: HomeRecentRow) {
 private fun ManualEntrySheet(
     draft: ManualEntryDraft,
     categories: List<CategoryOption>,
+    suggestions: List<ManualEntrySuggestion>,
     onClose: () -> Unit,
     onUpdate: (ManualEntryDraft.() -> ManualEntryDraft) -> Unit,
     onSubmit: () -> Unit,
@@ -1664,6 +1668,30 @@ private fun ManualEntrySheet(
                         shape = SegmentedButtonDefaults.itemShape(index = index, count = ManualEntryType.entries.size),
                         label = { Text(if (t == ManualEntryType.INCOME) "Income" else "Expense") },
                     )
+                }
+            }
+            // MANUAL-FAST (Sprint 2): tap a recent-merchant chip to pre-fill
+            // merchant + category + mode in one gesture. EXPENSE-only — the
+            // sheet defaults to EXPENSE and INCOME entries are too varied
+            // for "similar to last" suggestions to be reliable. The chips
+            // are the headline lever toward the 20s manual-entry target.
+            if (draft.type == ManualEntryType.EXPENSE && suggestions.isNotEmpty()) {
+                Text("Recent", style = MaterialTheme.typography.labelMedium)
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    suggestions.forEach { suggestion ->
+                        AssistChip(
+                            onClick = {
+                                onUpdate {
+                                    copy(
+                                        merchant = suggestion.merchant,
+                                        categoryId = suggestion.categoryId ?: categoryId,
+                                        mode = suggestion.mode ?: mode,
+                                    )
+                                }
+                            },
+                            label = { Text(suggestion.merchant) },
+                        )
+                    }
                 }
             }
             OutlinedTextField(
@@ -2371,6 +2399,10 @@ fun ManualEntrySheetPreview() {
             categories = listOf(
                 CategoryOption("1", "Food"),
                 CategoryOption("2", "Transport"),
+            ),
+            suggestions = listOf(
+                ManualEntrySuggestion("Swiggy", "1", Mode.UPI),
+                ManualEntrySuggestion("Uber", "2", Mode.CREDIT_CARD),
             ),
             onClose = {},
             onUpdate = {},

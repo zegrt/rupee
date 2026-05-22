@@ -117,6 +117,18 @@ data class ManualEntryDraft(
     val error: String? = null,
 )
 
+/**
+ * "Tap to fill" suggestion shown above the merchant field on the manual
+ * entry sheet. One per recently-used merchant; tapping pre-fills merchant
+ * + category + mode in one gesture, hitting the 20s-target manual-entry
+ * goal (backlog MANUAL-FAST).
+ */
+data class ManualEntrySuggestion(
+    val merchant: String,
+    val categoryId: String?,
+    val mode: Mode?,
+)
+
 data class HomeDashboard(
     val greeting: String = "Hello",
     val monthLabel: String = "",
@@ -160,6 +172,7 @@ data class HomeUiState(
     val recentTransactions: List<HomeTransactionRow> = emptyList(),
     val categories: List<CategoryOption> = emptyList(),
     val manualEntry: ManualEntryDraft = ManualEntryDraft(),
+    val manualEntrySuggestions: List<ManualEntrySuggestion> = emptyList(),
     val dashboard: HomeDashboard = HomeDashboard(),
     val isSeeding: Boolean = true,
 )
@@ -649,9 +662,43 @@ class HomeViewModel(
             recentTransactions = transactionRows,
             categories = categoryOptions,
             manualEntry = selection.manualEntry,
+            manualEntrySuggestions = buildManualEntrySuggestions(data.transactions),
             dashboard = buildDashboard(data, reviewRows.size, date),
             isSeeding = selection.isSeeding,
         )
+    }
+
+    /**
+     * MANUAL-FAST (Sprint 2): "tap to fill" chips for the manual-entry sheet.
+     * Picks the user's 5 most recent unique-merchant expense transactions
+     * from the last 30 days and surfaces each as a chip that fills merchant
+     * + category + mode in one gesture. The 20s manual-entry target rests
+     * mostly on this — most manual entries are repeats of a known merchant
+     * the user already has rules for; pre-filling skips the typing.
+     *
+     * EXPENSE-only because the manual-entry sheet defaults to EXPENSE and
+     * INCOME entries are rare and varied. Falling back to recents from
+     * either side would muddy the suggestion ordering.
+     */
+    private fun buildManualEntrySuggestions(
+        transactions: List<CanonicalTransactionEntity>,
+    ): List<ManualEntrySuggestion> {
+        val seen = mutableSetOf<String>()
+        val out = mutableListOf<ManualEntrySuggestion>()
+        for (transaction in transactions) {
+            if (transaction.type != CanonicalTransactionType.EXPENSE) continue
+            val merchant = cleanMerchant(transaction.merchantName)
+            if (merchant.isBlank()) continue
+            val key = merchant.lowercase()
+            if (!seen.add(key)) continue
+            out += ManualEntrySuggestion(
+                merchant = merchant,
+                categoryId = transaction.categoryId,
+                mode = transaction.mode,
+            )
+            if (out.size == MAX_MANUAL_SUGGESTIONS) break
+        }
+        return out
     }
 
     private fun buildReviewRows(
@@ -875,6 +922,10 @@ class HomeViewModel(
             maximumFractionDigits = decimals
             currency = java.util.Currency.getInstance("INR")
         }
+
+    companion object {
+        private const val MAX_MANUAL_SUGGESTIONS = 5
+    }
 }
 
 class HomeViewModelFactory(
