@@ -677,7 +677,7 @@ class HomeViewModel(
                     candidate?.mode?.name?.replace('_', ' '),
                     candidate?.occurredAt?.let(::formatOccurredAt),
                 ).joinToString(" • ").ifBlank { formatOccurredAt(inboxItem.createdAt) },
-                reasonLabel = inboxItem.reasonCode.name.replace('_', ' '),
+                reasonLabel = InboxReasonCopy.forInbox(inboxItem.reasonCode, candidate),
                 alwaysTrust = inboxItem.id in selection.alwaysTrust,
                 mergeTargetId = selection.reviewMergeTargets[inboxItem.id],
             )

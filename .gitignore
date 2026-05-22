@@ -26,3 +26,7 @@ CLAUDE.md
 
 # Local Gradle daemon JVM config (depends on the dev's installed JDK)
 gradle/gradle-daemon-jvm.properties
+
+# Parked design exploration artefacts (Aviate vs vwfndr APKs from the
+# design/aviate-vs-vwfndr branch — large binaries, not part of the build).
+design-research/
