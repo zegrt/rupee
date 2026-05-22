@@ -155,6 +155,19 @@ internal object NotificationParsingUtils {
         "received ₹",
         "deposited",
         "salary credit",
+        // Refund / reversal / chargeback phrasing — money flowing back to the
+        // user even though the body might also contain debit-side substrings
+        // like "transaction" or "debited" (referring to the original debit
+        // being reversed). Added 2026-05-22 as part of CRED-ICICI-AUDIT —
+        // without these, a CRED chargeback body was classified as
+        // MoneyDirection.UNKNOWN and then routed to UNKNOWN parser kind.
+        // Mirrors `TransactionalGate.POSITIVE_VERBS` which already has all
+        // four phrases on its credit-side list.
+        "refunded",
+        "refund of",
+        "reversed",
+        "reversal",
+        "chargeback",
     )
 
     // Unambiguous P2P receiver shapes. Live separately because their substrings

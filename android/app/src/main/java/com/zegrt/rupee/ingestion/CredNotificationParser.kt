@@ -35,11 +35,21 @@ class CredNotificationParser : NotificationParser {
         val isIncome = amountMinor != null &&
             direction == NotificationParsingUtils.MoneyDirection.IN
 
+        // CRED-ICICI-AUDIT (2026-05-22): isIncome runs *before* isCardSpend
+        // so a credit-side notification (refund / reversal / chargeback /
+        // statement credit / EMI-conversion reversal) doesn't get
+        // miscategorised as SPEND. isCardSpend matches generic verbs
+        // ("transaction", "debited", "charged") that also appear in refund
+        // / reversal bodies — e.g. "Refund transaction of Rs.500 credited
+        // to your HDFC card via CRED". Without this reorder the body's
+        // "transaction" keyword wins over the direction classifier and the
+        // user's spend total inflates by the refund amount.
+        // Mirrors the ladder structure IciciNotificationParser already uses.
         val transactionKind = when {
             isCardDue(lower) -> ParsedTransactionKind.BILL_DUE
             isCardPayment(lower) -> ParsedTransactionKind.PAYMENT
-            isCardSpend(lower, amountMinor) -> ParsedTransactionKind.SPEND
             isIncome -> ParsedTransactionKind.INCOME
+            isCardSpend(lower, amountMinor) -> ParsedTransactionKind.SPEND
             else -> ParsedTransactionKind.UNKNOWN
         }
 
