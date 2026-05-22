@@ -327,7 +327,11 @@ fun SettingsScreen(
 private fun SettingsCard(title: String, content: @Composable () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        // 24.dp matches the rest of the content cards (Bucket / RecentActivity /
+        // InspectionSection). HeroBudgetCard keeps 28.dp for hero emphasis;
+        // ReviewRowCard keeps 18.dp as a "row inside container" idiom.
+        // Sprint 2 POLISH-1.
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
