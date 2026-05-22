@@ -22,16 +22,9 @@ Each item should have: *what*, *why it matters*, *touchpoints*, *blocked by*.
 
 ## In flight
 
-- **Design exploration — parked on branch** *(2026-05-21)*. Branch
-  `design/aviate-vs-vwfndr` pushed to origin, **not merged**. Two product
-  flavors (`aviate` = calm/Wrapped, `vwfndr` = instrument/signed-receipt)
-  ship as side-by-side installable APKs from one repo via Gradle product
-  flavors. Real wallet logic (Room / ViewModels / ingestion) is untouched
-  and dormant during the evaluation. Decision is pending. Picking a
-  direction is the gate between **Sprint 1** and **Sprint 2** of the MVP
-  plan below. See `DESIGN_NOTES.md` (root) + `design-research/DESIGN_NOTES.md`
-  for what each direction does, what would change behind the screen, and
-  trade-offs.
+- *(Nothing actively in flight as of 2026-05-22; Sprint 0 and Sprint 1
+  both merged, v0.14.4 cut. Sprint 2 below is the next runnable sprint;
+  the design revamp moved to post-1.0 — see [REVAMP](#revamp--full-design-overhaul-aviate-vs-vwfndr-post-10) in Slotted.)*
 
 ---
 
@@ -145,20 +138,30 @@ Everything below is scoped to land before a 1.0 cut. Three working
 sprints + a release sprint. Anything not on this list lives in
 **Slotted** (post-1.0) or **Watching**.
 
+**Design revamp (Aviate vs vwfndr) is intentionally post-release.** The
+exploration branch (`design/aviate-vs-vwfndr`) stays parked. Sprint 2's
+polish work targets the **current** warm Clay / Sage / Paper Material 3
+theme — every item below is now flavor-agnostic. The big visual
+overhaul is captured as `REVAMP` in Slotted and lives behind a 1.0
+shipping decision.
+
 **EMI auto-detection is intentionally post-release.** The manual EMI
 entry path in `Cards & EMIs` already covers the MVP feature checklist;
 auto-detection from notifications is a quality upgrade that doesn't
 gate 1.0. See Slotted → **EMI-AUTO**.
 
-**Design-direction gate.** The Aviate-vs-vwfndr decision on the parked
-`design/aviate-vs-vwfndr` branch sits between Sprint 1 and Sprint 2.
-Sprint 0/1 work is flavor-agnostic; Sprint 2 polish presumes the call.
+*(Earlier revisions of this file gated Sprint 2 on the Aviate-vs-vwfndr
+decision. That decision is now deferred to post-1.0; Sprint 2 below
+polishes the existing theme.)*
 
 ---
 
-## Sprint 0 — Release blockers *(≈1 day, single PR)*
+## Sprint 0 — Release blockers *(shipped 2026-05-22, v0.14.4)*
 
 Pure correctness. Has to land before any real 1.0 cut.
+
+*All six items below merged into main. Listed for traceability — the
+work is done.*
 
 ### SEED-SERVICE — proper seeding service (replace hardcoded IDs)
 **What:** `LocalFinanceRepository.completeInitialSetup` hardcodes seed IDs (`account-bank-1`, `card-1`, `account-cash`) and a single 2026-03 budget period. Works for one tester; breaks for a clean install in any other month. Replace with UUID generation + current-month budget.
@@ -202,14 +205,14 @@ Pure correctness. Has to land before any real 1.0 cut.
 
 ---
 
-## Sprint 1 — Utility wins + design call *(≈3-4 days)*
+## Sprint 1 — Utility wins *(shipped 2026-05-22, v0.14.3)*
 
-Three flavor-agnostic utility wins users will feel, plus the
-design-direction decision itself. After this sprint we have the
-visual language locked for Sprint 2 polish.
+Four flavor-agnostic utility wins users will feel.
 
-**Decision (no code):** pick Aviate vs vwfndr off the parked branch.
-Closing this unblocks Sprint 2.
+*All four items below merged into main. The Aviate-vs-vwfndr design
+call that earlier revisions paired with this sprint moved to post-1.0
+— see [REVAMP](#revamp--full-design-overhaul-aviate-vs-vwfndr-post-10)
+in Slotted.*
 
 ### EXPORT-UI — Export to CSV / JSON
 **What:** PRD §14 lists data-export as an MVP capability but no UI affordance exists today. Surface a Settings entry that lets the user save a date-windowed export of `canonical_transactions` (+ joined merchant/category) as CSV or JSON to local storage, then offer the share-sheet. JSON export should also include `raw_capture_events` for the same window so power users can debug ingestion themselves.
@@ -237,14 +240,17 @@ Closing this unblocks Sprint 2.
 
 ---
 
-## Sprint 2 — Design integration + polish *(≈1 week)*
+## Sprint 2 — Polish on the existing theme *(≈1 week)*
 
-Apply the chosen design language to the most-trafficked surfaces. Three
-items in here read differently in each flavor (chip copy, skeletons,
-typography), so the Sprint 1 design call is the gate.
+*(Previously gated on the Aviate-vs-vwfndr design call; rescoped 2026-05-22
+to target the current warm Clay / Sage / Paper Material 3 theme. The big
+visual revamp moved to `REVAMP` in Slotted as a post-1.0 item.)*
+
+Six items, all flavor-agnostic. Order them however; nothing here blocks
+on anything else inside the sprint.
 
 ### POLISH-1 — Home / Inbox / Settings polish pass
-**What:** Designer-driven visual review pass on the three most-trafficked surfaces. Specific items emerge from walkthrough; common rough spots based on past testing:
+**What:** Visual review pass on the three most-trafficked surfaces in the **current** theme. Common rough spots based on past testing:
 - spacing inconsistencies (margins, padding) between Home / Inbox / Settings
 - typography hierarchy on Home (greeting vs month vs budget number)
 - empty states (Inbox empty, no transactions yet, no income captured)
@@ -252,13 +258,13 @@ typography), so the Sprint 1 design call is the gate.
 - Recap surface visual density
 **Why:** pre-1.0 product polish; the v0.13.8 onboarding pass cleaned Welcome / Permissions / Profile screens but Home / Inbox / Settings haven't had a focused visual review since.
 **Touchpoints:** mostly `MainActivity.kt` composables. Could prompt an L5-flavoured decomposition pass as a side effect.
-**Blocked by:** Sprint 1 design call. ~2 days to apply the chosen language.
+**Blocked by:** nothing. ~2 days inside the existing palette.
 
 ### COLDSTART — Cold-start hydration / loading skeletons
-**What:** First open of Home / Inbox / Transactions flashes empty before flows hydrate. Add a quick skeleton (Aviate: soft shimmer; vwfndr: viewfinder warm-up mark) and only swap in real content once the flow has emitted at least once. Pair with empty states (no income captured yet, etc.) — both surfaces need the same "we're alive but not ready" affordance.
+**What:** First open of Home / Inbox / Transactions flashes empty before flows hydrate. Add a quick skeleton (in the current theme's idiom — soft `surfaceVariant` shimmer pills, no extra-flavor styling) and only swap in real content once the flow has emitted at least once. Pair with empty states (no income captured yet, etc.) — both surfaces need the same "we're alive but not ready" affordance.
 **Why:** the empty-flash reads as "broken" to first-time users. Fast fix, high perceptual value.
 **Touchpoints:** the three tab composables in `MainActivity.kt`, plus an empty-state composable that swaps in when the flow emits an empty list.
-**Blocked by:** Sprint 1 design call (skeleton style differs per flavor). ~½ day.
+**Blocked by:** nothing. ~½ day.
 
 ### INBOX-WHY-COPY — Refine per-reason chip copy
 **What:** The reason-chip slot already exists (`row.reasonLabel` renders inside a tinted Surface at `MainActivity.kt:1837`). Today the label distinguishes mainly SUGGESTED vs INBOX. Expand to read from `parsed_signals.parserKey` + confidence tier + presence/absence of merchant/maskedDigits and emit specific reasons (`LOW CONFIDENCE`, `NO MERCHANT`, `AMOUNT ONLY`, `NEW SENDER`, `MASKED DIGITS MISSING`).
@@ -353,7 +359,20 @@ typography), so the Sprint 1 design call is the gate.
 - Merchant/category creation: auto-create unknown names, or reject the import until the user pre-creates them? Auto-create is friendlier but pollutes the merchant trust corpus.
 **Blocked by:** nothing technical. Deferred to post-1.0 because export already covers the "I want my data outside the app" trust requirement, and import is meaningful only after new-phone-restore becomes a real user request.
 
-### RECAP-PERSIST — Persisted monthly Recap snapshots *(post-1.0; design-direction-sensitive)*
+### REVAMP — Full design overhaul (Aviate vs vwfndr) *(post-1.0)*
+**What:** The Sprint 0 / Sprint 1 / Sprint 2 work hardens the wallet on its current warm Clay / Sage / Paper Material 3 theme. **After 1.0 ships**, pick one of the two design directions explored on the `design/aviate-vs-vwfndr` branch and rebuild the visual layer top-to-bottom in that language. This is a style-beat-sized investment, not a polish pass — closer in shape to "Spotify's next-version redesign" than to spacing tweaks.
+**Why post-1.0:** the exploration produced two fully-mocked APKs (`Rupee · Calm` aviate flavor, `RPEE™` vwfndr flavor) that read as completely different products. Picking one is a *positioning* decision (emotional / shareable vs instrument / signed-receipt), not a code task — and it shouldn't gate getting a working wallet into the user's hands. Live with the current theme through 1.0, then revamp.
+**What the revamp would involve:**
+- Pick the direction (decision, not code). See `DESIGN_NOTES.md` for the trade-off in plain English.
+- Replace `ui/theme/Color.kt` + `Type.kt` + `Shape.kt` + `Theme.kt` with the winning flavor's set.
+- Move the winning `FlavorApp.kt` content into `MainActivity.kt`, replacing the current screens. Wire it to the real `HomeViewModel` / `LocalFinanceRepository` instead of the parked-branch mocks.
+- Delete the loser's source set + drop the `design` Gradle dimension.
+- Behind-the-screen items from `DESIGN_NOTES.md` that the chosen direction needs (era windowing + calm score for Aviate; signed receipts + per-source pipeline visibility for vwfndr) get sequenced as their own follow-up sprint.
+**Touchpoints:** branch `design/aviate-vs-vwfndr` (parked at `2dc967e`), `DESIGN_NOTES.md`, every Composable that currently uses `MaterialTheme.colorScheme.*` on the current palette.
+**Cost:** 1-2 weeks once a direction is picked. Roughly the same as building either flavor on the branch did, plus the data-wiring work that was deferred when those flavors were mocked-only.
+**Blocked by:** 1.0 shipping cleanly. Then a positioning call.
+
+### RECAP-PERSIST — Persisted monthly Recap snapshots *(post-1.0; deeper-recap design is REVAMP-sensitive)*
 **What:** Recap is computed-on-read today. PRD describes a "story-like highlights" surface (biggest category, most expensive day, variance vs last month, fixed vs discretionary). Persist a `MonthlyRecap` snapshot row per closed month so the surface loads instantly and we can build "share my month" later. Also unblocks the **Aviate Wrapped-style shareable artifact** if that direction wins.
 **Why:** Recap is too expensive to recompute on every open as transaction count grows; also blocks any cross-month comparison that requires a stable historical snapshot. Not gating 1.0 because the live-compute version is acceptable at current data volumes.
 **Touchpoints:** new `MonthlyRecapEntity` + DAO, scheduled job on month-close (WorkManager already exists in tree), `RecapViewModel` reads from DAO with fallback to live compute.
