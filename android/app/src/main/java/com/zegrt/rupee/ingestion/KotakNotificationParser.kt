@@ -30,28 +30,27 @@ class KotakNotificationParser : NotificationParser {
     override fun canParse(rawEvent: RawCaptureEventEntity): Boolean {
         val pkg = rawEvent.sourceAppPackage.orEmpty().lowercase()
         val isKotakPkg = "kotak" in pkg || pkg.startsWith("com.msf.kbank")
-        if (!isKotakPkg) return false
-        // Kotak's app sends both real txn alerts AND marketing pushes (e.g.
-        // "Just ₹2,500/month → ₹64,415 with Kotak Recurring Deposit. T&C").
-        // Since we always emit merchantRaw=null, a marketing match becomes a
-        // null-merchant MEDIUM-confidence candidate → "Unnamed" Inbox row.
-        // Require at least one transactional verb in the combined body to fire.
-        val body = rawEvent.body.lowercase()
-        return TRANSACTIONAL_VERBS.any { it in body }
-    }
-
-    private companion object {
-        private val TRANSACTIONAL_VERBS = listOf(
-            "sent via",
-            "debited",
-            "credited",
-            "paid",
-            "received",
-            "deducted",
-            "auto-debit",
-            "withdrawn",
-            "spent",
-        )
+        return isKotakPkg
+        // Previously this also required one of a local TRANSACTIONAL_VERBS list
+        // (`sent via`, `debited`, etc.) to be present in the body. That list was
+        // redundant with `TransactionalGate.POSITIVE_VERBS` — by the time a body
+        // reaches the parser the gate has already filtered any verb-free
+        // marketing push. Worse, the local list had drifted: v0.14.1 added
+        // `sent from` to the central gate for Kotak811's title-only shape
+        // (`₹3.00 sent from XX4129`) but the parser-level list was not
+        // updated, so the 2026-05-22 Nothing-A015 dump showed a real Kotak
+        // ₹3 debit clearing the gate, then falling through this parser into
+        // GenericNotificationParser — losing the kotak provider hint and the
+        // forced Mode.UPI.
+        //
+        // The other parsers that look superficially similar use verb matching
+        // for routing/disambiguation (real ATM vs "Try our new ATM card",
+        // real EMI vs "EMI options available", real UPI vs "Your UPI ID is")
+        // — those stay. Kotak's was just transactionality, which the gate
+        // already enforces.
+        //
+        // Dropped 2026-05-22 (KOTAK-VERB-DRIFT) from the Nothing-A015 dump
+        // audit.
     }
 
     override fun parse(rawEvent: RawCaptureEventEntity): NotificationParseResult {
