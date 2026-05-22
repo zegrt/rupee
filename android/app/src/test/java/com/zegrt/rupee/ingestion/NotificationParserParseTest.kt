@@ -318,26 +318,13 @@ class NotificationParserParseTest {
         org.junit.Assert.assertFalse(kotak.canParse(event))
     }
 
-    @Test
-    fun `kotak canParse rejects marketing push from Kotak811 with no transactional verb`() {
-        // Real body captured in the v0.13.3 dump — a Recurring Deposit promo.
-        // Without a transactional-verb gate this routed to Inbox as Unnamed
-        // (since Kotak parser intentionally emits merchantRaw = null).
-        val event = event(
-            pkg = "com.kotak811mobilebankingapp.instantsavingsupiscanandpayrecharge",
-            body = "That's all it takes? 👀\nJust ₹2,500/month → ₹64,415 with Kotak Recurring Deposit. T&C",
-        )
-        org.junit.Assert.assertFalse(kotak.canParse(event))
-    }
-
-    @Test
-    fun `kotak canParse rejects FD promo with no transactional verb`() {
-        val event = event(
-            pkg = "com.kotak811mobilebankingapp.instantsavingsupiscanandpayrecharge",
-            body = "Is your ₹5,000 earning enough? 🤔\nPut it in a Kotak FD for assured 6.8% p.a. returns. T&C",
-        )
-        org.junit.Assert.assertFalse(kotak.canParse(event))
-    }
+    // KOTAK-VERB-DRIFT (2026-05-22): two former tests here pinned the
+    // parser-local TRANSACTIONAL_VERBS list that has been deleted.
+    // Marketing pushes like the Kotak Recurring Deposit / Kotak FD promos
+    // are rejected by `TransactionalGate.NEGATIVE_KEYWORDS` upstream of any
+    // parser (see `TransactionalGateTest.reject Kotak Recurring Deposit
+    // promo - the original sin`). The parser's `canParse` now only checks
+    // package — by the time we get a body, the gate has already filtered.
 
     @Test
     fun `kotak parse classifies credited body as INCOME not SPEND`() {
