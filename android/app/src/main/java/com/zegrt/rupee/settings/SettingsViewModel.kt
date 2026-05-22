@@ -164,6 +164,15 @@ class SettingsViewModel(
                 message.value = "Couldn't read ledger for export"
                 return@launch
             }
+            if (snapshot.transactions.isEmpty()) {
+                // Skip writing + sharing an empty file. Producing a 1-line
+                // CSV header or a JSON envelope with `transactionCount: 0`
+                // would technically work but reads to the user as "the
+                // export silently lost everything" — better to say nothing
+                // is here.
+                message.value = "Nothing to export yet"
+                return@launch
+            }
             val uri = runCatching {
                 // File write goes off Main so a large ledger (or slow
                 // external storage) doesn't ANR. The repository snapshot

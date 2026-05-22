@@ -88,8 +88,22 @@ object LedgerExporter {
     }
 
     private fun writeCsv(file: File, snapshot: LedgerExportSnapshot) {
-        // Excel-friendly CSV: double-quote every field, escape internal
-        // quotes by doubling. Header row first.
+        file.writeText(toCsv(snapshot))
+    }
+
+    private fun writeJson(file: File, snapshot: LedgerExportSnapshot) {
+        file.writeText(toJson(snapshot))
+    }
+
+    /**
+     * Pure-string CSV rendering for [snapshot]. Public-internal so it can
+     * be unit-tested without the Android Context / FileProvider machinery.
+     *
+     * Excel-friendly: every field is double-quoted, internal quotes are
+     * doubled per RFC 4180, lookup IDs resolve to display names (or empty
+     * string when the FK is null).
+     */
+    internal fun toCsv(snapshot: LedgerExportSnapshot): String {
         val sb = StringBuilder()
         sb.appendLine("occurredAt,type,status,amountMinor,currency,merchant,category,account,card,mode,notes,id")
         for (t in snapshot.transactions) {
@@ -112,7 +126,7 @@ object LedgerExporter {
             )
             sb.appendLine(row.joinToString(",") { csvField(it) })
         }
-        file.writeText(sb.toString())
+        return sb.toString()
     }
 
     private fun csvField(value: String): String {
@@ -122,7 +136,12 @@ object LedgerExporter {
         return "\"$escaped\""
     }
 
-    private fun writeJson(file: File, snapshot: LedgerExportSnapshot) {
+    /**
+     * Pure-string JSON rendering for [snapshot]. Public-internal for
+     * unit-testability; same envelope shape as the file path
+     * (`schemaVersion`, `exportedAt`, `transactionCount`, `transactions`).
+     */
+    internal fun toJson(snapshot: LedgerExportSnapshot): String {
         val rows = JSONArray()
         for (t in snapshot.transactions) {
             val account = t.accountId?.let { snapshot.accountsById[it]?.displayName }
@@ -150,6 +169,6 @@ object LedgerExporter {
             put("transactionCount", snapshot.transactions.size)
             put("transactions", rows)
         }
-        file.writeText(envelope.toString(2))
+        return envelope.toString(2)
     }
 }
