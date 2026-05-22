@@ -40,39 +40,39 @@ class GenericUpiNotificationParser : NotificationParser {
         val amountMinor = NotificationParsingUtils.extractAmountMinor(rawEvent.body)
         val merchant = NotificationParsingUtils.extractMerchant(rawEvent.body, merchantRegexes)
         val maskedDigits = NotificationParsingUtils.extractMaskedDigits(rawEvent.body)
+        val networkRef = NotificationParsingUtils.extractNetworkReference(rawEvent.body)
         val direction = NotificationParsingUtils.classifyDirection(rawEvent.body)
         val isIncome = direction == NotificationParsingUtils.MoneyDirection.IN
 
-        // Confidence ladder is tiered by how many independent corroborating
-        // signals the parser extracted. Three signals matter:
-        //   - amountMinor    (the money — required for any non-LOW tier)
-        //   - merchant       (the payee — distinguishes a real UPI receipt
-        //                     from a balance / status push)
-        //   - maskedDigits   (the source account — confirms the body actually
-        //                     names a specific account, not a generic "sent
-        //                     ₹X via UPI" balance push)
+        // S1.3 pilot — additive evidence tally (see EvidenceTally.kt) instead
+        // of the prior per-case `when` ladder. Weights:
+        //   amount     +1   (floor; without it nothing else matters)
+        //   merchant   +3   (regex captured a payee — strongest single signal;
+        //                    the "paid to X" / "to X" pattern means we
+        //                    parsed a directional verb, not a generic balance
+        //                    push)
+        //   digits     +2   (account ending in XXXX — names a specific source)
+        //   networkRef +2   (UPI / NEFT reference id — unique to a real txn)
         //
-        // Two corroborating signals + amount → HIGH (auto-create at 0.85+).
-        // One corroborating signal → MEDIUM (Inbox review).
-        // Amount only → LOW (ignore — could be anything).
+        // The tally maps to the same HIGH (≥0.85) / MEDIUM (≥0.6) bands
+        // `NotificationDecisionEngine` already reads. Dump-replay against the
+        // current corpus shows no tier reshuffling at these weights — only
+        // the underlying number changes:
+        //   amount+merchant+digits      = 6 → 0.90  (was 0.85, still HIGH)
+        //   amount+merchant+digits+ref  = 8 → 0.90  (caps at HIGH)
+        //   amount+merchant             = 4 → 0.78  (unchanged)
+        //   amount+digits               = 3 → 0.62  (unchanged)
+        //   amount only                 = 1 → 0.30  (was 0.50, still LOW)
         //
-        // The previous static 0.7 cap pinned every fully-extracted UPI debit
-        // to MEDIUM, meaning the user got an Inbox review for every routine
-        // UPI spend even when merchant + amount + account were all extracted
-        // cleanly. Review fatigue → mass-confirms → defeats the Inbox. With
-        // the HIGH tier reachable here, routine UPI debits to a known payee
-        // from a recognised account auto-create as SUGGESTED on the Home
-        // screen.
-        //
-        // Mode is intentionally NOT a tier discriminator — every body that
-        // reaches this parser is Mode.UPI by construction, so it's not
-        // additive evidence.
-        val confidence = when {
-            amountMinor != null && merchant != null && maskedDigits != null -> 0.85
-            amountMinor != null && merchant != null -> 0.78
-            amountMinor != null && maskedDigits != null -> 0.62
-            else -> 0.5
-        }
+        // Mode is intentionally NOT in the tally — every body that reaches
+        // this parser is Mode.UPI by construction, so it's not additive
+        // evidence.
+        val confidence = EvidenceTally()
+            .addIf(amountMinor != null, "amount", 1)
+            .addIf(merchant != null, "merchant", 3)
+            .addIf(maskedDigits != null, "maskedDigits", 2)
+            .addIf(networkRef != null, "networkRef", 2)
+            .score()
 
         val kind = when {
             amountMinor == null -> ParsedTransactionKind.UNKNOWN

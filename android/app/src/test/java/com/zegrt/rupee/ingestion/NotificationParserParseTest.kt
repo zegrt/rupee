@@ -131,11 +131,16 @@ class NotificationParserParseTest {
         assertEquals(150000L, result.amountMinor)
     }
 
-    // M5: confidence tiering pins. The old static 0.7 cap routed every fully-
-    // extracted UPI debit to Inbox even when amount + merchant + masked
-    // digits all came through cleanly. New ladder: amount + merchant + digits
-    // → 0.85 HIGH (auto-create); amount + merchant → 0.78 MEDIUM; amount +
-    // digits → 0.62 MEDIUM; amount only → 0.5 LOW.
+    // S1.3 pilot: the GenericUpi confidence is now an additive evidence tally
+    // (see EvidenceTally.kt). Weights: amount +1, merchant +3, digits +2,
+    // networkRef +2. Tier bands unchanged (HIGH ≥ 0.85, MEDIUM ≥ 0.6, LOW
+    // below) so dump-replay distribution holds.
+    //
+    // Concrete cases pinned below:
+    //   amount + merchant + digits     = 6 pts → 0.90 HIGH (was 0.85 HIGH)
+    //   amount + merchant              = 4 pts → 0.78 MEDIUM (unchanged)
+    //   amount + digits                = 3 pts → 0.62 MEDIUM (unchanged)
+    //   amount alone                   = 1 pt  → 0.30 LOW   (was 0.50 LOW)
 
     @Test
     fun `generic upi with amount, merchant, and masked digits reaches HIGH confidence`() {
@@ -149,7 +154,7 @@ class NotificationParserParseTest {
         // exact value here so a future tier shuffle that demotes this case
         // back to MEDIUM (and back into Inbox-review fatigue) surfaces in
         // the test diff.
-        assertEquals(0.85, result.parseConfidence, 0.0001)
+        assertEquals(0.90, result.parseConfidence, 0.0001)
     }
 
     @Test
