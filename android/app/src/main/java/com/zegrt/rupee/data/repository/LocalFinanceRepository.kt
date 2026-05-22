@@ -522,12 +522,19 @@ class LocalFinanceRepository(
         val now = Instant.now().toString()
         val userId = USER_ID
 
+        // SEED-SERVICE (2026-05-22): IDs are now UUIDs, not sequential
+        // `account-bank-${n+1}` / `card-${n+1}` strings. The old form encoded
+        // creation order in the primary key which (a) made re-running
+        // onboarding less idempotent than it looks (the counter would advance
+        // on each call), (b) leaked write ordering, and (c) precluded any
+        // future restore-from-export scenario. Sort order is preserved on
+        // the dedicated `sortOrder` column where it belongs.
         if (input.bankAccountName.isNotBlank()) {
             val existingBanks = database.accountDao().countAccountsByType(userId, AccountType.BANK)
             database.accountDao().upsertAccounts(
                 listOf(
                     AccountEntity(
-                        id = "account-bank-${existingBanks + 1}",
+                        id = "account-${UUID.randomUUID()}",
                         userId = userId,
                         accountType = AccountType.BANK,
                         displayName = input.bankAccountName.trim(),
@@ -547,7 +554,7 @@ class LocalFinanceRepository(
             database.creditCardDao().upsertCards(
                 listOf(
                     CreditCardEntity(
-                        id = "card-${existingCards + 1}",
+                        id = "card-${UUID.randomUUID()}",
                         userId = userId,
                         displayName = input.creditCardName.trim(),
                         providerName = input.creditCardProviderName.trim().ifBlank { null },
@@ -566,7 +573,7 @@ class LocalFinanceRepository(
                 database.accountDao().upsertAccounts(
                     listOf(
                         AccountEntity(
-                            id = "account-cash",
+                            id = "account-${UUID.randomUUID()}",
                             userId = userId,
                             accountType = AccountType.CASH,
                             displayName = "Cash on hand",
