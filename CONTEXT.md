@@ -218,18 +218,31 @@ in this repo use "MVP" / "1.0" interchangeably for what we now call
 
 ## Known Gaps vs Schema and Architecture
 
-These are intentional or unintentional omissions surfaced by a deep review. They are not bugs in current behavior; they are work that has not happened yet.
+These are intentional or unintentional omissions surfaced by deep review.
+They are not bugs in current behavior; they are work that has not happened
+yet. **Every item below now lives in a numbered post-alpha sprint** — see
+[docs/rupee-backlog.md](docs/rupee-backlog.md) for the full plan. This
+section is the short reference index.
 
-- `EmiPlanEntity` now has a DAO and repository methods (v0.7.0). Auto-detection from notifications is still pending.
-- Schema entities not yet implemented in code: `canonical_transaction_source_links`, `dedupe_groups`, `dedupe_group_members`, `alert_rules`, `alert_events`, `monthly_recaps`, `emi_transaction_links`, `budget_category_assignments`. (`recurring_patterns` shipped in v0.9.2; `app_state` shipped in v0.14.0.)
-- `CanonicalTransactionEntity` carries a flat `dedupeFingerprint` field; the schema models duplicate clusters via dedupe_groups join tables. The current flat field is a pragmatic shortcut, not the long-term shape.
-- All five chip tabs (Home, Inbox, Transactions, Calendar, Settings) now exist (v0.8.0 added Calendar). Migration to a Material3 bottom-nav is still pending.
-- No NavHost / navigation-compose in use yet. Onboarding → Home transitions are driven by an `OnboardingStep` enum in `MainActivity`.
-- `HomeViewModel` is monolithic — owns Home summary, Inbox review, and Transaction edit state. Should split when surfaces grow.
-- `LocalFinanceRepository.completeInitialSetup` hardcodes seed IDs (`account-bank-1`, `card-1`, `account-cash`) and a single 2026-03 budget period; needs a proper seeding service before MVP.
-- Real alerting (budget/due/recurring) is implemented as of v0.11 — `BudgetAlertManager` and `DuesAlertManager` post system notifications via `NotificationManagerCompat` and dedupe via SharedPreferences. The schema-spec `alert_rules` / `alert_events` tables are still unimplemented; the SharedPrefs dedupe is the pragmatic shortcut.
-- SMS ingestion is deferred; no manifest permissions, no reader, but a `RawCaptureSourceType.SMS` enum value exists for the future.
-- Hardcoded confidence thresholds (`HIGH_CONFIDENCE = 0.85`, `MEDIUM_CONFIDENCE = 0.6`) live in `NotificationDecisionEngine`; no remote config or runtime tuning. (The v0.14.0 UPI tiering work uses these thresholds; tuning still requires an APK ship.)
+**Already shipped (was a gap; no longer):**
+- ~~Seed-IDs hardcoded in `completeInitialSetup`~~ — fixed by Sprint 0 SEED-SERVICE; UUIDs now ([LocalFinanceRepository.kt:537,557](android/app/src/main/java/com/zegrt/rupee/data/repository/LocalFinanceRepository.kt#L537-L557)).
+- ~~Chip-row tabs vs Material3 bottom-nav~~ — migrated to `NavigationBar` ([MainActivity.kt:814](android/app/src/main/java/com/zegrt/rupee/MainActivity.kt#L814)).
+- ~~`recurring_patterns` table missing~~ — shipped v0.9.2.
+- ~~`app_state` table missing~~ — shipped v0.14.0.
+- ~~`transaction_bucket_assignments` table missing~~ — entity exists ([TransactionBucketAssignmentEntity.kt](android/app/src/main/java/com/zegrt/rupee/data/local/entity/TransactionBucketAssignmentEntity.kt)); the *wiring* (DAO + observer + UI) is still TODO, scheduled in Sprint 5 BUCKET-PROGRESS.
+
+**Open gaps and where they live now:**
+- `EmiPlanEntity` has a DAO and repo methods. Auto-detection from notifications → **Sprint 6 EMI-AUTO**.
+- `CanonicalTransactionEntity` carries a flat `dedupeFingerprint`; the schema's `dedupe_groups` / `dedupe_group_members` tables are the long-term shape → **Sprint 8 S2.1 + S6**.
+- No NavHost / navigation-compose. `OnboardingStep` enum drives transitions today. Not currently planned — small enough to land as a one-off PR when a navigation-driven feature actually needs it.
+- `HomeViewModel` is monolithic (owns Home, Inbox, and Transaction-edit state). Splitting is a refactor that pairs with **Sprint 4 CAST-SAFETY** (the typed-data-class introduction is the natural moment to split).
+- `alert_rules` / `alert_events` tables → **Sprint 10**.
+- SMS ingestion (no manifest permissions, no reader; `RawCaptureSourceType.SMS` enum value exists) → **Sprint 11 SMS pipeline**.
+- Hardcoded `HIGH=0.85` / `MEDIUM=0.6` thresholds in `NotificationDecisionEngine` — no remote config or runtime tuning → **Sprint 10 S4-5 adaptive confidence** (per-merchant learning replaces global tuning need).
+- `monthly_recaps` → **Sprint 12 RECAP-PERSIST**.
+- `emi_transaction_links` → **Sprint 6 EMI-AUTO**.
+- `canonical_transaction_source_links` → **Sprint 8 S6** (provenance trail).
+- `budget_category_assignments` → **Sprint 5 BUCKET-PROGRESS**.
 
 ## External Product Research Notes
 
