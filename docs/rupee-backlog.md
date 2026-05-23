@@ -446,11 +446,24 @@ the compiler enforces shape.
 **Touchpoints:** the three sites above.
 **Blocked by:** nothing. ~1 hour.
 
-### MIGRATION-SKIP-TEST — chained v8 → v11 migration coverage
+### MIGRATION-SKIP-TEST — chained v8 → v11 migration coverage + fix MigrationTest asset packaging
 **What:** We have per-migration tests via `MigrationTestHelper` (Sprint 0 / T1). We don't have a chained "open a v8 fixture DB, end up at v11, verify every column exists" test. Room applies migrations sequentially so any gap in the ladder is silent.
-**Why:** future schema work (post-alpha sprints add ~6 new entities) will land more migrations; need a guard against drift.
-**Touchpoints:** new test in the existing `androidTest` migration suite.
-**Blocked by:** nothing. ~½ day.
+**Sub-item (discovered 2026-05-23):** the existing per-migration tests fail with `FileNotFoundException: Cannot find the schema file in the assets folder. Missing file: com.zegrt.rupee.data.local.RupeeDatabase/{8,9,10}.json`. The schemas ARE exported to `android/app/schemas/...` but Room's `AndroidMigrationTestHelper` expects them in `androidTest` assets. Fix: add `sourceSets["androidTest"].assets.srcDir("$projectDir/schemas")` to `build.gradle.kts` so the schema JSONs ship with the test APK.
+**Why:** future schema work (post-alpha sprints add ~6 new entities) will land more migrations; need a guard against drift. *And* the existing per-migration tests need to actually run before we can rely on them.
+**Touchpoints:** `build.gradle.kts` sourceSets, new chained test in the existing `androidTest` migration suite.
+**Blocked by:** nothing. ~1 day.
+
+### DUMP-OUTCOME-DAO-TEST-FK — fix `DumpOutcomeDaoTest` FK violations
+**What:** `DumpOutcomeDaoTest.snapshot_confirmFreshInboxRow_populatesAllFields` and `snapshot_mergeIntoExistingRow_setsMergedFromColumn` both fail with `SQLiteConstraintException: FOREIGN KEY constraint failed`. Discovered 2026-05-23 during the v0.15.0-alpha.1 hotfix work. The tests pre-date H4's FK enforcement and the fixture data they construct violates the cascade chain. Likely fix: ensure the test fixture inserts the parent rows (raw_capture_events → parsed_signals → transaction_candidates) before referencing them in inbox/canonical inserts.
+**Why:** these tests cover the dump-snapshot DAO that the share-with-debug pipeline relies on. Without them running, regressions in the snapshot DAO (the same query that surfaced the cascade-delete bug) ship silently.
+**Touchpoints:** `androidTest/.../data/local/dao/DumpOutcomeDaoTest.kt`.
+**Blocked by:** nothing. ~1 hour.
+
+### CANONICAL-AUDIT-TRAIL — switch `CanonicalTransactionDao.upsertTransactions` to @Upsert
+**What:** Sibling fix to v0.15.0-alpha.2's `TransactionCandidateDao` change. `CanonicalTransactionDao.upsertTransactions` is still `@Insert(onConflict = REPLACE)`. Because `transaction_candidates.linkedCanonicalTransactionId` and `inbox_items.linkedCanonicalTransactionId` are FK with `onDelete = SET NULL`, every REPLACE on a canonical row silently NULLs out the back-pointers from any inbox / candidate audit row. This is a softer bug than the cascade-delete (no data loss, just audit-trail loss), but the fix is one-line: switch the DAO to `@Upsert`.
+**Why:** every `confirmSuggestedTransaction`, `deleteTransaction`, `updateTransactionDetails` call currently silently breaks the audit trail. Hard to spot in normal use but it'll bite when S6 (Sprint 8) tries to follow `mergedFromExistingCanonicalId` pointers and finds nulls.
+**Touchpoints:** `CanonicalTransactionDao.kt` (one annotation swap).
+**Blocked by:** nothing. ~10 min PR.
 
 ### REPO-VM-TEST-COVERAGE — unit tests for the high-stakes repo + VM paths
 **What:** `LocalFinanceRepository.confirmInboxItem` / `setMerchantTrust` / `deleteTransaction` / `getLedgerExportSnapshot` are only covered by integration via `DumpReplayTest`. `HomeViewModel`'s 8-flow combine has zero direct tests. The `Array<Any?>` casts above are dangerous *specifically because* nothing tests them.

@@ -40,21 +40,30 @@ class IngestionPipelineTest : BaseDatabaseTest() {
 
     @Test
     fun ingestNotification_inboxPendingPath_writesBothInboxAndCandidate() = runBlocking {
-        // A CRED card spend with all three fields (amount + merchant + digits).
-        // Under v0.14.0 confidence ladders this lands in INBOX_PENDING via
-        // MEDIUM tier — exactly the path that hit the FK regression.
+        // A Kotak debit. Kotak parsers structurally emit `merchantRaw = null`
+        // (the payee never appears in the bank push — only in the Kotak app),
+        // so the EvidenceTally scores amount=3 + digits=1 = 4 points = 0.78
+        // (MEDIUM tier) → INBOX_PENDING. This is the path that exercises the
+        // candidate-then-inbox-then-candidate-backfill write sequence — the
+        // path the v0.14.0 H4 FK regression broke and the v0.14.1 hotfix
+        // ostensibly fixed.
+        //
+        // Previously this test used a CRED card spend body, but Sprint 2's
+        // S1.3 (rest) parser migration promoted CRED with amount+merchant+
+        // digits to HIGH tier, so it no longer routes through INBOX_PENDING
+        // at all. Kotak's structural lack of a merchant keeps it in MEDIUM.
+        // ingestNotification expects the already-combined body (title +
+        // bigText + textLines), which the production NotificationListenerService
+        // assembles via NotificationExtractor before calling. Concat here so
+        // amount + verb both reach the parser.
         val outcome = normalizer().ingestNotification(
             userId = "local-user",
-            packageName = "com.dreamplug.androidapp",
-            title = "Spent on HDFC card",
-            body = "₹1,499 spent on HDFC Credit Card xx1234 at Zomato via CRED on 06 May",
+            packageName = "com.kotak811mobilebankingapp.instantsavingsupiscanandpayrecharge",
+            title = "₹1,593.77 received via UPI",
+            body = "₹1,593.77 received via UPI\nAmount credited to XX4129. Check out details.",
             postedAtMillis = System.currentTimeMillis(),
         )
 
-        // Before v0.14.1 this returned Filtered(INGEST_FAILED). After the
-        // write-order fix it must reach Ingested. Bare assertion shape so
-        // a regression message reads as "I expected Ingested but got
-        // Filtered(INGEST_FAILED:SQLiteConstraintException)".
         assertTrue(
             "Expected Ingested outcome but got $outcome — likely the H4 FK regression returned",
             outcome is IngestionResult.Ingested,
@@ -70,10 +79,25 @@ class IngestionPipelineTest : BaseDatabaseTest() {
         // Back-pointer wired: candidate.linkedInboxItemId points at the inbox row.
         assertEquals(ingested.inboxItemId, candidate!!.linkedInboxItemId)
 
+        // This is THE assertion the cascade-delete bug breaks. Pre-fix, the
+        // second candidate upsert (to backfill linkedInboxItemId) used Room's
+        // @Insert(onConflict = REPLACE), which generates INSERT OR REPLACE.
+        // SQLite REPLACE deletes the conflicting candidate row first; because
+        // inbox_items.transactionCandidateId has onDelete = CASCADE, the
+        // inbox row we just wrote gets cascade-deleted. The candidate is
+        // re-inserted, but the inbox row is gone forever. The user sees an
+        // empty Inbox even though `normalizeLocked` returned Ingested with
+        // an inboxItemId.
+        //
+        // Reference: https://dexterslog.com/posts/insert-on-conflict-replace-with-on-delete-cascade-in-sqlite/
         val inbox = database.inboxItemDao()
             .observeInboxItems(userId = "local-user", state = InboxDecisionState.PENDING)
             .first()
-        assertEquals(1, inbox.size)
+        assertEquals(
+            "inbox_items row survived candidate-backfill — cascade-delete bug fixed",
+            1,
+            inbox.size,
+        )
         assertEquals(ingested.inboxItemId, inbox[0].id)
         assertEquals(ingested.candidateId, inbox[0].transactionCandidateId)
     }

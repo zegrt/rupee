@@ -1,9 +1,8 @@
 package com.zegrt.rupee.data.local.dao
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Upsert
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -59,6 +58,27 @@ interface TransactionCandidateDao {
         fingerprint: String,
     ): TransactionCandidateEntity?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    /**
+     * @Upsert generates `INSERT ... ON CONFLICT(id) DO UPDATE SET ...` —
+     * an in-place update on conflict, not a delete-then-insert.
+     *
+     * `@Insert(onConflict = REPLACE)` was the old shape; Room rendered that
+     * as `INSERT OR REPLACE`. SQLite's REPLACE conflict resolution **deletes
+     * the conflicting row first**, then inserts a new one. Because
+     * `inbox_items.transactionCandidateId` has `onDelete = CASCADE`, every
+     * REPLACE on a candidate row cascade-deleted any inbox row pointing at
+     * it. `NotificationSignalNormalizer.normalizeLocked` re-upserts the
+     * candidate after writing the inbox row (to backfill
+     * `linkedInboxItemId`), so every INBOX_PENDING-bound notification had
+     * its inbox row silently destroyed at write time. The v0.15.0-alpha.1
+     * stage-roll surfaced this — user saw zero items in Inbox even though
+     * `IngestionResult.Ingested` was returned. Same cascade also affected
+     * other re-upsert sites (confirmInboxItemMergedWith, etc.) and the
+     * `duplicateOfCandidateId` SET NULL on dedupe chains.
+     *
+     * Authoritative reference for the SQLite REPLACE-cascade interaction:
+     * https://dexterslog.com/posts/insert-on-conflict-replace-with-on-delete-cascade-in-sqlite/
+     */
+    @Upsert
     suspend fun upsertTransactionCandidate(candidate: TransactionCandidateEntity)
 }
