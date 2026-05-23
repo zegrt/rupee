@@ -1,9 +1,26 @@
-# Alpha stage-roll log — v0.15.0-alpha.1
+# Alpha stage-roll log — v0.15.0-alpha.2
 
-**Build:** `rupee-0.15.0-alpha.1-release.apk` (signed) /
-`rupee-0.15.0-alpha.1-debug.apk` (with notification-dump tool).
-**Soak started:** *(fill in when you side-load)*
+**Build:** `rupee-0.15.0-alpha.2-release.apk` (signed) /
+`rupee-0.15.0-alpha.2-debug.apk` (with notification-dump tool).
+**Soak started:** *(fill in when you side-load alpha.2)*
 **Soak ended:** *(fill in 24h+ later)*
+
+## alpha.1 → alpha.2 changelog (read first)
+
+Alpha.1 was side-loaded on 2026-05-23 morning. Within the first hour
+the very first real notification capture surfaced an **alpha-blocker**:
+every body routing to INBOX_PENDING was being silently dropped from
+the DB due to a SQLite REPLACE + ON DELETE CASCADE interaction. The
+user reported "nothing has come in the inbox" — see CHANGELOG.md
+entry for v0.15.0-alpha.2 for the full deep-research writeup. Hotfix
+shipped same day as alpha.2.
+
+**Pre-existing data note:** if you installed alpha.1, any inbox rows
+that *should* have appeared between v0.14.1 and the alpha.2 upgrade
+are unrecoverable. The candidates still exist in the DB as orphaned
+INBOX_PENDING rows. If you want a clean slate, factory-reset the app's
+storage (Settings → Apps → Rupee → Storage → Clear data) before
+running the alpha.2 soak.
 
 This is the structured log for Sprint 3's **ALPHA-STAGE-ROLL** item.
 The goal isn't zero bugs — it's *known* bugs. Anything you spot during
@@ -17,7 +34,7 @@ the soak gets a line in the table below, with a verdict (alpha-blocker
 1. Connect your phone via USB with USB debugging enabled.
 2. From repo root:
    ```bash
-   adb install android/app/build/outputs/apk/release/rupee-0.15.0-alpha.1-release.apk
+   adb install -r android/app/build/outputs/apk/release/rupee-0.15.0-alpha.2-release.apk
    ```
    (Use the `-debug` APK if you want the notification-dump tool for
    capturing bodies that go wrong; otherwise the signed release is the

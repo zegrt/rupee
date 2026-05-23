@@ -15,6 +15,91 @@ The mobile-stage progression we track against:
 
 ---
 
+## [0.15.0-alpha.2] — 2026-05-23
+
+**Hotfix for the alpha-blocker discovered in ALPHA-STAGE-ROLL.** The very
+first day of real-device soak surfaced that every notification routing to
+`INBOX_PENDING` was being silently dropped — the user saw an empty Inbox
+even though `ingestNotification` was reporting `Ingested` outcomes.
+
+### The bug
+`TransactionCandidateDao.upsertTransactionCandidate` was annotated with
+`@Insert(onConflict = REPLACE)`, which Room renders as
+`INSERT OR REPLACE INTO transaction_candidates ...`. SQLite's REPLACE
+conflict resolution **deletes the conflicting row first**, then inserts.
+Because `inbox_items.transactionCandidateId` has
+`onDelete = ForeignKey.CASCADE`, every REPLACE on a candidate row
+cascade-deleted any inbox row pointing at it.
+
+`NotificationSignalNormalizer.normalizeLocked` does three writes in a
+single transaction:
+1. Insert candidate
+2. Insert inbox_item (FK to candidate)
+3. Re-upsert candidate to backfill `linkedInboxItemId`
+
+Step 3's REPLACE cascade-deleted the inbox row from step 2. The
+`IngestionResult.Ingested` returned still carried the now-orphaned
+`inboxItemId`, which is why the dump line said "ingested with inbox id
+X" but the actual DB row was gone.
+
+Bug lived in production since v0.14.1 (when the H4 write-order fix
+introduced the third upsert). v0.14.0 had a different bug (FK violation
+on first write) that masked this one — once that was fixed, this one
+took over. Three production dumps (v0.14.2, v0.14.5, v0.15.0-alpha.1)
+all showed the signature: candidates in INBOX_PENDING with
+`inboxItemId = NULL` in the snapshot.
+
+### The fix
+Switch `TransactionCandidateDao.upsertTransactionCandidate` from
+`@Insert(onConflict = REPLACE)` to `@Upsert`. Room's `@Upsert`
+(introduced in Room 2.5, we're on 2.7.1) generates
+`INSERT ... ON CONFLICT(id) DO UPDATE SET ...` — an in-place update
+that doesn't trigger conflict-resolution deletion and doesn't cascade.
+
+Reference: https://dexterslog.com/posts/insert-on-conflict-replace-with-on-delete-cascade-in-sqlite/
+
+### Test coverage
+- `IngestionPipelineTest.ingestNotification_inboxPendingPath_writesBothInboxAndCandidate`
+  now uses a Kotak debit body (the only parser-shape that still lands
+  MEDIUM tier after Sprint 2's S1.3 promotions) and asserts the inbox
+  row count is exactly 1 post-ingest. Reproduced the bug on a real
+  device (Nothing-A015 / Android 16) before the fix.
+- The same test caught the pre-existing tier assertion drift — its
+  prior body landed AUTO_CREATED post-Sprint 2 instead of INBOX_PENDING,
+  which is why the existing test infra hadn't caught the cascade bug
+  on its own.
+
+### Three pre-existing test failures filed to Sprint 4
+Discovered during this hotfix work but unrelated to the cascade bug:
+- 3× `MigrationTest` fail with "Cannot find the schema file in the
+  assets folder" — a build.gradle.kts source-set fix.
+- 2× `DumpOutcomeDaoTest` fail with `SQLiteConstraintException: FOREIGN
+  KEY constraint failed` — the test fixture pre-dates H4's FK
+  enforcement and constructs invalid parent-child orderings.
+- Sibling concern: `CanonicalTransactionDao.upsertTransactions` still
+  uses `@Insert(REPLACE)`, which silently SET NULLs the audit-trail
+  back-pointers from inbox/candidate every time. Filed as
+  `CANONICAL-AUDIT-TRAIL`. Softer bug than the cascade-delete (no data
+  loss, just audit-trail loss).
+
+All three filed in `docs/rupee-backlog.md` under Sprint 4 (closed-beta
+stability hardening).
+
+### What this hotfix does NOT do
+- **Recover the inbox rows already lost.** Every inbox row written
+  between v0.14.1 and v0.15.0-alpha.1 was cascade-deleted at write
+  time. Those candidates still exist (in `INBOX_PENDING` state) with
+  orphaned `linkedInboxItemId` pointers. They cannot be recovered.
+  After upgrading to alpha.2, all *new* notifications routing to
+  INBOX_PENDING will properly create durable inbox rows.
+
+### Released as
+- `versionName = "0.15.0-alpha.2"`, `versionCode = 43`
+- Git tag: `v0.15.0-alpha.2`
+- Signed release APK: `rupee-0.15.0-alpha.2-release.apk`
+
+---
+
 ## [0.15.0-alpha.1] — 2026-05-23
 
 **The alpha milestone.** First Rupee build judged stable enough for a
