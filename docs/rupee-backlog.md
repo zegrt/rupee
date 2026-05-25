@@ -2,12 +2,23 @@
 
 **Purpose:** durable, in-repo backlog. Anything Claude promised to do "next sprint" or "later" lives here, not just in conversation context. This file is the single source of truth for what's deferred — if it's not here, it doesn't exist.
 
-**Last updated:** 2026-05-23 (alpha rename + deep-audit follow-up).
-Reframed the 1.0 target to a much more honest **alpha** milestone — see
-the new "Path to alpha" section below for the mobile-stage progression
-(pre-alpha → alpha → closed beta → open beta → RC → 1.0). Added six
-Watching items surfaced by the 2026-05-23 audit pass, slotted
-NOTIF-CHANNELS post-alpha, and folded BABYPROOF-INPUTS into Sprint 3.
+**Last updated:** 2026-05-25 (alpha.2 soak audit — two new items).
+Two findings from the 2026-05-25 audit pass against the v0.15.0-alpha.2
+build, both added to Sprint 4:
+**DIAG-CAPTURE-TOGGLE** (the `BuildConfig.DEBUG` gate on
+`NotificationDumper` makes alpha-tester diagnostic capture impossible
+without shipping a separate debug binary — replace with a runtime
+opt-in toggle, defaults ON during alpha)
+and **PARSED-SIGNAL-UPSERT-LATENT** (`ParsedSignalDao.upsertParsedSignal`
+is still `@Insert(REPLACE)`, the same bug class as the alpha.2 cascade-
+delete hotfix; not exploitable today but latent).
+
+Previous (2026-05-23): reframed the 1.0 target to a much more honest
+**alpha** milestone — see the new "Path to alpha" section below for the
+mobile-stage progression (pre-alpha → alpha → closed beta → open beta →
+RC → 1.0). Added six Watching items surfaced by the 2026-05-23 audit
+pass, slotted NOTIF-CHANNELS post-alpha, and folded BABYPROOF-INPUTS
+into Sprint 3.
 
 ---
 
@@ -413,9 +424,67 @@ experience.
 
 ## Sprint 4 — Stability hardening *(≈1 week)*
 
-The six audit findings from the 2026-05-23 deep code review. Every item
+Eight items now: the original six findings from the 2026-05-23 deep
+code review, plus two added on 2026-05-25 from auditing the v0.15.0-alpha.2
+build (`DIAG-CAPTURE-TOGGLE`, `PARSED-SIGNAL-UPSERT-LATENT`). Every item
 is either a class of bug we want to design out before real testers see
 it, or a test-coverage gap that lets future regressions sneak in.
+
+Sequencing within the sprint: `DIAG-CAPTURE-TOGGLE` first (it unlocks
+real diagnostic capture from alpha testers, so the rest of the sprint
+can react to real-soak data instead of guessing). Then the four
+one-line / one-annotation safety swaps (`CANONICAL-AUDIT-TRAIL`,
+`PARSED-SIGNAL-UPSERT-LATENT`, `MONEY-MATH-LEGACY`, `TRUST-WRITE-RACE`)
+since they share the "10-minute, prevent silent corruption" shape.
+Then `DATE-PARSE-LOGGING`, then the test-infra items, then the
+refactors (`CAST-SAFETY`, `REPO-VM-TEST-COVERAGE`).
+
+### DIAG-CAPTURE-TOGGLE — replace BuildConfig.DEBUG gate with user opt-in
+**What:** `NotificationDumper.isEnabled() = BuildConfig.DEBUG` (in
+[diagnostics/NotificationDumper.kt:41](android/app/src/main/java/com/zegrt/rupee/diagnostics/NotificationDumper.kt#L41))
+hard-gates the dump path to debug builds. Side-effect surfaced from the
+2026-05-25 audit: anyone on the signed alpha.2 release APK (i.e., you
+and every closed tester) cannot capture dumps when something goes wrong
+— the very thing alpha was supposed to enable. Two pre-alpha bugs
+(alpha.1 cascade-delete, alpha.2 diag-screen-empty) hit precisely this
+ceiling.
+
+Replace with a Settings → Privacy → "Diagnostic capture" toggle stored
+in `app_state`. Stage-aware defaults: **alpha and closed beta → ON by
+default**; open beta and RC → OFF by default + 24h auto-expire + reset
+on app upgrade. Persistent banner on Home + Inbox while toggle is on so
+testers know capture is active. Toggle gates the new check in
+`NotificationDumper.isEnabled(context)`; `BuildConfig.DEBUG` becomes one
+of several inputs rather than the sole gate.
+
+**Why:** the AOSP privacy guidance explicitly recommends this shape:
+> Don't preload diagnostics- or repair-focused tools on release builds,
+> and only install these tools on-demand to solve specific issues.
+> Ensure that only the user can enable the tool during a support session,
+> and store artifacts of consent and disable the tool after collecting
+> the necessary diagnostic information.
+> — [Android Open Source Project, Privacy security best practices](https://source.android.com/docs/security/best-practices/privacy)
+
+Matches what Signal / Bitwarden / Proton / DuckDuckGo ship: one binary,
+user-controlled opt-in, prominent disclosure, off-by-default at RC.
+Maintaining a separate "internal" product flavor was considered and
+rejected — it doubles the CI matrix, adds a separate package name and
+keystore, and worst of all means the dev never dogfoods the real alpha
+(see the alpha.1 → alpha.2 incident: the bug only manifested on the
+release build the user installed).
+
+**Touchpoints:** `diagnostics/NotificationDumper.kt` (read from
+`app_state` instead of `BuildConfig.DEBUG`); new key
+`diag_capture_enabled` in `LocalFinanceRepository` companion (hydrated
+into an `AtomicBoolean` at startup, written through on toggle); Settings
+UI row (toggle + status line + "Open dump folder" deep-link);
+persistent banner composable on Home & Inbox while on; reset hook in
+`RupeeApplication.onCreate` when `BuildConfig.VERSION_CODE` differs from
+the value stored at last toggle write (so a new install / upgrade
+resets to the stage default).
+**Blocked by:** nothing. ~2-4h with tests.
+**Source:** 2026-05-25 audit conversation; diagnosed as a category bug,
+not a one-off.
 
 ### CAST-SAFETY — drop `Array<Any?>` + `UNCHECKED_CAST` in VM flow combinators
 **What:** `HomeViewModel.dashboardData` and `viewSelection` (~lines 305–370)
@@ -461,9 +530,19 @@ the compiler enforces shape.
 
 ### CANONICAL-AUDIT-TRAIL — switch `CanonicalTransactionDao.upsertTransactions` to @Upsert
 **What:** Sibling fix to v0.15.0-alpha.2's `TransactionCandidateDao` change. `CanonicalTransactionDao.upsertTransactions` is still `@Insert(onConflict = REPLACE)`. Because `transaction_candidates.linkedCanonicalTransactionId` and `inbox_items.linkedCanonicalTransactionId` are FK with `onDelete = SET NULL`, every REPLACE on a canonical row silently NULLs out the back-pointers from any inbox / candidate audit row. This is a softer bug than the cascade-delete (no data loss, just audit-trail loss), but the fix is one-line: switch the DAO to `@Upsert`.
-**Why:** every `confirmSuggestedTransaction`, `deleteTransaction`, `updateTransactionDetails` call currently silently breaks the audit trail. Hard to spot in normal use but it'll bite when S6 (Sprint 8) tries to follow `mergedFromExistingCanonicalId` pointers and finds nulls.
+**Why:** the 2026-05-25 audit confirmed five callsites all hit this path: `confirmInboxItem`, `confirmSuggestedTransaction`, `deleteTransaction`, `updateTransactionDetails`, `createManualTransaction`. Every user action that touches a canonical row currently breaks the audit trail. Hard to spot in normal use but it'll bite when S6 (Sprint 8) tries to follow `mergedFromExistingCanonicalId` pointers and finds nulls.
 **Touchpoints:** `CanonicalTransactionDao.kt` (one annotation swap).
 **Blocked by:** nothing. ~10 min PR.
+
+### PARSED-SIGNAL-UPSERT-LATENT — switch `ParsedSignalDao.upsertParsedSignal` to @Upsert
+**What:** The 2026-05-25 audit of every `@Insert(onConflict = REPLACE)` against the FK chain found a third instance of the alpha.2 bug class. `ParsedSignalDao.upsertParsedSignal` is `@Insert(REPLACE)`, and `parsed_signals` is the CASCADE parent of `transaction_candidates`. If `upsertParsedSignal` were ever called on a row with an existing id, SQLite's REPLACE semantics would DELETE the existing row, fire the CASCADE down to `transaction_candidates`, which would CASCADE again to `inbox_items` — same data loss shape as the alpha.1 bug, one layer up the chain.
+
+Today this is **latent**, not exploitable: every call site in `NotificationSignalNormalizer` (the only writer) generates a fresh `UUID` per row, so REPLACE conflict never fires. The bug is in the API surface, not the runtime behaviour. Sibling code patterns (dump replay, future re-ingestion, the S2 rule engine that wants to overwrite a parsed_signal in place) would all trip it the first time they reuse an id.
+
+**Why:** defense-in-depth. The alpha.1 cascade-delete bug was also latent until H4 (FK enforcement) shipped — then it ate every inbox row for a day. Switching to `@Upsert` removes the landmine. One annotation, can't regress.
+**Touchpoints:** `ParsedSignalDao.kt` (one annotation swap). Optionally add a sentinel test that calls `upsertParsedSignal` twice with the same id and asserts the child `transaction_candidates` row survives.
+**Blocked by:** nothing. ~10 min PR.
+**Source:** 2026-05-25 audit conversation; surfaced while triaging post-alpha.2 stability.
 
 ### REPO-VM-TEST-COVERAGE — unit tests for the high-stakes repo + VM paths
 **What:** `LocalFinanceRepository.confirmInboxItem` / `setMerchantTrust` / `deleteTransaction` / `getLedgerExportSnapshot` are only covered by integration via `DumpReplayTest`. `HomeViewModel`'s 8-flow combine has zero direct tests. The `Array<Any?>` casts above are dangerous *specifically because* nothing tests them.
