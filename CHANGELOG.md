@@ -15,6 +15,81 @@ The mobile-stage progression we track against:
 
 ---
 
+## [0.15.0-alpha.3] — 2026-05-25
+
+Sprint 4 safety bundle + the DIAG-CAPTURE-TOGGLE from the 2026-05-25
+audit. No new features; six pure-correctness items the alpha-soak
+audit surfaced. Diagnostic-capture is now a user-controllable toggle
+(defaults ON during alpha builds), so testers on this signed release
+can actually capture dumps when something breaks.
+
+### Added
+
+- **DIAG-CAPTURE-TOGGLE** — Settings → Privacy & data gains a
+  "Diagnostic capture" Switch backed by `app_state`. Defaults ON for
+  `-alpha` / `-beta` versionNames; OFF for `-rc` / stable. Upgrade-
+  reset hook reverts to the stage default when `VERSION_CODE`
+  changes so a stale ON doesn't leak across major releases. Persistent
+  banner on Home + Inbox while capture is on, tappable to Settings.
+  Matches the AOSP privacy guidance + Signal / Bitwarden / Proton
+  / DuckDuckGo pattern. Unblocks the alpha-soak feedback loop —
+  pre-alpha.3, the dumper was gated to `BuildConfig.DEBUG` so
+  testers on the signed release APK couldn't capture dumps even
+  when bugs surfaced.
+
+### Changed
+
+- **CANONICAL-AUDIT-TRAIL** — `CanonicalTransactionDao.upsertTransactions`
+  swapped from `@Insert(onConflict = REPLACE)` → `@Upsert`. Stops the
+  silent SET-NULL of `linkedCanonicalTransactionId` back-pointers on
+  inbox + candidate rows every time a canonical transaction is
+  confirmed / edited / deleted. Sibling fix to alpha.2's
+  TransactionCandidateDao swap; same SQLite REPLACE gotcha, softer
+  consequence (SET NULL vs CASCADE).
+- **PARSED-SIGNAL-UPSERT-LATENT** — `ParsedSignalDao.upsertParsedSignal`
+  swapped to `@Upsert`. Defense-in-depth — `parsed_signals` is the
+  CASCADE parent of `transaction_candidates`, so a future code path
+  that re-upserts a parsed_signal would silently destroy every
+  downstream candidate + inbox row. Not exploitable today (every
+  callsite uses a fresh UUID) but trivial to exploit accidentally.
+- **MONEY-MATH-LEGACY** — `GenericNotificationParser.extractAmountMinor`
+  now routes through the shared `NotificationParsingUtils.extractAmountMinor`.
+  Fixes the alpha.1 Walnut SMS-bridge bug where `₹1,593.77 Credited
+  from 7510773991@YESCRED` parsed as ₹159.00 (the old regex's `[.,]`
+  treated dot/comma as interchangeable, mangling Indian-grouped
+  decimals; the `Double * 100 → Long` rounding was also vulnerable
+  to off-by-one drift). Three new unit tests pin the corpus.
+- **TRUST-WRITE-RACE** — `LocalFinanceRepository.setMerchantTrust`
+  read-then-conditional-write pair wrapped in `database.withTransaction`.
+  Two rapid TRUST-FROM-TXN toggle taps no longer race on the unique
+  pattern constraint.
+
+### Fixed
+
+- **DATE-PARSE-LOGGING** — Three `runCatching{ LocalDate.parse }.getOrNull()`
+  sites in `HomeViewModel`, `RecurringDetectionEngine`, and
+  `DuesAlertManager` used to swallow `DateTimeParseException`
+  silently. A malformed timestamp in any one of those would silently
+  drop a row from upcoming-dues / recurring detection / dues
+  notifications with no failure trail. Each now logs `Log.w("Rupee",
+  ...)` before the `getOrNull()` so tester reports like "my EMI
+  isn't showing under upcoming dues" have something to bisect against.
+
+### Released as
+
+- `versionName = "0.15.0-alpha.3"`, `versionCode = 44`
+- Git tag: `v0.15.0-alpha.3`
+- Signed release APK: `rupee-0.15.0-alpha.3-release.apk`
+
+### Behind the scenes — Sprint 4 progress
+
+This release closes **6 of 8** Sprint 4 items (DIAG-CAPTURE-TOGGLE
+shipped in alpha.2's interim PR; the five above ship here). Remaining:
+**MIGRATION-SKIP-TEST** (~1 day, test-infra + chain test),
+**CAST-SAFETY + REPO-VM-TEST-COVERAGE** (~2-3 days, the refactor pair).
+
+---
+
 ## [0.15.0-alpha.2] — 2026-05-23
 
 **Hotfix for the alpha-blocker discovered in ALPHA-STAGE-ROLL.** The very
