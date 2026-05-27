@@ -43,6 +43,10 @@ data class SettingsUiState(
     val appVersion: String = "",
     val savingName: Boolean = false,
     val message: String? = null,
+    // DIAG-CAPTURE-TOGGLE — drives the Settings → Privacy → "Diagnostic
+    // capture" Switch. Repository is the source of truth; this flow just
+    // mirrors `observeDiagnosticCaptureEnabled` for binding.
+    val diagnosticCaptureEnabled: Boolean = false,
 )
 
 data class TrustRuleRow(
@@ -94,7 +98,9 @@ class SettingsViewModel(
         // Accounts list — drives the new Accounts settings screen with its
         // per-account "exclude from totals" toggles.
         repository.observeAccounts(),
-    ) { entities, drafts, perms, accounts ->
+        // DIAG-CAPTURE-TOGGLE — Settings toggle row + persistent banner gate.
+        repository.observeDiagnosticCaptureEnabled(),
+    ) { entities, drafts, perms, accounts, diagCaptureEnabled ->
         @Suppress("UNCHECKED_CAST")
         val user = entities[0] as UserEntity?
         @Suppress("UNCHECKED_CAST")
@@ -145,6 +151,7 @@ class SettingsViewModel(
             appVersion = appVersion,
             savingName = savingNameValue,
             message = messageValue,
+            diagnosticCaptureEnabled = diagCaptureEnabled,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -184,6 +191,17 @@ class SettingsViewModel(
     fun setAccountExcludeFromIncome(accountId: String, exclude: Boolean) {
         viewModelScope.launch {
             repository.setAccountExcludeFromIncomeTotals(accountId, exclude)
+        }
+    }
+
+    fun setDiagnosticCaptureEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.setDiagnosticCaptureEnabled(enabled)
+            message.value = if (enabled) {
+                "Diagnostic capture turned on. Notifications will be saved locally for debugging."
+            } else {
+                "Diagnostic capture turned off."
+            }
         }
     }
 

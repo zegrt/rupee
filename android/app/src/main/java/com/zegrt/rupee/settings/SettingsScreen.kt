@@ -42,6 +42,7 @@ fun SettingsScreen(
     onOpenDebug: () -> Unit,
     onExportLedgerCsv: () -> Unit,
     onExportLedgerJson: () -> Unit,
+    onToggleDiagnosticCapture: (Boolean) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -278,6 +279,40 @@ fun SettingsScreen(
                     "If you uninstall or reset, your data is gone. A cloud backup is on the roadmap.",
                 style = MaterialTheme.typography.bodyMedium,
             )
+            Spacer(modifier = Modifier.height(16.dp))
+            // DIAG-CAPTURE-TOGGLE row. The Switch flips the runtime gate on
+            // NotificationDumper via the repository. Defaults ON for alpha
+            // / closed-beta builds, OFF for open-beta / RC / GA — see
+            // LocalFinanceRepository.defaultDiagCaptureForStage.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Diagnostic capture",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        if (state.diagnosticCaptureEnabled) {
+                            "On — every transaction notification's text is being saved to a " +
+                                "local file you can share when something breaks. No bodies leave " +
+                                "the device until you tap Share."
+                        } else {
+                            "Off — Rupee won't save raw notification text. Turn this on if " +
+                                "asked to debug a parsing problem."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                androidx.compose.material3.Switch(
+                    checked = state.diagnosticCaptureEnabled,
+                    onCheckedChange = onToggleDiagnosticCapture,
+                    modifier = Modifier.padding(start = 16.dp),
+                )
+            }
         }
         SettingsCard(title = "Export data") {
             Text(
