@@ -1,0 +1,358 @@
+/* Rupee — design tokens + base styles */
+
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+:root {
+  /* DARK (primary) — warm near-black, single saffron accent */
+  --bg:            oklch(0.135 0.005 80);
+  --bg-deep:       oklch(0.10 0.004 80);
+  --surface:       oklch(0.175 0.006 80);
+  --surface-2:     oklch(0.225 0.007 80);
+  --surface-3:     oklch(0.275 0.008 80);
+  --divider:       oklch(0.28 0.006 80);
+  --hairline:      oklch(0.35 0.006 80);
+
+  --text:          oklch(0.96 0.004 80);
+  --muted:         oklch(0.70 0.008 80);
+  --dim:           oklch(0.50 0.008 80);
+  --faint:         oklch(0.38 0.008 80);
+
+  --accent:        oklch(0.74 0.175 55);   /* saffron */
+  --accent-bright: oklch(0.82 0.19 60);
+  --accent-deep:   oklch(0.55 0.16 50);
+  --accent-on:     oklch(0.15 0.02 55);
+
+  --good:          oklch(0.80 0.13 165);   /* mint — income / confirmed */
+  --good-dim:      oklch(0.55 0.09 165);
+  --warn:          oklch(0.82 0.17 80);
+  --bad:           oklch(0.68 0.20 25);
+
+  --radius-sm: 6px;
+  --radius:    10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  --font-sans: "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* LIGHT variant — scoped via .rupee-light wrapper, used for one or two frames */
+.rupee-light {
+  --bg:            oklch(0.985 0.003 80);
+  --bg-deep:       oklch(0.96 0.004 80);
+  --surface:       oklch(0.97 0.004 80);
+  --surface-2:     oklch(0.94 0.005 80);
+  --surface-3:     oklch(0.90 0.006 80);
+  --divider:       oklch(0.88 0.005 80);
+  --hairline:      oklch(0.82 0.006 80);
+
+  --text:          oklch(0.18 0.005 80);
+  --muted:         oklch(0.40 0.008 80);
+  --dim:           oklch(0.55 0.008 80);
+  --faint:         oklch(0.70 0.008 80);
+
+  --accent:        oklch(0.62 0.19 50);
+  --accent-bright: oklch(0.70 0.20 55);
+  --accent-deep:   oklch(0.50 0.18 48);
+  --accent-on:     oklch(0.99 0.005 80);
+
+  --good:          oklch(0.55 0.13 165);
+  --good-dim:      oklch(0.75 0.08 165);
+  --bad:           oklch(0.55 0.20 25);
+}
+
+html, body { margin: 0; padding: 0; }
+body { font-family: var(--font-sans); background: #f0eee9; color: var(--text); }
+
+/* shell — every Rupee frame's outer wrapper */
+.r-shell {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "ss02";
+  -webkit-font-smoothing: antialiased;
+  height: 100%;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.r-scroll {
+  overflow: auto;
+  height: 100%;
+}
+.r-scroll::-webkit-scrollbar { display: none; }
+
+/* type helpers */
+.r-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.r-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.r-num { font-variant-numeric: tabular-nums; }
+
+/* register marks / dotted divider */
+.r-rule {
+  border: 0;
+  border-top: 1px dashed var(--hairline);
+  margin: 0;
+}
+.r-solid {
+  border: 0;
+  border-top: 1px solid var(--divider);
+  margin: 0;
+}
+
+/* hit area helpers */
+.r-tap { cursor: pointer; user-select: none; }
+
+/* tabular figure shortcut on amounts */
+.r-amt {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "ss01", "tnum";
+}
+
+/* corner registration mark (decorative — TE-style) */
+.r-reg {
+  position: absolute;
+  width: 8px; height: 8px;
+  border: 1px solid var(--faint);
+}
+.r-reg.tl { top: 8px; left: 8px; border-right: 0; border-bottom: 0; }
+.r-reg.tr { top: 8px; right: 8px; border-left: 0; border-bottom: 0; }
+.r-reg.bl { bottom: 8px; left: 8px; border-right: 0; border-top: 0; }
+.r-reg.br { bottom: 8px; right: 8px; border-left: 0; border-top: 0; }
+
+/* status bar — minimal, themed */
+.r-status {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+.r-status-icons { display: flex; gap: 4px; align-items: center; }
+
+/* gesture pill */
+.r-gesture {
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.r-gesture > div {
+  width: 110px; height: 4px; border-radius: 2px;
+  background: var(--text); opacity: 0.55;
+}
+
+/* bottom nav */
+.r-nav {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  background: var(--bg);
+  border-top: 1px solid var(--divider);
+  flex-shrink: 0;
+}
+.r-nav-item {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 4px;
+  padding: 10px 0 12px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.r-nav-item.active { color: var(--accent); }
+.r-nav-item.active .r-nav-dot {
+  background: var(--accent);
+}
+.r-nav-dot {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: transparent;
+  margin-top: 2px;
+}
+
+/* chip — generic mono pill */
+.r-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--surface-2);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.r-chip.accent { background: color-mix(in oklch, var(--accent) 16%, transparent); color: var(--accent-bright); }
+.r-chip.warn   { background: color-mix(in oklch, var(--warn) 14%, transparent); color: var(--warn); }
+.r-chip.bad    { background: color-mix(in oklch, var(--bad) 18%, transparent); color: var(--bad); }
+.r-chip.good   { background: color-mix(in oklch, var(--good) 18%, transparent); color: var(--good); }
+.r-chip.solid  { background: var(--accent); color: var(--accent-on); }
+.r-chip.outline { background: transparent; border: 1px solid var(--hairline); }
+
+/* category dot — uses --cat-c custom prop */
+.r-cat {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 12px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+/* button */
+.r-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 8px;
+  padding: 14px 18px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  border: 0; border-radius: 8px;
+  cursor: pointer;
+  background: var(--accent);
+  color: var(--accent-on);
+}
+.r-btn.ghost { background: var(--surface-2); color: var(--text); }
+.r-btn.outline { background: transparent; border: 1px solid var(--hairline); color: var(--text); }
+.r-btn.block { width: 100%; }
+
+/* card */
+.r-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  position: relative;
+}
+.r-card.flat { background: transparent; border: 1px solid var(--divider); }
+
+/* progress bar — segmented */
+.r-bar {
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+.r-bar > div {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+}
+.r-bar.over > div { background: var(--bad); }
+
+/* segmented progress (made of ticks) */
+.r-ticks {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+}
+.r-ticks > span {
+  flex: 1;
+  background: var(--surface-2);
+  border-radius: 1px;
+}
+.r-ticks > span.on { background: var(--accent); }
+.r-ticks > span.over { background: var(--bad); }
+
+/* confidence stripe styles (toggleable via .r-conf-mode-X on ancestor) */
+.r-conf {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.r-conf-stripe {
+  width: 3px;
+  flex-shrink: 0;
+  background: transparent;
+}
+.r-conf-mode-stripe .r-conf-stripe.auto    { background: var(--faint); }
+.r-conf-mode-stripe .r-conf-stripe.user    { background: var(--good); }
+.r-conf-mode-stripe .r-conf-stripe.suggest { background: var(--accent); }
+
+.r-conf-mode-dot .r-conf-stripe { display: none; }
+.r-conf-mode-dot .r-conf-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.r-conf-mode-dot .r-conf-dot.auto    { background: var(--faint); }
+.r-conf-mode-dot .r-conf-dot.user    { background: var(--good); }
+.r-conf-mode-dot .r-conf-dot.suggest { background: var(--accent); }
+
+.r-conf-mode-tint .r-conf-stripe { display: none; }
+.r-conf-mode-tint .r-conf-row.auto    { background: transparent; }
+.r-conf-mode-tint .r-conf-row.user    { background: color-mix(in oklch, var(--good) 6%, transparent); }
+.r-conf-mode-tint .r-conf-row.suggest { background: color-mix(in oklch, var(--accent) 8%, transparent); }
+
+.r-conf-mode-chip .r-conf-stripe { display: none; }
+
+/* inbox row */
+.r-inbox-row {
+  display: flex;
+  gap: 0;
+  align-items: stretch;
+  background: var(--surface);
+  margin-bottom: 8px;
+}
+
+/* reason chip variants — toggled by .r-rcm-X on ancestor */
+.r-reason {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 3px;
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+  border: 0;
+}
+.r-rcm-icon .r-reason svg { display: inline-block; }
+.r-rcm-plain .r-reason svg { display: none; }
+.r-rcm-stripe .r-reason svg { display: none; }
+
+/* skeleton pulse */
+@keyframes rPulse { 0%, 100% { opacity: 0.5 } 50% { opacity: 0.85 } }
+.r-skel { background: var(--surface-2); border-radius: 4px; animation: rPulse 1.6s ease-in-out infinite; }
+
+/* recap (Wrapped) story card */
+.r-story {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  padding: 80px 28px 60px;
+  color: var(--text);
+  overflow: hidden;
+}
+.r-story-bg {
+  position: absolute; inset: 0;
+  z-index: 0;
+}
+.r-story > * { position: relative; z-index: 1; }
+
+/* tweaks panel — override starter dimensions slightly */
+.tweaks-panel {
+  font-family: var(--font-sans);
+}
