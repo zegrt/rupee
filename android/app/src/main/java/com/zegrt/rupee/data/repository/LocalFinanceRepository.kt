@@ -685,12 +685,21 @@ class LocalFinanceRepository(
         val pattern = MerchantNameUtils.clean(merchant).takeIf { it != "Unnamed" }
             ?: merchant.trim()
         if (pattern.isBlank()) return
-        val existing = database.merchantTrustRuleDao().getRulesForUser(USER_ID)
-            .firstOrNull { it.merchantPattern.equals(pattern, ignoreCase = true) }
-        when {
-            trust && existing == null -> addMerchantTrustRule(merchant, autoCategoryId)
-            !trust && existing != null -> removeMerchantTrustRule(existing.id)
-            else -> Unit
+        // TRUST-WRITE-RACE (Sprint 4) — wrap the read+conditional-write pair
+        // in withTransaction so two rapid TRUST-FROM-TXN toggle taps can't
+        // race. Without this, tap 1 reads "no rule" → schedules insert; tap
+        // 2 reads "no rule" → also schedules insert; one of the two inserts
+        // hits a unique-pattern constraint and crashes. The transaction
+        // serialises the read-then-write window so the second toggle always
+        // sees the first's decision.
+        database.withTransaction {
+            val existing = database.merchantTrustRuleDao().getRulesForUser(USER_ID)
+                .firstOrNull { it.merchantPattern.equals(pattern, ignoreCase = true) }
+            when {
+                trust && existing == null -> addMerchantTrustRule(merchant, autoCategoryId)
+                !trust && existing != null -> removeMerchantTrustRule(existing.id)
+                else -> Unit
+            }
         }
     }
 

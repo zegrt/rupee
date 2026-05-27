@@ -1,9 +1,8 @@
 package com.zegrt.rupee.data.local.dao
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Upsert
 import com.zegrt.rupee.data.local.entity.ParsedSignalEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -30,7 +29,18 @@ interface ParsedSignalDao {
     )
     fun observeBucketCountsSince(fromIso: String): Flow<List<ParserBucketCount>>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    /**
+     * @Upsert is defense-in-depth — `parsed_signals` is the CASCADE parent
+     * of `transaction_candidates`, so any REPLACE on a parsed_signal would
+     * cascade-delete every candidate (and via the chain, every inbox row)
+     * pointing at it. Not exploitable today because every call site uses a
+     * fresh UUID for the new row, but trivial to exploit accidentally from
+     * a future code path that wants to re-write a parsed_signal in place.
+     * Third instance of the alpha.2 bug class (TransactionCandidateDao +
+     * CanonicalTransactionDao were the first two). Reference:
+     * https://dexterslog.com/posts/insert-on-conflict-replace-with-on-delete-cascade-in-sqlite/
+     */
+    @Upsert
     suspend fun upsertParsedSignal(signal: ParsedSignalEntity)
 }
 

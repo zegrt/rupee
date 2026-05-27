@@ -1,5 +1,6 @@
 package com.zegrt.rupee.home
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -866,7 +867,17 @@ class HomeViewModel(
 
     private fun parseDueDate(iso: String?): LocalDate? {
         if (iso.isNullOrBlank()) return null
-        return runCatching { LocalDate.parse(iso.take(10)) }.getOrNull()
+        return runCatching { LocalDate.parse(iso.take(10)) }
+            .onFailure { t ->
+                // DATE-PARSE-LOGGING (Sprint 4). Previously this swallowed
+                // DateTimeParseException silently, so a malformed date in
+                // a card/EMI/recurring row would just drop that row from
+                // upcoming-dues with no failure trail. Surface to logcat
+                // so a tester report ("my EMI isn't showing under
+                // upcoming dues") has something to bisect against.
+                Log.w("Rupee", "parseDueDate failed for iso=$iso", t)
+            }
+            .getOrNull()
     }
 
     private fun dueLabelFor(today: LocalDate, due: LocalDate): String {

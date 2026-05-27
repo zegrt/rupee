@@ -1,9 +1,8 @@
 package com.zegrt.rupee.data.local.dao
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Upsert
 import com.zegrt.rupee.data.local.entity.CanonicalTransactionEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -231,6 +230,27 @@ interface CanonicalTransactionDao {
         untilIso: String,
     ): Flow<List<CategorySpend>>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    /**
+     * @Upsert (Room 2.5+) generates `INSERT ... ON CONFLICT(id) DO UPDATE SET ...`
+     * — in-place update on conflict, not a delete-then-insert.
+     *
+     * The old `@Insert(onConflict = REPLACE)` shape rendered as
+     * `INSERT OR REPLACE`. SQLite's REPLACE conflict resolution deletes the
+     * conflicting row first. Because `transaction_candidates.linkedCanonicalTransactionId`
+     * and `inbox_items.linkedCanonicalTransactionId` are foreign keys with
+     * `onDelete = SET NULL`, every REPLACE on a canonical row silently NULLs
+     * the back-pointers from the audit trail. The user never sees the loss
+     * (the canonical txn renders fine) but cross-stream linking work (S6) and
+     * the merge-into-existing audit trail (M1) silently degrades on every
+     * `confirmSuggestedTransaction` / `deleteTransaction` /
+     * `updateTransactionDetails` call.
+     *
+     * This is the sibling fix to alpha.2's TransactionCandidateDao @Upsert
+     * swap — same SQLite gotcha, softer consequence (SET NULL vs CASCADE).
+     * See `TransactionCandidateDao.upsertTransactionCandidate` for the full
+     * background. Reference:
+     * https://dexterslog.com/posts/insert-on-conflict-replace-with-on-delete-cascade-in-sqlite/
+     */
+    @Upsert
     suspend fun upsertTransactions(transactions: List<CanonicalTransactionEntity>)
 }
