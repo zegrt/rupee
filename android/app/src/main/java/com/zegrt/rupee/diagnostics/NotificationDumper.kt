@@ -8,6 +8,7 @@ import com.zegrt.rupee.data.local.dao.DumpOutcomeSnapshot
 import com.zegrt.rupee.ingestion.IngestionResult
 import java.io.File
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Debug-only tool that captures every text-shaped value from every incoming
@@ -24,9 +25,17 @@ import java.time.Instant
  * right schema. Old v1 lines stay parseable; v2 lines just have more fields.
  *
  * Writes to `getExternalFilesDir("notif-dumps")/dumps.jsonl`. The folder is
- * share-exportable so testers can email the file back without ADB. No-op in
- * release builds; the listener guard plus the BuildConfig.DEBUG check make it
- * impossible to write user notification data to disk in a release APK.
+ * share-exportable so testers can email the file back without ADB.
+ *
+ * **Two gates, OR-combined.** Debug builds always capture (it's a dev tool).
+ * Release builds gate on a runtime [captureEnabledOverride] flag that the
+ * Settings → Privacy → "Diagnostic capture" toggle drives via
+ * `LocalFinanceRepository.setDiagnosticCaptureEnabled`. The toggle defaults
+ * ON for alpha and closed-beta versionNames and OFF for open-beta / RC / GA
+ * — see `LocalFinanceRepository.defaultDiagCaptureForStage`. Pre-alpha (when
+ * the dumper was hard-gated to `BuildConfig.DEBUG`) every closed tester on
+ * the signed release APK had no way to capture diagnostic dumps, even when
+ * a real bug surfaced — the alpha.1 → alpha.2 incident is the proof case.
  */
 object NotificationDumper {
 
@@ -38,7 +47,19 @@ object NotificationDumper {
     // drops the oldest half rather than truncating mid-line.
     private const val MAX_BYTES = 4 * 1024 * 1024
 
-    fun isEnabled(): Boolean = BuildConfig.DEBUG
+    /**
+     * Process-global toggle for diagnostic capture on release builds. Written
+     * by [LocalFinanceRepository.setDiagnosticCaptureEnabled] and hydrated
+     * at app start by [LocalFinanceRepository.hydrateDebounceState]. Debug
+     * builds ignore this — capture is always on there.
+     */
+    private val captureEnabledOverride = AtomicBoolean(false)
+
+    fun setCaptureEnabled(enabled: Boolean) {
+        captureEnabledOverride.set(enabled)
+    }
+
+    fun isEnabled(): Boolean = BuildConfig.DEBUG || captureEnabledOverride.get()
 
     /**
      * Write one line per notification — raw extras + ingestion outcome. The

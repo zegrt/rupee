@@ -12,7 +12,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -414,6 +416,7 @@ private fun RupeeApp(
             onDebugShareNotificationDumps = { debugViewModel.shareNotificationDumps(context) },
             onDebugClearNotificationDumps = { debugViewModel.clearNotificationDumps(context) },
             onDebugRefreshNotificationDumpSize = { debugViewModel.refreshNotificationDumpSize(context) },
+            onToggleDiagnosticCapture = settingsViewModel::setDiagnosticCaptureEnabled,
         )
     }
 }
@@ -804,6 +807,7 @@ private fun RupeeHome(
     onDebugRefreshNotificationDumpSize: () -> Unit,
     onDebugEmailCrashLog: () -> Unit,
     onDebugClearCrashLog: () -> Unit,
+    onToggleDiagnosticCapture: (Boolean) -> Unit,
 ) {
     var showDebug by remember { mutableStateOf(false) }
     var showTrustRules by remember { mutableStateOf(false) }
@@ -840,6 +844,7 @@ private fun RupeeHome(
                         versionLabel = versionLabel,
                         onReviewInbox = { onSelectTab(HomeTab.INBOX) },
                         onAddTransaction = onOpenManualEntry,
+                        onOpenSettings = { onSelectTab(HomeTab.SETTINGS) },
                     )
                     HomeTab.INBOX -> ReviewTab(
                         uiState = uiState,
@@ -851,6 +856,7 @@ private fun RupeeHome(
                         onConfirm = onConfirmReviewRow,
                         onDismiss = onDismissReviewRow,
                         onSelectMergeTarget = onSelectMergeTarget,
+                        onOpenSettings = { onSelectTab(HomeTab.SETTINGS) },
                     )
                     HomeTab.TRANSACTIONS -> TransactionsTab(
                         uiState = uiState,
@@ -888,6 +894,7 @@ private fun RupeeHome(
                             onDebugRefreshNotificationDumpSize()
                             showDebug = true
                         },
+                        onToggleDiagnosticCapture = onToggleDiagnosticCapture,
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1230,9 +1237,13 @@ private fun HomeSummaryTab(
     versionLabel: String = "",
     onReviewInbox: () -> Unit,
     onAddTransaction: () -> Unit,
+    onOpenSettings: () -> Unit = {},
 ) {
     val dashboard = uiState.dashboard
     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        if (uiState.diagnosticCaptureEnabled) {
+            DiagnosticCaptureBanner(onTap = onOpenSettings)
+        }
         DashboardGreeting(
             greeting = dashboard.greeting,
             monthLabel = dashboard.monthLabel,
@@ -1825,8 +1836,13 @@ private fun ReviewTab(
     onConfirm: (String, ReviewSource) -> Unit,
     onDismiss: (String, ReviewSource) -> Unit,
     onSelectMergeTarget: (String, String?) -> Unit,
+    onOpenSettings: () -> Unit = {},
 ) {
     var mergePickerForId by remember { mutableStateOf<String?>(null) }
+    if (uiState.diagnosticCaptureEnabled) {
+        DiagnosticCaptureBanner(onTap = onOpenSettings)
+        Spacer(modifier = Modifier.height(16.dp))
+    }
     InspectionSection(
         title = "Review",
         hasItems = uiState.reviewRows.isNotEmpty(),
@@ -2294,6 +2310,55 @@ private fun TransactionDetailSheet(
                 androidx.compose.material3.TextButton(onClick = { if (confirmDelete) confirmDelete = false }) { Text("Cancel") }
             },
         )
+    }
+}
+
+/**
+ * Persistent banner on Home + Inbox while the DIAG-CAPTURE-TOGGLE is on.
+ * Surfaces the fact that notification text is being saved locally — matches
+ * the AOSP guidance ("artifacts of consent and disable the tool after
+ * collecting the necessary diagnostic information") + the Signal /
+ * Bitwarden / Proton pattern of a prominent, dismissable-via-Settings
+ * indicator. Tap navigates to Settings → Privacy where the user can flip
+ * the toggle back off.
+ */
+@Composable
+private fun DiagnosticCaptureBanner(onTap: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onTap),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Small recording-style dot. No animation — pulsing dots on
+            // persistent banners read as alarming on long screen sessions.
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .padding(end = 12.dp)
+                    .height(8.dp)
+                    .width(8.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(MaterialTheme.colorScheme.tertiary),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Diagnostic capture is on",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+                Text(
+                    "Notification text is being saved locally. Tap to turn off in Settings.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+            }
+        }
     }
 }
 

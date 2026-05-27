@@ -29,7 +29,9 @@ import com.zegrt.rupee.data.local.entity.RecurringPatternEntity
 import com.zegrt.rupee.data.local.entity.SyncStatus
 import com.zegrt.rupee.data.local.entity.TransactionCandidateEntity
 import com.zegrt.rupee.data.local.entity.UserEntity
+import com.zegrt.rupee.BuildConfig
 import com.zegrt.rupee.diagnostics.LedgerExportSnapshot
+import com.zegrt.rupee.diagnostics.NotificationDumper
 import com.zegrt.rupee.ingestion.MerchantNameUtils
 import com.zegrt.rupee.ingestion.NotificationSignalNormalizer
 import com.zegrt.rupee.recurring.RecurringDetectionEngine
@@ -43,6 +45,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -75,6 +80,15 @@ class LocalFinanceRepository(
     private val lastRecurringRefreshMs = AtomicLong(0L)
     private val lastIngestionPruneMs = AtomicLong(0L)
 
+    /**
+     * DIAG-CAPTURE-TOGGLE (Sprint 4) — user-controlled gate for
+     * `NotificationDumper`. Hydrated at startup; written through to
+     * `app_state` + [NotificationDumper.setCaptureEnabled] on every flip.
+     * Exposed as a `StateFlow` so the persistent banner on Home & Inbox
+     * can react.
+     */
+    private val diagnosticCaptureEnabled = MutableStateFlow(false)
+
     companion object {
         private const val USER_ID = "local-user"
         private const val DEFAULT_MONTHLY_BUDGET_MINOR = 4_000_000L
@@ -84,6 +98,35 @@ class LocalFinanceRepository(
         // epoch-millis longs.
         private const val KEY_LAST_RECURRING_REFRESH_MS = "last_recurring_refresh_ms"
         private const val KEY_LAST_INGESTION_PRUNE_MS = "last_ingestion_prune_ms"
+
+        // Keys for DIAG-CAPTURE-TOGGLE. Boolean stored as "true"/"false".
+        // versionCode stored as decimal-string Int. We check the stored
+        // versionCode against the current `BuildConfig.VERSION_CODE` at
+        // hydrate time; mismatch means a fresh install or an upgrade, both
+        // of which reset to the stage default rather than honouring the
+        // previous toggle. The reset hook is the AOSP guidance's "off after
+        // collecting diagnostic information" — surviving across app
+        // upgrades would let a long-lived ON state leak past whatever stage
+        // gated it.
+        private const val KEY_DIAG_CAPTURE_ENABLED = "diag_capture_enabled"
+        private const val KEY_DIAG_CAPTURE_VERSION_CODE = "diag_capture_version_code"
+
+        /**
+         * Stage default for the diagnostic-capture toggle, derived from the
+         * versionName. Alpha + closed-beta builds default ON so testers can
+         * capture without being told to flip a setting; open-beta + RC + GA
+         * default OFF. The heuristic is intentionally simple — distinguishing
+         * "closed beta" from "open beta" by versionName alone would be brittle
+         * (both use `-beta.N` semver), so we will revisit when we cut the
+         * first beta. Today's only non-alpha release is the eventual GA, so
+         * the simple `-alpha` substring check covers the entire current
+         * lifecycle.
+         */
+        fun defaultDiagCaptureForStage(versionName: String): Boolean {
+            // Alpha and (per current heuristic) any pre-RC beta defaults ON.
+            // RC / GA / anything without a pre-release suffix defaults OFF.
+            return versionName.contains("-alpha") || versionName.contains("-beta")
+        }
 
         // Pruning runs at most once per 24 hours. Cheap-enough to call on
         // every cold start without nagging the disk; spaced enough that a
@@ -1015,6 +1058,67 @@ class LocalFinanceRepository(
         val dao = database.appStateDao()
         dao.get(KEY_LAST_RECURRING_REFRESH_MS)?.toLongOrNull()?.let(lastRecurringRefreshMs::set)
         dao.get(KEY_LAST_INGESTION_PRUNE_MS)?.toLongOrNull()?.let(lastIngestionPruneMs::set)
+
+        // DIAG-CAPTURE-TOGGLE hydration. Three cases:
+        //   1. No prior versionCode stored → fresh install. Start at the
+        //      stage default for the current versionName.
+        //   2. Stored versionCode != BuildConfig.VERSION_CODE → app upgrade.
+        //      Reset to the stage default rather than honouring the prior
+        //      value (matches AOSP's "disable after the support session"
+        //      guidance — an old ON toggle shouldn't survive forever).
+        //   3. Stored versionCode == BuildConfig.VERSION_CODE → mid-run.
+        //      Honour whatever the user last set.
+        val storedVc = dao.get(KEY_DIAG_CAPTURE_VERSION_CODE)?.toIntOrNull()
+        val storedValue = dao.get(KEY_DIAG_CAPTURE_ENABLED)?.toBooleanStrictOrNull()
+        val effective = if (storedVc == BuildConfig.VERSION_CODE && storedValue != null) {
+            storedValue
+        } else {
+            defaultDiagCaptureForStage(BuildConfig.VERSION_NAME)
+        }
+        diagnosticCaptureEnabled.value = effective
+        NotificationDumper.setCaptureEnabled(effective)
+        // Persist the resolved state + current versionCode so the next cold
+        // start hits case 3 (no surprise resets when nothing changed).
+        if (storedVc != BuildConfig.VERSION_CODE || storedValue != effective) {
+            writeDiagCaptureState(effective)
+        }
+    }
+
+    /** Observable view of the diagnostic-capture toggle — used by the banner on Home + Inbox. */
+    fun observeDiagnosticCaptureEnabled(): StateFlow<Boolean> = diagnosticCaptureEnabled.asStateFlow()
+
+    /** Snapshot read for callers that don't need to observe. */
+    fun isDiagnosticCaptureEnabled(): Boolean = diagnosticCaptureEnabled.value
+
+    /**
+     * Flip the diagnostic-capture toggle. Updates the in-memory flow, the
+     * [NotificationDumper] override, and writes through to `app_state` along
+     * with the current versionCode so the next cold start treats this as
+     * the user's intent rather than a stale value.
+     */
+    suspend fun setDiagnosticCaptureEnabled(enabled: Boolean) = withContext(Dispatchers.IO) {
+        diagnosticCaptureEnabled.value = enabled
+        NotificationDumper.setCaptureEnabled(enabled)
+        writeDiagCaptureState(enabled)
+    }
+
+    private suspend fun writeDiagCaptureState(enabled: Boolean) {
+        val nowIso = Instant.now().toString()
+        val dao = database.appStateDao()
+        dao.upsert(
+            com.zegrt.rupee.data.local.entity.AppStateEntity(
+                key = KEY_DIAG_CAPTURE_ENABLED,
+                value = enabled.toString(),
+                updatedAt = nowIso,
+            ),
+        )
+        dao.upsert(
+            com.zegrt.rupee.data.local.entity.AppStateEntity(
+                key = KEY_DIAG_CAPTURE_VERSION_CODE,
+                value = BuildConfig.VERSION_CODE.toString(),
+                updatedAt = nowIso,
+            ),
+        )
     }
 
     /**

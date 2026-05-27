@@ -175,6 +175,10 @@ data class HomeUiState(
     val manualEntrySuggestions: List<ManualEntrySuggestion> = emptyList(),
     val dashboard: HomeDashboard = HomeDashboard(),
     val isSeeding: Boolean = true,
+    // DIAG-CAPTURE-TOGGLE — surfaces the persistent banner on Home + Inbox
+    // when capture is on, so testers know their notification text is being
+    // saved locally for sharing.
+    val diagnosticCaptureEnabled: Boolean = false,
 )
 
 private data class DashboardData(
@@ -369,8 +373,12 @@ class HomeViewModel(
         )
     }
 
-    val uiState: StateFlow<HomeUiState> = combine(dashboardData, viewSelection) { data, selection ->
-        toUiState(data, selection, today.value)
+    val uiState: StateFlow<HomeUiState> = combine(
+        dashboardData,
+        viewSelection,
+        repository.observeDiagnosticCaptureEnabled(),
+    ) { data, selection, diagCapture ->
+        toUiState(data, selection, today.value).copy(diagnosticCaptureEnabled = diagCapture)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
