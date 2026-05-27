@@ -3,6 +3,7 @@ package com.zegrt.rupee.budget
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.edit
@@ -102,7 +103,13 @@ class DuesAlertManager(private val context: Context) {
 
     private fun parseDate(iso: String?): LocalDate? {
         if (iso.isNullOrBlank()) return null
-        return runCatching { LocalDate.parse(iso.take(10)) }.getOrNull()
+        // DATE-PARSE-LOGGING (Sprint 4). A malformed due-date silently
+        // dropped the alert without telling anyone; a tester report
+        // ("the bill due-date notification didn't fire") now has a
+        // logcat line to bisect against.
+        return runCatching { LocalDate.parse(iso.take(10)) }
+            .onFailure { t -> Log.w("Rupee", "DuesAlertManager.parseDate failed for iso=$iso", t) }
+            .getOrNull()
     }
 
     private fun dueLabel(daysAway: Int, date: LocalDate): String = when (daysAway) {

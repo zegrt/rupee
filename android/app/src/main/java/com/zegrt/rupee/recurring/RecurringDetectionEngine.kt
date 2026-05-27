@@ -1,5 +1,6 @@
 package com.zegrt.rupee.recurring
 
+import android.util.Log
 import com.zegrt.rupee.data.local.entity.CanonicalTransactionEntity
 import com.zegrt.rupee.data.local.entity.CanonicalTransactionStatus
 import com.zegrt.rupee.ingestion.MerchantNameUtils
@@ -85,7 +86,13 @@ class RecurringDetectionEngine(
     private fun parseDate(iso: String): LocalDate? = try {
         Instant.parse(iso).atZone(zone).toLocalDate()
     } catch (_: Exception) {
-        runCatching { LocalDate.parse(iso.take(10)) }.getOrNull()
+        // DATE-PARSE-LOGGING (Sprint 4). If we fall through here AND the
+        // shorter LocalDate parse also fails, the row drops from recurring
+        // detection silently. Surface to logcat so a tester who's missing
+        // a recurring subscription has something to bisect against.
+        runCatching { LocalDate.parse(iso.take(10)) }
+            .onFailure { t -> Log.w("Rupee", "RecurringDetectionEngine.parseDate failed for iso=$iso", t) }
+            .getOrNull()
     }
 
     private fun median(values: List<Int>): Int? {
