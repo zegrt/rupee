@@ -23,6 +23,7 @@ class NotificationParserParseTest {
     private val emi = EmiNotificationParser()
     private val kotak = KotakNotificationParser()
     private val atm = AtmNotificationParser()
+    private val generic = GenericNotificationParser()
 
     // ── GPay ──────────────────────────────────────────────────────────────────
 
@@ -606,6 +607,40 @@ class NotificationParserParseTest {
         // brand) to allow the location regex to evolve without churning
         // the test. The "ATM Cash · " prefix is the contract.
         assertEquals(true, result.toEntityName?.startsWith("ATM Cash"))
+    }
+
+    // ── Generic ──────────────────────────────────────────────────────────────
+    // MONEY-MATH-LEGACY (Sprint 4). Before the alpha.3 hotfix
+    // GenericNotificationParser used its own regex `[.,]` (`.` OR `,`)
+    // which silently mangled Indian-grouped decimals — the Walnut
+    // SMS-bridge "₹1,593.77 Credited from 7510773991@YESCRED" body in
+    // the alpha.1 dump parsed as ₹159.00. The fix routes through the
+    // shared `NotificationParsingUtils.extractAmountMinor` which uses
+    // a precise regex + BigDecimal. These cases pin the new behaviour.
+
+    @Test
+    fun `generic parses Indian-grouped decimal amount as bit-exact paise`() {
+        // The exact body the alpha.1 dump captured — used to parse as
+        // 15900L (₹159.00). After MONEY-MATH-LEGACY it parses as
+        // 159377L (₹1,593.77).
+        val result = generic.parse(
+            event(body = "₹1,593.77 Credited from 7510773991@YESCRED\nIn account Kotak (4129)")
+        )
+        assertEquals(159377L, result.amountMinor)
+    }
+
+    @Test
+    fun `generic parses lakh-scale amount correctly`() {
+        val result = generic.parse(event(body = "Rs 1,00,000 spent at Reliance Trends"))
+        assertEquals(10000000L, result.amountMinor)
+    }
+
+    @Test
+    fun `generic parses small decimal without double-rounding drift`() {
+        // Used to be vulnerable to 19.99 → 1999.99 → 199999L / 200000L
+        // rounding flicker from the old `* 100.0 → toLong()` path.
+        val result = generic.parse(event(body = "₹19.99 charged"))
+        assertEquals(1999L, result.amountMinor)
     }
 
     private fun event(
