@@ -1,9 +1,30 @@
-# Alpha stage-roll log — v0.15.0-alpha.2
+# Alpha stage-roll log — v0.15.0-alpha.3
 
-**Build:** `rupee-0.15.0-alpha.2-release.apk` (signed) /
-`rupee-0.15.0-alpha.2-debug.apk` (with notification-dump tool).
-**Soak started:** *(fill in when you side-load alpha.2)*
+**Build:** `rupee-0.15.0-alpha.3-release.apk` (signed) /
+`rupee-0.15.0-alpha.3-debug.apk` (with notification-dump tool).
+**Soak started:** *(fill in when you side-load alpha.3)*
 **Soak ended:** *(fill in 24h+ later)*
+
+## alpha.2 → alpha.3 changelog (read first)
+
+Six small Sprint 4 correctness items closed in a single bundled PR
+(#81) plus the DIAG-CAPTURE-TOGGLE that shipped between alpha.2 and
+alpha.3 (PR #80). No user-visible UI changes except:
+
+- **Settings → Privacy & data** has a new "Diagnostic capture" toggle.
+  Defaults ON on this alpha build. Banner appears at the top of Home
+  + Inbox while it's on so you remember the feature is active. Toggle
+  off in Settings to stop saving notification text locally.
+- **Walnut SMS-bridge bodies** like `₹1,593.77 Credited` will now
+  parse with the correct amount (used to round to ₹159.00).
+
+See CHANGELOG.md entry for v0.15.0-alpha.3 for the full root-cause
+writeups on all six items.
+
+**No clean install required.** Existing alpha.2 state carries forward
+cleanly — none of the six changes touch schema. The DIAG-CAPTURE-TOGGLE
+upgrade-reset hook will flip diagnostic-capture back to the alpha
+default (ON) on first launch of alpha.3.
 
 ## alpha.1 → alpha.2 changelog (read first)
 
@@ -34,7 +55,7 @@ the soak gets a line in the table below, with a verdict (alpha-blocker
 1. Connect your phone via USB with USB debugging enabled.
 2. From repo root:
    ```bash
-   adb install -r android/app/build/outputs/apk/release/rupee-0.15.0-alpha.2-release.apk
+   adb install -r android/app/build/outputs/apk/release/rupee-0.15.0-alpha.3-release.apk
    ```
    (Use the `-debug` APK if you want the notification-dump tool for
    capturing bodies that go wrong; otherwise the signed release is the
