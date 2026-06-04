@@ -1,11 +1,11 @@
 # Rupee
 
-> **Stage: pre-alpha (v0.14.5).** The next milestone is **alpha** (v0.15.0-alpha.1)
-> — feature-complete enough for a small closed-tester group, not a public
-> launch. The path forward is alpha → closed beta → open beta → release
-> candidate → 1.0. Anywhere this repo's older docs say "MVP" or "1.0," read
-> it as "alpha" for current purposes; the source of truth for active scope
-> is [docs/rupee-backlog.md](./docs/rupee-backlog.md).
+> **Stage: alpha (v0.15.0-alpha.3).** Feature-complete enough for a
+> small closed-tester group; not a public launch. The path forward is
+> alpha → closed beta → open beta → release candidate → 1.0. Anywhere
+> this repo's older docs say "MVP" or "1.0," read it as "alpha" for
+> current purposes; the source of truth for active scope is
+> [docs/rupee-backlog.md](./docs/rupee-backlog.md).
 
 Rupee is an Android-first personal finance app for India.
 
@@ -70,7 +70,7 @@ Right now the project has:
 - onboarding flow
 - local database foundation
 - notification ingestion foundation
-- provider-specific parsing for GPay, CRED, and ICICI notifications, plus a generic UPI fallback for PhonePe/Paytm-style bodies
+- dedicated parsers for ATM withdrawals, GPay, CRED, ICICI, Kotak (incl. Kotak811), PhonePe, Paytm, EMI debits, with a central `TransactionalGate` that drops marketing / OTP / promo bodies before any parser fires, and a generic-UPI fallback for less-common UPI shapes
 - a decision layer for auto-create vs Inbox vs ignore, and a dedupe layer that suppresses repeated alerts
 - a daily dashboard (hero monthly budget, this-week spend, upcoming dues, recent activity, Inbox CTA) on Home
 - a unified review queue on Inbox: pending items plus auto-created `SUGGESTED` transactions, with edit-before-confirm (merchant, amount, category dropdown)
@@ -84,7 +84,7 @@ Right now the project has:
 - a Monthly recap surface (Settings → Monthly recap) with total spent, change vs last month, top categories, top merchants, and biggest transactions
 - light/dark theme following the Android system setting
 - per-account / per-card "exclude from spend totals" toggle for wallets that double-count from another tracked source
-- dedicated parsers for ATM withdrawals, GPay, CRED, ICICI, Kotak (incl. Kotak811), PhonePe, Paytm, EMI debits, generic UPI fallback; ATM bodies route to `CASH_WITHDRAWAL` (excluded from monthly spend totals so cash withdrawals don't double-count when later spent); debug-only notification-dump tool with sibling outcomes snapshot to bootstrap and replay against the parser corpus
+- ATM bodies route to `CASH_WITHDRAWAL` (excluded from monthly spend totals so cash withdrawals don't double-count when later spent); user-opt-in **Diagnostic capture** (Settings → Privacy & data) writes a paired notification-dump + DB-outcomes snapshot to local files for triage; the same JSONL corpus replays as a JVM unit test (`DumpReplayHarness`) so regressions in parser distribution flunk CI
 - DB-level foreign keys with cascade deletes across the ingestion chain (raw → parsed signal → candidate → inbox), automatic 90-day prune of raw notification events, and fuel-brand normalisation (IOC / HPCL / BPCL / Shell etc.) so a single merchant trust rule covers every outlet of a brand
 - manual transaction entry through a bottom sheet
 - a Settings page (display name, monthly budget, notification permission re-check, version, category/bucket lists)
@@ -101,12 +101,16 @@ The current preview build:
 - does not request SMS access
 - can be built locally as a debug APK
 
-APK output is regenerated per release into `android/app/build/outputs/apk/`.
-The current local build target is **v0.14.5** (pre-alpha). The signed
-release APK is for friends/family; the debug APK includes the
-notification-dump tool that bootstraps the parser corpus. The exact
-file names follow `rupee-{versionName}-{release,debug}.apk` — see
-the latest `versionName` in [android/app/build.gradle.kts](./android/app/build.gradle.kts).
+APK output is regenerated per release into `android/app/build/outputs/apk/`
+(release AAB lands in `android/app/build/outputs/bundle/release/`).
+The current local build target is **v0.15.0-alpha.3** (alpha). The
+signed release APK / AAB is the build that goes to closed testers;
+the debug APK adds a floating Debug pill that opens the parser
+playground and DB-reset shortcut. Both builds support the new opt-in
+**Diagnostic capture** toggle (Settings → Privacy & data) — defaults
+ON during alpha so testers can ship dumps back when something goes
+wrong. The exact file names follow `rupee-{versionName}-{release,debug}.apk`
+— see the latest `versionName` in [android/app/build.gradle.kts](./android/app/build.gradle.kts).
 
 ## Main Docs
 
@@ -117,7 +121,9 @@ the latest `versionName` in [android/app/build.gradle.kts](./android/app/build.g
 - [Android Screen Spec](./docs/rupee-android-screens.md)
 - [Engineering Roadmap](./docs/rupee-roadmap.md)
 - [Deferred Work & Sprint Backlog](./docs/rupee-backlog.md)
+- [Alpha stage-roll log](./docs/alpha-stage-roll-log.md) — per-build tester instructions, soak-window checklist, issue table; one section per alpha cut (currently `v0.15.0-alpha.3`)
 - [Gravedigging Audit (2026-05-18)](./docs/gravedigging-2026-05-18.md) — closed-out paper trail of the bug-of-the-Inbox-husk-shape audit and the four PRs that landed phases 1–3b in v0.14.0
+- [CHANGELOG](./CHANGELOG.md) — per-release summary (Keep a Changelog format)
 
 ## Project Context
 

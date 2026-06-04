@@ -2,16 +2,15 @@
 
 **Purpose:** durable, in-repo backlog. Anything Claude promised to do "next sprint" or "later" lives here, not just in conversation context. This file is the single source of truth for what's deferred — if it's not here, it doesn't exist.
 
-**Last updated:** 2026-05-25 (alpha.2 soak audit — two new items).
-Two findings from the 2026-05-25 audit pass against the v0.15.0-alpha.2
-build, both added to Sprint 4:
-**DIAG-CAPTURE-TOGGLE** (the `BuildConfig.DEBUG` gate on
-`NotificationDumper` makes alpha-tester diagnostic capture impossible
-without shipping a separate debug binary — replace with a runtime
-opt-in toggle, defaults ON during alpha)
-and **PARSED-SIGNAL-UPSERT-LATENT** (`ParsedSignalDao.upsertParsedSignal`
-is still `@Insert(REPLACE)`, the same bug class as the alpha.2 cascade-
-delete hotfix; not exploitable today but latent).
+**Last updated:** 2026-05-25 (Sprint 4 safety bundle shipped as
+v0.15.0-alpha.3 — six items closed in PRs #80 + #81, one cut tagged in
+PR #82). The two items added on 2026-05-25 morning
+(`DIAG-CAPTURE-TOGGLE`, `PARSED-SIGNAL-UPSERT-LATENT`) landed in the
+same bundle alongside `CANONICAL-AUDIT-TRAIL`, `MONEY-MATH-LEGACY`,
+`TRUST-WRITE-RACE`, and `DATE-PARSE-LOGGING`. Remaining Sprint 4 items
+(`CAST-SAFETY`, `MIGRATION-SKIP-TEST`, `DUMP-OUTCOME-DAO-TEST-FK`,
+`REPO-VM-TEST-COVERAGE`) are deferred to a follow-on Sprint 4.x — see
+"Sprint 4 remainder" below.
 
 Previous (2026-05-23): reframed the 1.0 target to a much more honest
 **alpha** milestone — see the new "Path to alpha" section below for the
@@ -40,9 +39,17 @@ Each item has: *what*, *why it matters*, *touchpoints*, *blocked by*.
 
 ## In flight
 
-- *(Nothing actively in flight as of 2026-05-23; Sprints 0/1/2 all merged,
-  v0.14.5 cut. Sprint 3 (alpha prep) is the next runnable sprint. The
-  design revamp stays post-alpha — see [REVAMP](#revamp--full-design-overhaul-aviate-vs-vwfndr-post-alpha)
+- **v0.15.0-alpha.3 soak** *(opened 2026-05-25)*. Side-loaded on the
+  primary dev device; closed-tester rollout pending the soak window
+  documented in [docs/alpha-stage-roll-log.md](alpha-stage-roll-log.md).
+  This is the cut that bundles the Sprint 4 safety items
+  (`DIAG-CAPTURE-TOGGLE`, `CANONICAL-AUDIT-TRAIL`,
+  `PARSED-SIGNAL-UPSERT-LATENT`, `MONEY-MATH-LEGACY`,
+  `TRUST-WRITE-RACE`, `DATE-PARSE-LOGGING`). Re-run the
+  alpha-stage-roll checklist; whatever surfaces feeds Sprint 4.x or
+  later sprints.
+- *(Design revamp stays post-alpha — see
+  [REVAMP](#revamp--full-design-overhaul-aviate-vs-vwfndr-post-alpha)
   in Slotted.)*
 
 ---
@@ -422,24 +429,32 @@ the two UX gaps that close out the alpha feature set, then a parser-
 coverage sprint so closed-beta testers on non-pilot banks have a useful
 experience.
 
-## Sprint 4 — Stability hardening *(≈1 week)*
+## Sprint 4 — Stability hardening *(safety bundle shipped 2026-05-25, v0.15.0-alpha.3; remainder is "Sprint 4.x" below)*
 
-Eight items now: the original six findings from the 2026-05-23 deep
+Eight items total: the original six findings from the 2026-05-23 deep
 code review, plus two added on 2026-05-25 from auditing the v0.15.0-alpha.2
 build (`DIAG-CAPTURE-TOGGLE`, `PARSED-SIGNAL-UPSERT-LATENT`). Every item
 is either a class of bug we want to design out before real testers see
 it, or a test-coverage gap that lets future regressions sneak in.
 
-Sequencing within the sprint: `DIAG-CAPTURE-TOGGLE` first (it unlocks
-real diagnostic capture from alpha testers, so the rest of the sprint
-can react to real-soak data instead of guessing). Then the four
-one-line / one-annotation safety swaps (`CANONICAL-AUDIT-TRAIL`,
-`PARSED-SIGNAL-UPSERT-LATENT`, `MONEY-MATH-LEGACY`, `TRUST-WRITE-RACE`)
-since they share the "10-minute, prevent silent corruption" shape.
-Then `DATE-PARSE-LOGGING`, then the test-infra items, then the
-refactors (`CAST-SAFETY`, `REPO-VM-TEST-COVERAGE`).
+**What shipped in v0.15.0-alpha.3 (PRs #80 + #81 + cut #82):**
+`DIAG-CAPTURE-TOGGLE`, `CANONICAL-AUDIT-TRAIL`,
+`PARSED-SIGNAL-UPSERT-LATENT`, `MONEY-MATH-LEGACY`,
+`TRUST-WRITE-RACE`, `DATE-PARSE-LOGGING`. All six are the one-line /
+one-annotation / single-callsite-fix shape; they bundled cleanly into a
+single safety release.
+
+**Sprint 4.x remainder (deferred, not yet runnable):**
+`CAST-SAFETY`, `MIGRATION-SKIP-TEST`, `DUMP-OUTCOME-DAO-TEST-FK`,
+`REPO-VM-TEST-COVERAGE`. These are the bigger refactors / test-infra
+gaps — separate sprint slot so a regression on one doesn't block the
+safety bundle that testers are already running.
 
 ### DIAG-CAPTURE-TOGGLE — replace BuildConfig.DEBUG gate with user opt-in
+**Shipped:** v0.15.0-alpha.3 (PR #80, merged 2026-05-25). Settings →
+Privacy & data carries the new "Diagnostic capture" toggle; defaults
+ON during alpha. Persistent banner on Home + Inbox while on.
+
 **What:** `NotificationDumper.isEnabled() = BuildConfig.DEBUG` (in
 [diagnostics/NotificationDumper.kt:41](android/app/src/main/java/com/zegrt/rupee/diagnostics/NotificationDumper.kt#L41))
 hard-gates the dump path to debug builds. Side-effect surfaced from the
@@ -498,18 +513,26 @@ the compiler enforces shape.
 **Blocked by:** nothing. ~1 day.
 
 ### TRUST-WRITE-RACE — wrap `setMerchantTrust` read+write in a transaction
+**Shipped:** v0.15.0-alpha.3 (PR #81 — safety bundle).
+
 **What:** [LocalFinanceRepository.kt:641-651](android/app/src/main/java/com/zegrt/rupee/data/repository/LocalFinanceRepository.kt#L641-L651) reads `getRulesForUser`, searches for a match in memory, then either upserts or deletes. Two rapid taps from the new TRUST-FROM-TXN toggle could race. Fix: wrap the lookup+write pair in `database.withTransaction { ... }`, or add an idempotent upsert-by-pattern DAO method.
 **Why:** the trust-from-txn surface (Sprint 1 shipped) lets users toggle this fast — race conditions become real.
 **Touchpoints:** `LocalFinanceRepository.setMerchantTrust`, `MerchantTrustRuleDao`.
 **Blocked by:** nothing. ~1 hour.
 
 ### MONEY-MATH-LEGACY — backport BigDecimal pattern to `GenericNotificationParser`
+**Shipped:** v0.15.0-alpha.3 (PR #81 — safety bundle). Walnut SMS
+bodies like `₹1,593.77 Credited` now parse correctly (used to round to
+₹159.00 because of Indian comma-grouping + Double rounding).
+
 **What:** [GenericNotificationParser.kt:68](android/app/src/main/java/com/zegrt/rupee/ingestion/GenericNotificationParser.kt#L68) is the last parser using `Double * 100 → Long`. Every other parser routes through `NotificationParsingUtils.extractAmountMinor` which uses `BigDecimal.movePointRight(2).toLong()`. Backport.
 **Why:** off-by-one rounding on edge amounts. Low frequency, but it's the kind of bug that's impossible to debug from logs.
 **Touchpoints:** `GenericNotificationParser.kt`.
 **Blocked by:** nothing. ~10 min.
 
 ### DATE-PARSE-LOGGING — surface silent ISO-8601 parse failures
+**Shipped:** v0.15.0-alpha.3 (PR #81 — safety bundle).
+
 **What:** Three `runCatching { … }.getOrNull()` sites in `HomeViewModel.formatOccurredAt`, `RecurringDetectionEngine`, and `DuesAlertManager` swallow `DateTimeParseException`. If a malformed timestamp ever lands in the DB (migration bug, third-party writer), the UI silently drops the row from upcoming-dues and recurring detection. Add `Log.w("Rupee", ...)` before the `getOrNull()`.
 **Why:** silent UI dropouts are the worst kind of bug — testers report "the upcoming-dues card isn't showing my EMI" with no failure trail.
 **Touchpoints:** the three sites above.
@@ -529,12 +552,19 @@ the compiler enforces shape.
 **Blocked by:** nothing. ~1 hour.
 
 ### CANONICAL-AUDIT-TRAIL — switch `CanonicalTransactionDao.upsertTransactions` to @Upsert
+**Shipped:** v0.15.0-alpha.3 (PR #81 — safety bundle). All five
+callsites (`confirmInboxItem`, `confirmSuggestedTransaction`,
+`deleteTransaction`, `updateTransactionDetails`,
+`createManualTransaction`) now preserve the audit trail.
+
 **What:** Sibling fix to v0.15.0-alpha.2's `TransactionCandidateDao` change. `CanonicalTransactionDao.upsertTransactions` is still `@Insert(onConflict = REPLACE)`. Because `transaction_candidates.linkedCanonicalTransactionId` and `inbox_items.linkedCanonicalTransactionId` are FK with `onDelete = SET NULL`, every REPLACE on a canonical row silently NULLs out the back-pointers from any inbox / candidate audit row. This is a softer bug than the cascade-delete (no data loss, just audit-trail loss), but the fix is one-line: switch the DAO to `@Upsert`.
 **Why:** the 2026-05-25 audit confirmed five callsites all hit this path: `confirmInboxItem`, `confirmSuggestedTransaction`, `deleteTransaction`, `updateTransactionDetails`, `createManualTransaction`. Every user action that touches a canonical row currently breaks the audit trail. Hard to spot in normal use but it'll bite when S6 (Sprint 8) tries to follow `mergedFromExistingCanonicalId` pointers and finds nulls.
 **Touchpoints:** `CanonicalTransactionDao.kt` (one annotation swap).
 **Blocked by:** nothing. ~10 min PR.
 
 ### PARSED-SIGNAL-UPSERT-LATENT — switch `ParsedSignalDao.upsertParsedSignal` to @Upsert
+**Shipped:** v0.15.0-alpha.3 (PR #81 — safety bundle).
+
 **What:** The 2026-05-25 audit of every `@Insert(onConflict = REPLACE)` against the FK chain found a third instance of the alpha.2 bug class. `ParsedSignalDao.upsertParsedSignal` is `@Insert(REPLACE)`, and `parsed_signals` is the CASCADE parent of `transaction_candidates`. If `upsertParsedSignal` were ever called on a row with an existing id, SQLite's REPLACE semantics would DELETE the existing row, fire the CASCADE down to `transaction_candidates`, which would CASCADE again to `inbox_items` — same data loss shape as the alpha.1 bug, one layer up the chain.
 
 Today this is **latent**, not exploitable: every call site in `NotificationSignalNormalizer` (the only writer) generates a fresh `UUID` per row, so REPLACE conflict never fires. The bug is in the API surface, not the runtime behaviour. Sibling code patterns (dump replay, future re-ingestion, the S2 rule engine that wants to overwrite a parsed_signal in place) would all trip it the first time they reuse an id.
